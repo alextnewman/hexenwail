@@ -34,6 +34,7 @@ const state = {
     phoneHintSeen: false,
   },
   touchOnlyEnvironment: false,
+  phoneMode: false,
 };
 
 const ui = {};
@@ -607,7 +608,7 @@ function applyPreferences() {
   document.body.dataset.touchControls = state.preferences.touchControls;
   document.body.dataset.handedness = state.preferences.handedness;
   document.body.dataset.touchOnly = state.touchOnlyEnvironment ? 'true' : 'false';
-  document.body.dataset.phoneMode = state.touchOnlyEnvironment ? 'true' : 'false';
+  document.body.dataset.phoneMode = state.phoneMode ? 'true' : 'false';
   if (ui.touchControlsSetting) ui.touchControlsSetting.value = state.preferences.touchControls;
   if (ui.handednessSetting) ui.handednessSetting.value = state.preferences.handedness;
   if (ui.lookSensitivitySetting) ui.lookSensitivitySetting.value = String(state.preferences.lookSensitivity);
@@ -658,12 +659,17 @@ function hasConnectedGamepad() {
 }
 
 function isLikelyTouchOnlyEnvironment() {
-  const phoneSizedTouch = matchMedia(PHONE_VIEWPORT_QUERY).matches;
+  const phoneSizedTouch = isPhoneModeEnvironment();
   const hasFinePointer = matchMedia('(any-pointer: fine)').matches || matchMedia('(any-hover: hover)').matches;
   return phoneSizedTouch && !hasFinePointer && !hasConnectedGamepad();
 }
 
+function isPhoneModeEnvironment() {
+  return matchMedia(PHONE_VIEWPORT_QUERY).matches;
+}
+
 function updateTouchOnlyEnvironment(forceOff = false) {
+  state.phoneMode = isPhoneModeEnvironment();
   state.touchOnlyEnvironment = !forceOff && isLikelyTouchOnlyEnvironment();
   if (!state.touchOnlyEnvironment) {
     releasePhoneInputs();
@@ -755,6 +761,7 @@ async function maybeStartEngine() {
     scheduleCanvasResize();
     setStatus('Hexenwail running. Tap the canvas to focus input.');
   } catch (error) {
+    if (state.quitInProgress) return;
     state.engineStarted = false;
     state.runtimeExited = true;
     setEngineState('fatal');

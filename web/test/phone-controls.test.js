@@ -126,6 +126,7 @@ test('phone mode DOM includes playing layout, touch visibility rules, and quit h
   assert.match(html, /data-phone-mode="true"/);
   assert.match(html, /@media \(pointer: coarse\) and \(hover: none\) and \(max-width: 820px\), \(pointer: coarse\) and \(hover: none\) and \(max-height: 820px\)/);
   assert.match(app, /isLikelyTouchOnlyEnvironment/);
+  assert.match(app, /isPhoneModeEnvironment/);
   assert.match(app, /PHONE_VIEWPORT_QUERY/);
   assert.match(app, /gamepadconnected/);
   assert.match(app, /hexenwailquit/);
