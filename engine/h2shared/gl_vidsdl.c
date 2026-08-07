@@ -46,6 +46,7 @@
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
+#include <emscripten/html5_webgl.h>
 #endif
 
 
@@ -218,6 +219,7 @@ static const char	*gl_version;
 
 GLint		gl_max_size = 256;
 GLfloat		gl_max_anisotropy;
+gl_renderer_caps_t gl_renderer_caps;
 float		gldepthmin, gldepthmax;
 qboolean	gl_clipcontrol_able = false;
 qboolean	gl_bindless_able = false;
@@ -240,6 +242,184 @@ cvar_t	vid_config_fsaa = {"vid_config_fsaa", "4", CVAR_ARCHIVE};	/* read by gl_l
 
 // stencil buffer
 qboolean	have_stencil = false;
+
+static const char *GL_ErrorName (GLenum error)
+{
+	switch (error)
+	{
+	case GL_INVALID_ENUM:			return "GL_INVALID_ENUM";
+	case GL_INVALID_VALUE:			return "GL_INVALID_VALUE";
+	case GL_INVALID_OPERATION:		return "GL_INVALID_OPERATION";
+	case GL_OUT_OF_MEMORY:			return "GL_OUT_OF_MEMORY";
+	case GL_INVALID_FRAMEBUFFER_OPERATION:	return "GL_INVALID_FRAMEBUFFER_OPERATION";
+	default:				return "unknown";
+	}
+}
+
+void GL_CheckErrors (const char *checkpoint)
+{
+	GLenum error;
+	int count = 0;
+
+	while ((error = glGetError()) != GL_NO_ERROR && count++ < 16)
+		Con_Printf("[RENDERER] GL error at %s: %s (0x%x)\n",
+			   checkpoint, GL_ErrorName(error), error);
+}
+
+static void GL_InitRendererCaps (void)
+{
+	memset(&gl_renderer_caps, 0, sizeof(gl_renderer_caps));
+
+#ifdef __EMSCRIPTEN__
+	{
+		EMSCRIPTEN_WEBGL_CONTEXT_HANDLE context = emscripten_webgl_get_current_context();
+
+		gl_renderer_caps.profile = GL_RENDERER_WEBGL2;
+		gl_renderer_caps.profile_name = "WebGL2 / OpenGL ES 3.0";
+		gl_renderer_caps.anisotropy =
+			context > 0 &&
+			emscripten_webgl_enable_extension(context, "EXT_texture_filter_anisotropic")
+				== EMSCRIPTEN_RESULT_SUCCESS;
+		gl_renderer_caps.float_color_buffer =
+			context > 0 &&
+			emscripten_webgl_enable_extension(context, "EXT_color_buffer_float")
+				== EMSCRIPTEN_RESULT_SUCCESS;
+		gl_renderer_caps.postprocess = true;
+	}
+	gl_bindless_able = false;
+#else
+	gl_renderer_caps.profile = GL_RENDERER_DESKTOP_43;
+	gl_renderer_caps.profile_name = "Desktop OpenGL 4.3";
+	gl_renderer_caps.anisotropy =
+		SDL_GL_ExtensionSupported("GL_EXT_texture_filter_anisotropic") ||
+		SDL_GL_ExtensionSupported("GL_ARB_texture_filter_anisotropic");
+	gl_renderer_caps.float_color_buffer = true;
+	gl_renderer_caps.shader_storage = glBindBufferBase_fp != NULL;
+	gl_renderer_caps.compute_shaders =
+		glDispatchCompute_fp != NULL && glMemoryBarrier_fp != NULL;
+	gl_renderer_caps.indirect_draw =
+		glDrawElementsIndirect_fp != NULL && glMultiDrawElementsIndirect_fp != NULL;
+	gl_renderer_caps.indexed_blending =
+		glBlendFunci_fp != NULL && glDrawBuffers_fp != NULL && glClearBufferfv_fp != NULL;
+	gl_renderer_caps.gpu_particles = gl_renderer_caps.shader_storage;
+	gl_renderer_caps.skeletal_animation = gl_renderer_caps.shader_storage;
+	gl_renderer_caps.oit =
+		gl_renderer_caps.indexed_blending && gl_renderer_caps.float_color_buffer;
+	gl_renderer_caps.postprocess = true;
+
+	gl_bindless_able = COM_CheckParm("+bindless") &&
+			   (glGetTextureHandleARB_fp != NULL) &&
+			   (glGetTextureSamplerHandleARB_fp != NULL) &&
+			   (glMakeTextureHandleResidentARB_fp != NULL) &&
+			   (glMakeTextureHandleNonResidentARB_fp != NULL) &&
+			   (glGenSamplers_fp != NULL) &&
+			   (glDeleteSamplers_fp != NULL) &&
+			   (glBindSampler_fp != NULL) &&
+			   (glSamplerParameteri_fp != NULL);
+	gl_renderer_caps.bindless_textures = gl_bindless_able;
+#endif
+
+	Con_SafePrintf("[RENDERER] Profile: %s\n", gl_renderer_caps.profile_name);
+	Con_SafePrintf("[RENDERER] Features: postprocess=%s HDR-targets=%s "
+		       "SSBO=%s compute=%s indirect=%s bindless=%s OIT=%s\n",
+		       gl_renderer_caps.postprocess ? "yes" : "no",
+		       gl_renderer_caps.float_color_buffer ? "yes" : "no",
+		       gl_renderer_caps.shader_storage ? "yes" : "CPU fallback",
+		       gl_renderer_caps.compute_shaders ? "yes" : "CPU fallback",
+		       gl_renderer_caps.indirect_draw ? "yes" : "sorted draws",
+		       gl_renderer_caps.bindless_textures ? "yes" : "bound textures",
+		       gl_renderer_caps.oit ? "yes" : "sorted transparency");
+}
+
+static qboolean GL_RunFramebufferSelfTest (void)
+{
+	GLuint texture = 0, framebuffer = 0;
+	GLenum status;
+	GLint old_fbo, old_texture, old_active, old_viewport[4];
+	GLfloat old_clear[4];
+	unsigned char pixel[4] = {0, 0, 0, 0};
+	qboolean passed;
+
+	glGetIntegerv_fp(GL_FRAMEBUFFER_BINDING, &old_fbo);
+	glGetIntegerv_fp(GL_ACTIVE_TEXTURE, &old_active);
+	glGetIntegerv_fp(GL_TEXTURE_BINDING_2D, &old_texture);
+	glGetIntegerv_fp(GL_VIEWPORT, old_viewport);
+	glGetFloatv_fp(GL_COLOR_CLEAR_VALUE, old_clear);
+
+	glActiveTexture_fp(GL_TEXTURE0);
+	glGenTextures_fp(1, &texture);
+	glBindTexture_fp(GL_TEXTURE_2D, texture);
+	glTexImage2D_fp(GL_TEXTURE_2D, 0, GL_RGBA8, 2, 2, 0,
+			GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexParameterf_fp(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameterf_fp(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+	glGenFramebuffers_fp(1, &framebuffer);
+	glBindFramebuffer_fp(GL_FRAMEBUFFER, framebuffer);
+	glFramebufferTexture2D_fp(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+				  GL_TEXTURE_2D, texture, 0);
+	status = glCheckFramebufferStatus_fp(GL_FRAMEBUFFER);
+	if (status == GL_FRAMEBUFFER_COMPLETE)
+	{
+		glViewport_fp(0, 0, 2, 2);
+		glClearColor_fp(0.25f, 0.5f, 0.75f, 1.0f);
+		glClear_fp(GL_COLOR_BUFFER_BIT);
+		glReadPixels_fp(0, 0, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
+	}
+
+	passed = status == GL_FRAMEBUFFER_COMPLETE &&
+		 pixel[0] >= 62 && pixel[0] <= 66 &&
+		 pixel[1] >= 126 && pixel[1] <= 129 &&
+		 pixel[2] >= 190 && pixel[2] <= 193 &&
+		 pixel[3] == 255 && glGetError() == GL_NO_ERROR;
+
+	glBindFramebuffer_fp(GL_FRAMEBUFFER, old_fbo);
+	glDeleteFramebuffers_fp(1, &framebuffer);
+	glBindTexture_fp(GL_TEXTURE_2D, old_texture);
+	glDeleteTextures_fp(1, &texture);
+	glActiveTexture_fp(old_active);
+	glViewport_fp(old_viewport[0], old_viewport[1], old_viewport[2], old_viewport[3]);
+	glClearColor_fp(old_clear[0], old_clear[1], old_clear[2], old_clear[3]);
+	currenttexture = GL_UNUSED_TEXTURE;
+
+	gl_renderer_caps.fbo_selftest = passed;
+	Con_SafePrintf("[RENDERER] Generated RGBA8 texture/FBO self-test: %s "
+		       "(status=0x%x pixel=%u,%u,%u,%u)\n",
+		       passed ? "PASS" : "FAIL", status,
+		       pixel[0], pixel[1], pixel[2], pixel[3]);
+	return passed;
+}
+
+static void GL_RendererStatus_f (void)
+{
+	Con_Printf("[RENDERER] %s | GL=%s | GLSL=%s\n",
+		   gl_renderer_caps.profile_name, gl_version,
+		   (const char *)glGetString_fp(GL_SHADING_LANGUAGE_VERSION));
+	Con_Printf("[RENDERER] drawable=%dx%d viewport=%d,%d %dx%d "
+		   "postprocess=%s HDR-targets=%s OIT=%s SSBO=%s FBO-test=%s\n",
+		   WRWidth, WRHeight, glx, gly, glwidth, glheight,
+		   gl_renderer_caps.postprocess ? "ready" : "failed",
+		   gl_renderer_caps.float_color_buffer ? "yes" : "no",
+		   gl_renderer_caps.oit ? "yes" : "sorted fallback",
+		   gl_renderer_caps.shader_storage ? "yes" : "CPU fallback",
+		   gl_renderer_caps.fbo_selftest ? "pass" : "fail");
+	GL_ReportShaderStatus();
+	GL_ReportLightmapStatus();
+}
+
+static void GL_RendererSafe_f (void)
+{
+	Cvar_Set("r_hdr", "0");
+	Cvar_Set("r_oit", "0");
+	Cvar_Set("r_bloom", "0");
+	Cvar_Set("r_scale", "1");
+	Cvar_Set("r_softemu", "0");
+	Cvar_Set("gl_fxaa", "0");
+	Cvar_Set("r_motionblur", "0");
+	Cvar_Set("gl_lightmapfmt", "GL_RGBA");
+	Cvar_Set("gl_lmatlas", "1");
+	Con_Printf("[RENDERER] Safe graphics defaults applied; reload the map if it is already running.\n");
+}
 
 // this is useless: things aren't like those in quake
 //static qboolean	fullsbardraw = false;
@@ -327,6 +507,8 @@ EMSCRIPTEN_KEEPALIVE void Hexenwail_ResizeCanvas (int css_width, int css_height)
 	Cvar_SetValueQuick (&vid_config_gly, WRHeight);
 	vid.recalc_refdef = 1;
 	glViewport_fp(0, 0, WRWidth, WRHeight);
+	Con_SafePrintf("[RENDERER] Canvas synchronized: CSS=%dx%d drawable=%dx%d\n",
+		       css_width, css_height, WRWidth, WRHeight);
 }
 #endif
 
@@ -965,6 +1147,10 @@ static void GL_Init (void)
 
 	gl_version = (const char *)glGetString_fp (GL_VERSION);
 	Con_SafePrintf ("GL_VERSION: %s\n", gl_version);
+	Con_SafePrintf ("GLSL_VERSION: %s\n",
+			(const char *)glGetString_fp(GL_SHADING_LANGUAGE_VERSION));
+	Con_SafePrintf ("[RENDERER] Drawable: %dx%d, logical video: %dx%d\n",
+			WRWidth, WRHeight, vid.width, vid.height);
 
 	glGetIntegerv_fp(GL_MAX_TEXTURE_SIZE, &gl_max_size);
 	if (gl_max_size < 256)	// Refuse to work when less than 256
@@ -988,21 +1174,25 @@ static void GL_Init (void)
 	glActiveTexture(GL_TEXTURE0);
 #endif
 
-	/* GL 4.3: anisotropic filtering is always available */
-	gl_max_anisotropy = 1;
-	glGetFloatv_fp(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &gl_max_anisotropy);
-	Con_SafePrintf("Anisotropic filtering: max %.1f\n", gl_max_anisotropy);
-
-	/* NPOT textures: always available on GL 4.3 */
-	Con_SafePrintf("NPOT textures enabled\n");
-
 	/* stencil buffer */
 	have_stencil = !!vid_attribs.stencil;
 
 #ifndef __EMSCRIPTEN__
 	/* load shader and VBO function pointers (Emscripten uses direct calls) */
 	GL_LoadFunctionPointers();
+#endif
 
+	GL_InitRendererCaps();
+
+	gl_max_anisotropy = 1;
+	if (gl_renderer_caps.anisotropy)
+		glGetFloatv_fp(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &gl_max_anisotropy);
+	Con_SafePrintf("Anisotropic filtering: %s (max %.1f)\n",
+		       gl_renderer_caps.anisotropy ? "enabled" : "unavailable",
+		       gl_max_anisotropy);
+	Con_SafePrintf("NPOT textures enabled\n");
+
+#ifndef __EMSCRIPTEN__
 	/* GL 4.3 debug output — logs errors to console/qconsole.log before GPU hang */
 	glDebugMessageCallback_fp = (glDebugMessageCallback_f)
 		SDL_GL_GetProcAddress("glDebugMessageCallback");
@@ -1016,8 +1206,15 @@ static void GL_Init (void)
 #endif
 
 	GL_Shaders_Init();
+	GL_CheckErrors("mandatory shader initialization");
 	GL_VBO_Init();
 	GL_PostProcess_Init();
+	gl_renderer_caps.postprocess = GL_PostProcess_Available();
+	if (!gl_renderer_caps.postprocess)
+		Sys_Error("Mandatory post-processing shader failed to initialize");
+	GL_CheckErrors("post-processing initialization");
+	if (!GL_RunFramebufferSelfTest())
+		Sys_Error("Renderer RGBA8 framebuffer self-test failed");
 
 	/* Streaming buffer ring (gl_buffer.c) — uhexen2-8pc2.
 	 * Probe extension availability by entry-point load, query offset
@@ -1030,17 +1227,6 @@ static void GL_Init (void)
 		       (glClientWaitSync_fp != NULL) &&
 		       (glDeleteSync_fp != NULL);
 	gl_multi_bind_able = (glBindBuffersRange_fp != NULL);
-	/* Bindless disabled by default pending stability testing.
-	 * Require explicit +bindless to enable (in addition to hardware support). */
-	gl_bindless_able = COM_CheckParm("+bindless") &&
-			   (glGetTextureHandleARB_fp != NULL) &&
-			   (glGetTextureSamplerHandleARB_fp != NULL) &&
-			   (glMakeTextureHandleResidentARB_fp != NULL) &&
-			   (glMakeTextureHandleNonResidentARB_fp != NULL) &&
-			   (glGenSamplers_fp != NULL) &&
-			   (glDeleteSamplers_fp != NULL) &&
-			   (glBindSampler_fp != NULL) &&
-			   (glSamplerParameteri_fp != NULL);
 
 	if (gl_bindless_able)
 		GL_CreateSamplers();
@@ -1705,6 +1891,8 @@ void	VID_Init (const unsigned char *palette)
 	Cmd_AddCommand ("vid_listmodes", VID_ListModes_f);
 	Cmd_AddCommand ("vid_nummodes", VID_NumModes_f);
 	Cmd_AddCommand ("vid_restart", VID_Restart_f);
+	Cmd_AddCommand ("renderer_status", GL_RendererStatus_f);
+	Cmd_AddCommand ("renderer_safe", GL_RendererSafe_f);
 
 	VID_InitPalette (palette);
 

@@ -279,6 +279,7 @@ void R_Init (void)
 
 	Cvar_RegisterVariable (&r_norefresh);
 	Cvar_RegisterVariable (&r_lightmap);
+	Cvar_RegisterVariable (&r_world_debug);
 	Cvar_RegisterVariable (&r_fullbright);
 	Cvar_RegisterVariable (&r_waterwarp);
 	Cvar_RegisterVariable (&r_drawentities);
@@ -635,4 +636,3 @@ void D_FlushCaches (void)
 	if (numgltextures - gl_texlevel > 0 && flush_textures && gl_purge_maptex.integer)
 		D_ClearOpenGLTextures (gl_texlevel);
 }
-

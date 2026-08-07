@@ -150,6 +150,7 @@ cvar_t	r_alias_stochastic_alpha = {"r_alias_stochastic_alpha", "0", CVAR_ARCHIVE
 static qboolean	r_aliasinfo_request = false;	/* uhexen2-khsa: one-shot diagnostic flag */
 cvar_t	r_fullbright = {"r_fullbright", "0", CVAR_NONE};
 cvar_t	r_lightmap = {"r_lightmap", "0", CVAR_NONE};
+cvar_t	r_world_debug = {"r_world_debug", "0", CVAR_NONE};
 cvar_t	r_shadows = {"r_shadows", "0", CVAR_NONE};
 cvar_t	r_mirroralpha = {"r_mirroralpha", "1", CVAR_NONE};
 cvar_t	r_wateralpha = {"r_wateralpha", "1", CVAR_ARCHIVE};
@@ -4225,6 +4226,26 @@ static void R_SetupFrame (void)
 				glUniform1f_fp(gl_shader_world_oit.u_lightmap_bicubic, bicubic);
 			}
 		}
+		{
+			float debug_mode = r_world_debug.value;
+			if (debug_mode < 0.0f) debug_mode = 0.0f;
+			if (debug_mode > 3.0f) debug_mode = 3.0f;
+			if (gl_shader_world.program && gl_shader_world.u_world_debug >= 0)
+			{
+				glUseProgram_fp(gl_shader_world.program);
+				glUniform1f_fp(gl_shader_world.u_world_debug, debug_mode);
+			}
+			if (gl_shader_world_opaque.program && gl_shader_world_opaque.u_world_debug >= 0)
+			{
+				glUseProgram_fp(gl_shader_world_opaque.program);
+				glUniform1f_fp(gl_shader_world_opaque.u_world_debug, debug_mode);
+			}
+			if (gl_shader_world_oit.program && gl_shader_world_oit.u_world_debug >= 0)
+			{
+				glUseProgram_fp(gl_shader_world_oit.program);
+				glUniform1f_fp(gl_shader_world_oit.u_world_debug, debug_mode);
+			}
+		}
 		glUseProgram_fp(0);
 	}
 
@@ -5115,4 +5136,3 @@ void R_RenderView (void)
 	if (r_speeds.integer == 1)
 		R_PrintTimes ();
 }
-

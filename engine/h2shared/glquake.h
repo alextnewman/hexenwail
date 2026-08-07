@@ -195,6 +195,34 @@ extern	GLfloat		gl_max_anisotropy;
 extern	qboolean	have_stencil;
 extern	qboolean	gl_clipcontrol_able;	/* reversed-Z when true */
 
+typedef enum
+{
+	GL_RENDERER_DESKTOP_43,
+	GL_RENDERER_WEBGL2
+} gl_renderer_profile_t;
+
+typedef struct
+{
+	gl_renderer_profile_t	profile;
+	const char		*profile_name;
+	qboolean		anisotropy;
+	qboolean		float_color_buffer;
+	qboolean		shader_storage;
+	qboolean		compute_shaders;
+	qboolean		indirect_draw;
+	qboolean		bindless_textures;
+	qboolean		indexed_blending;
+	qboolean		gpu_particles;
+	qboolean		skeletal_animation;
+	qboolean		oit;
+	qboolean		postprocess;
+	qboolean		fbo_selftest;
+} gl_renderer_caps_t;
+
+extern	gl_renderer_caps_t gl_renderer_caps;
+void	GL_CheckErrors (const char *checkpoint);
+void	GL_ReportLightmapStatus (void);
+
 /* Frame-resources streaming buffer ring (engine/h2shared/gl_buffer.c).
  * uhexen2-8pc2: Ironwail-parity replacement for raw glBufferSubData → bind
  * → draw uploads.  See gl_buffer.c for the full architecture. */
@@ -282,6 +310,7 @@ extern	cvar_t	r_speeds;
 extern	cvar_t	r_waterwarp;
 extern	cvar_t	r_fullbright;
 extern	cvar_t	r_lightmap;
+extern	cvar_t	r_world_debug;
 extern	cvar_t	r_shadows;
 extern	cvar_t	r_mirroralpha;
 extern	cvar_t	r_wateralpha;
@@ -471,4 +500,3 @@ void R_AliasInfo_f (void);	/* uhexen2-khsa diagnostic */
 void R_TranslatePlayerSkin (int playernum);
 
 #endif	/* GLQUAKE_H */
-

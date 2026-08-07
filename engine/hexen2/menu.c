@@ -2798,6 +2798,11 @@ static qboolean M_Rendering_IsSkip (int i)
 {
 	if (i < 0 || i >= REND_ITEMS)
 		return true;
+	if (i == REND_ANISOTROPY && !gl_renderer_caps.anisotropy)
+		return true;
+	if ((i == REND_HDR || i == REND_HDR_EXPOSURE) &&
+	    !gl_renderer_caps.float_color_buffer)
+		return true;
 	return M_Filter_Active() && !M_Filter_Matches(rend_labels[i]);
 }
 
@@ -7244,4 +7249,3 @@ static void BGM_RestartMusic (void)
 		BGM_Stop();
 	}
 }
-
