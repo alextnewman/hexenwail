@@ -6,6 +6,7 @@ import {
 import { PhoneControls, PHONE_CONTROL_KEYCODES } from './lib/phone-controls.js';
 
 const BASE_DIR = '/persistent';
+const ENGINE_ARGUMENTS = ['-basedir', BASE_DIR];
 const STORAGE_ROOT = 'hexenwail';
 const PREFERENCES_KEY = 'hexenwail-pwa-preferences-v1';
 const SAVE_SYNC_INTERVAL_MS = 10000;
@@ -53,7 +54,7 @@ function getModule() {
     globalThis.Module = {
       preRun: [],
       postRun: [],
-      arguments: ['-basedir', BASE_DIR],
+      arguments: [...ENGINE_ARGUMENTS],
       noInitialRun: true,
       locateFile: (path) => new URL(path, document.baseURI).toString(),
     };
@@ -783,7 +784,7 @@ async function maybeStartEngine() {
     if (typeof Module.callMain !== 'function') {
       throw new Error('Engine runtime did not expose callMain.');
     }
-    const exitStatus = Module.callMain([...(Module.arguments ?? [])]);
+    const exitStatus = Module.callMain([...ENGINE_ARGUMENTS]);
     if (state.quitInProgress || state.runtimeExited) return;
     if (typeof exitStatus === 'number' && exitStatus !== 0) {
       throw new Error(`Engine exited during startup with status ${exitStatus}.`);
@@ -1214,7 +1215,7 @@ function bindBootCallbacks() {
   const Module = getModule();
   const previousOnRuntimeInitialized = Module.onRuntimeInitialized;
   Module.canvas = ui.canvas;
-  Module.arguments = ['-basedir', BASE_DIR];
+  Module.arguments = [...ENGINE_ARGUMENTS];
   Module.noInitialRun = true;
   Module.locateFile = (path) => new URL(path, document.baseURI).toString();
   Module.print = (text) => {
