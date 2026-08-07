@@ -149,13 +149,14 @@ for a clean restart.
 
 ### Touch mappings
 
-Touch controls are shown only when the launcher believes the device is a
-touch-only phone environment: phone-sized coarse pointer, no hover/fine pointer,
-and no connected gamepad. If a touchpad/mouse, physical keyboard activity, pen,
-wheel, or controller is detected, the overlay is hidden and all held touch inputs
-are released so it does not appear on an iPad with a keyboard/trackpad or when a
-controller is available. Within that touch-only gate, the launcher setting can
-choose auto/on/off behavior, left- or right-handed layout, and look sensitivity.
+In auto mode, touch controls are shown only when the launcher believes the device
+is a touch-only phone environment: a coarse pointer with no hover/fine pointer,
+no connected gamepad, and a viewport short side no larger than 820 CSS pixels.
+If a touchpad/mouse, physical keyboard activity, pen, wheel, or controller is
+detected, auto mode hides the overlay and releases all held touch inputs. The
+launcher setting can choose auto/on/off behavior, left- or right-handed layout,
+and look sensitivity; **Always show** displays the controls on any running
+device.
 Preferences are stored in local browser storage, separate from imported game
 assets and saves.
 

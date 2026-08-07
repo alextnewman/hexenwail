@@ -94,20 +94,21 @@ export class PhoneControls {
     if (!this.enabled || !this.root) return;
     const action = actionForTarget(event.target);
     if (!action) return;
+    if ([...this.pointerOwners.values()].some((owner) => owner.action === action)) return;
 
     event.preventDefault?.();
     event.stopPropagation?.();
     event.target?.setPointerCapture?.(event.pointerId);
 
     if (action === 'stick') {
-      this.pointerOwners.set(event.pointerId, { type: 'stick' });
+      this.pointerOwners.set(event.pointerId, { type: 'stick', action });
       this.stickCenter = rectCenter(event.target, eventPoint(event));
       this.updateStick(event);
       return;
     }
 
     if (action === 'look') {
-      this.pointerOwners.set(event.pointerId, { type: 'look' });
+      this.pointerOwners.set(event.pointerId, { type: 'look', action });
       this.lastLookPoint = eventPoint(event);
       return;
     }

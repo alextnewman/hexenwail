@@ -370,7 +370,6 @@ void Sys_Quit (void)
 			globalThis.HexenwailBoot.onQuit({ kind: 'quit' });
 		}
 	});
-	return;
 #endif
 
 	exit (0);

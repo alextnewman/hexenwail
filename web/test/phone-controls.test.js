@@ -74,6 +74,27 @@ test('multi-touch buttons and look region keep independent pointer ownership', (
   assert.deepEqual(looks, [[20, -20]], 'look deltas are clamped before sensitivity scaling');
 });
 
+test('each touch action rejects a second pointer', () => {
+  const root = makeElement(null);
+  const attack = makeElement('attack');
+  const stick = makeElement('stick');
+  const events = [];
+  const controls = new PhoneControls(root, { key: (key, down) => events.push([key, down]), look() {} });
+  controls.attach();
+
+  root.dispatch('pointerdown', pointer(attack, 1, 10, 10));
+  root.dispatch('pointerdown', pointer(attack, 2, 10, 10));
+  root.dispatch('pointerup', pointer(attack, 1, 10, 10));
+  root.dispatch('pointerdown', pointer(stick, 3, 60, 60));
+  root.dispatch('pointerdown', pointer(stick, 4, 60, 60));
+  root.dispatch('pointermove', pointer(stick, 4, 60, 0));
+
+  assert.deepEqual(events, [
+    [PHONE_CONTROL_KEYCODES.attack, true],
+    [PHONE_CONTROL_KEYCODES.attack, false],
+  ]);
+});
+
 test('releaseAll clears button and stick keys after cancellation or backgrounding', () => {
   const root = makeElement(null);
   const stick = makeElement('stick');
@@ -102,8 +123,10 @@ test('phone mode DOM includes playing layout, touch visibility rules, and quit h
   assert.match(html, /body\[data-engine-state="running"\]/);
   assert.match(html, /id="phone-controls"/);
   assert.match(html, /data-touch-only="true"/);
-  assert.match(html, /@media \(pointer: coarse\) and \(max-width: 820px\)/);
+  assert.match(html, /data-phone-mode="true"/);
+  assert.match(html, /@media \(pointer: coarse\) and \(hover: none\) and \(max-width: 820px\), \(pointer: coarse\) and \(hover: none\) and \(max-height: 820px\)/);
   assert.match(app, /isLikelyTouchOnlyEnvironment/);
+  assert.match(app, /PHONE_VIEWPORT_QUERY/);
   assert.match(app, /gamepadconnected/);
   assert.match(app, /hexenwailquit/);
   assert.match(app, /Hexenwail_ResizeCanvas/);

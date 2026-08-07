@@ -10,6 +10,7 @@ const STORAGE_ROOT = 'hexenwail';
 const PREFERENCES_KEY = 'hexenwail-pwa-preferences-v1';
 const SAVE_SYNC_INTERVAL_MS = 10000;
 const MAX_IMPORT_BYTES = 2 * 1024 * 1024 * 1024;
+const PHONE_VIEWPORT_QUERY = '(pointer: coarse) and (hover: none) and (max-width: 820px), (pointer: coarse) and (hover: none) and (max-height: 820px)';
 
 const state = {
   storage: null,
@@ -606,6 +607,7 @@ function applyPreferences() {
   document.body.dataset.touchControls = state.preferences.touchControls;
   document.body.dataset.handedness = state.preferences.handedness;
   document.body.dataset.touchOnly = state.touchOnlyEnvironment ? 'true' : 'false';
+  document.body.dataset.phoneMode = state.touchOnlyEnvironment ? 'true' : 'false';
   if (ui.touchControlsSetting) ui.touchControlsSetting.value = state.preferences.touchControls;
   if (ui.handednessSetting) ui.handednessSetting.value = state.preferences.handedness;
   if (ui.lookSensitivitySetting) ui.lookSensitivitySetting.value = String(state.preferences.lookSensitivity);
@@ -656,7 +658,7 @@ function hasConnectedGamepad() {
 }
 
 function isLikelyTouchOnlyEnvironment() {
-  const phoneSizedTouch = matchMedia('(pointer: coarse) and (hover: none) and (max-width: 820px)').matches;
+  const phoneSizedTouch = matchMedia(PHONE_VIEWPORT_QUERY).matches;
   const hasFinePointer = matchMedia('(any-pointer: fine)').matches || matchMedia('(any-hover: hover)').matches;
   return phoneSizedTouch && !hasFinePointer && !hasConnectedGamepad();
 }
@@ -1131,7 +1133,7 @@ function bindUi() {
   });
 
   for (const query of [
-    '(pointer: coarse) and (hover: none) and (max-width: 820px)',
+    PHONE_VIEWPORT_QUERY,
     '(any-pointer: fine)',
     '(any-hover: hover)',
   ]) {

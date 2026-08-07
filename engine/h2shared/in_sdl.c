@@ -1009,6 +1009,9 @@ static void IN_DiscardMove (void)
 		old_mouse_x = old_mouse_y = 0;
 		SDL_GetRelativeMouseState (NULL, NULL);
 	}
+#ifdef __EMSCRIPTEN__
+	touch_look_x = touch_look_y = 0;
+#endif
 }
 
 void IN_UpdateViewAngles (void)
