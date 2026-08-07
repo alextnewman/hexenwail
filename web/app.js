@@ -426,9 +426,10 @@ async function handleImportedFiles(fileList) {
 
 async function getInstalledPaks(gameDirectories) {
   const paks = [];
+  const normalizedDirs = gameDirectories ? gameDirectories.map(d => d.toLowerCase()) : null;
   for (const entry of await state.storage.listFiles()) {
     if (!/^(?:data1|portals|hw)\/.*\.pak$/i.test(entry.path)) continue;
-    if (gameDirectories && !gameDirectories.includes(entry.path.split('/')[0])) continue;
+    if (normalizedDirs && !normalizedDirs.includes(entry.path.split('/')[0].toLowerCase())) continue;
     const bytes = await state.storage.readFile(entry.path);
     paks.push({ path: entry.path, size: bytes.byteLength, sha256: await sha256(bytes) });
   }
@@ -544,7 +545,7 @@ async function importSaveBundle(file) {
     if (file.size > 256 * 1024 * 1024) throw new Error('Save bundle is too large.');
     setSaveMessage('Checking save bundle…');
     const bundle = await validateSaveBundle(new Uint8Array(await file.arrayBuffer()));
-    const warnings = getPakCompatibilityWarnings(bundle.manifest.requiredPaks, await getInstalledPaks());
+    const warnings = getPakCompatibilityWarnings(bundle.manifest.requiredPaks, await getInstalledPaks(bundle.manifest.gameDirectories));
     const size = bundle.files.reduce((total, entry) => total + entry.bytes.byteLength, 0);
     const mode = ui.saveImportMode?.value === 'replace' ? 'replace' : 'merge';
     const summary = `Import ${bundle.files.length} save file(s) (${formatBytes(size)}) from ${new Date(bundle.manifest.createdAt).toLocaleString()} for ${bundle.manifest.gameDirectories.join(', ')}?\n\nMode: ${mode === 'replace' ? 'Replace saves (all existing save slots are removed)' : 'Merge (only matching save paths are replaced)'}${warnings.length ? `\n\nCompatibility warnings:\n${warnings.join('\n')}` : ''}`;
