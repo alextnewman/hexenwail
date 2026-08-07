@@ -28,6 +28,18 @@ test('creates and validates a versioned ZIP save bundle', async () => {
   assert.deepEqual(restored.files[0], save);
 });
 
+test('creates and validates a versioned ZIP save bundle with case-insensitive directories', async () => {
+  const { bytes, manifest } = await createSaveBundle([save], { createdAt: '2026-08-07T00:00:00.000Z' });
+  manifest.gameDirectories = ['DATA1'];
+  manifest.files[0].path = 'saves/DATA1/s0/clients.gip';
+  const modifiedZip = createStoredZip([
+    { name: 'hexenwail-save.json', bytes: new TextEncoder().encode(JSON.stringify(manifest)) },
+    { name: 'saves/DATA1/s0/clients.gip', bytes: save.bytes }
+  ]);
+  const restored = await validateSaveBundle(modifiedZip);
+  assert.equal(restored.manifest.gameDirectories[0], 'data1');
+});
+
 test('rejects mismatched, duplicate, unlisted, and unsafe bundle files', async () => {
   const { manifest } = await createSaveBundle([save], { createdAt: '2026-08-07T00:00:00.000Z' });
   const changed = structuredClone(manifest);

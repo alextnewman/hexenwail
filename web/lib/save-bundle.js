@@ -147,7 +147,8 @@ export async function validateSaveBundle(bytes) {
   assertBundle(manifest?.format === SAVE_BUNDLE_FORMAT, 'Unsupported save bundle format');
   assertBundle(Number.isInteger(manifest.formatVersion) && manifest.formatVersion === SAVE_BUNDLE_VERSION, `Unsupported save bundle version: ${manifest?.formatVersion}`);
   assertBundle(typeof manifest.createdAt === 'string' && !Number.isNaN(Date.parse(manifest.createdAt)), 'Save bundle manifest has an invalid creation date');
-  assertBundle(Array.isArray(manifest.gameDirectories) && manifest.gameDirectories.every((dir) => KNOWN_GAME_ROOTS.includes(dir)) && new Set(manifest.gameDirectories).size === manifest.gameDirectories.length, 'Save bundle manifest has invalid game directories');
+  assertBundle(Array.isArray(manifest.gameDirectories) && manifest.gameDirectories.every((dir) => typeof dir === 'string' && KNOWN_GAME_ROOTS.includes(dir.toLowerCase())) && new Set(manifest.gameDirectories.map((dir) => dir.toLowerCase())).size === manifest.gameDirectories.length, 'Save bundle manifest has invalid game directories');
+  manifest.gameDirectories = manifest.gameDirectories.map((dir) => dir.toLowerCase());
   assertBundle(Array.isArray(manifest.requiredPaks) && Array.isArray(manifest.files) && manifest.files.length > 0 && manifest.files.length <= SAVE_BUNDLE_LIMITS.maxFiles, 'Save bundle manifest is invalid');
   const pakPaths = new Set();
   for (const pak of manifest.requiredPaks) {
@@ -162,7 +163,7 @@ export async function validateSaveBundle(bytes) {
     assertBundle(!declared.has(file.path), `Duplicate manifest path: ${file.path}`);
     declared.set(file.path, file);
   }
-  const declaredDirectories = [...new Set([...declared.keys()].map((path) => path.split('/')[1]))].sort();
+  const declaredDirectories = [...new Set([...declared.keys()].map((path) => path.split('/')[1].toLowerCase()))].sort();
   assertBundle(JSON.stringify(declaredDirectories) === JSON.stringify([...manifest.gameDirectories].sort()), 'Save bundle manifest game directories do not match its files');
   assertBundle(files.length === declared.size + 1, 'Save bundle contains files not declared by its manifest');
   const output = [];
