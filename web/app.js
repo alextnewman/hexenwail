@@ -586,6 +586,9 @@ function createIDBBackend() {
       const tx = db.transaction(STORE_NAME, mode);
       const store = tx.objectStore(STORE_NAME);
       executor(store, resolve, reject);
+      // The executor's own request handler (onsuccess/onerror) always settles
+      // this promise before the transaction completes; oncomplete here is
+      // solely responsible for closing this per-call connection.
       tx.oncomplete = () => db.close();
       tx.onerror = () => reject(tx.error);
     });
@@ -661,9 +664,13 @@ async function registerServiceWorker() {
 
   try {
     const registration = await navigator.serviceWorker.register('./sw.js', { scope: './' });
-    ui.offlineText.textContent = navigator.serviceWorker.controller || registration.active
-      ? 'Offline shell ready after this version finishes caching.'
-      : 'Installing offline shell… keep this tab open until the status changes.';
+    if (navigator.serviceWorker.controller) {
+      ui.offlineText.textContent = 'Offline shell ready. Imported game data stays outside the service worker cache.';
+    } else if (registration.active || registration.installing || registration.waiting) {
+      ui.offlineText.textContent = 'Offline shell installing… reload once to let it take control of this tab.';
+    } else {
+      ui.offlineText.textContent = 'Installing offline shell… keep this tab open until the status changes.';
+    }
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       ui.offlineText.textContent = 'Offline shell ready. Imported game data stays outside the service worker cache.';
     });

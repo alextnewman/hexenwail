@@ -68,7 +68,7 @@ export function parseZipCentralDirectory(bytes, limitOverrides) {
     const localHeaderOffset = readUInt32(view, cursor + 42);
     const crc32 = readUInt32(view, cursor + 16);
 
-    assertZip(compressedSize < 0xffffffff && uncompressedSize < 0xffffffff, 'ZIP64 entries are not supported');
+    assertZip(compressedSize !== 0xffffffff && uncompressedSize !== 0xffffffff, 'ZIP64 entries are not supported');
     assertZip(uncompressedSize <= limits.maxSingleEntrySize, `ZIP entry is too large (${uncompressedSize} bytes)`);
     totalUncompressedSize += uncompressedSize;
     assertZip(totalUncompressedSize <= limits.maxTotalUncompressedSize, 'ZIP expands beyond the allowed total size');
@@ -92,6 +92,10 @@ export function parseZipCentralDirectory(bytes, limitOverrides) {
     cursor = nameEnd + extraLength + commentLength;
   }
 
+  Object.defineProperty(entries, 'totalUncompressedSize', {
+    value: totalUncompressedSize,
+    enumerable: false,
+  });
   return entries;
 }
 
@@ -137,7 +141,7 @@ async function extractEntryData(bytes, entry) {
 
 export async function extractZipEntries(bytes, options = {}) {
   const entries = parseZipCentralDirectory(bytes, options.limits);
-  const totalBytes = entries.reduce((sum, item) => sum + item.uncompressedSize, 0);
+  const totalBytes = entries.totalUncompressedSize;
   const files = [];
   let processed = 0;
 
