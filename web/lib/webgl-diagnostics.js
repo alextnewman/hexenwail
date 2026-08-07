@@ -135,40 +135,97 @@ export function nonBlackPixelRatio(pixels, minimumLuminance = 8) {
   return visible / pixelCount;
 }
 
-function framebufferSelfTest(gl) {
+function createSolidTexture(gl, unit, color) {
+  const texture = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0 + unit);
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(
+    gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+    new Uint8Array(color),
+  );
+  return texture;
+}
+
+function framebufferSelfTest(gl, worldProgram) {
   const width = 32;
   const height = 32;
-  const texture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texture);
+  const targetTexture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, targetTexture);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
   const framebuffer = gl.createFramebuffer();
   gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, targetTexture, 0);
   const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
   if (status !== gl.FRAMEBUFFER_COMPLETE) {
     throw new Error(`RGBA8 framebuffer incomplete: 0x${status.toString(16)}`);
   }
 
+  const sourceTextures = [
+    createSolidTexture(gl, 0, [128, 96, 64, 255]),
+    createSolidTexture(gl, 1, [192, 192, 192, 255]),
+    createSolidTexture(gl, 2, [16, 8, 4, 255]),
+  ];
+  const vertices = new Float32Array([
+    -1, -1, 0, 0, 0, 1, 1, 1, 1,
+    1, -1, 0, 1, 0, 1, 1, 1, 1,
+    -1, 1, 0, 0, 1, 1, 1, 1, 1,
+    -1, 1, 0, 0, 1, 1, 1, 1, 1,
+    1, -1, 0, 1, 0, 1, 1, 1, 1,
+    1, 1, 0, 1, 1, 1, 1, 1, 1,
+  ]);
+  const vao = gl.createVertexArray();
+  const vertexBuffer = gl.createBuffer();
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 9 * 4, 0);
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 9 * 4, 3 * 4);
+  gl.enableVertexAttribArray(3);
+  gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 9 * 4, 5 * 4);
+
+  gl.useProgram(worldProgram);
+  gl.uniform1i(gl.getUniformLocation(worldProgram, 'u_texture0'), 0);
+  gl.uniform1i(gl.getUniformLocation(worldProgram, 'u_texture1'), 1);
+  gl.uniform1i(gl.getUniformLocation(worldProgram, 'u_texture2'), 2);
   gl.viewport(0, 0, width, height);
-  gl.clearColor(0.25, 0.5, 0.75, 1);
+  gl.clearColor(0, 0, 0, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
   const pixels = new Uint8Array(width * height * 4);
   gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
   const ratio = nonBlackPixelRatio(pixels);
   const sample = [...pixels.slice(0, 4)];
 
+  gl.useProgram(null);
+  gl.bindVertexArray(null);
+  gl.deleteBuffer(vertexBuffer);
+  gl.deleteVertexArray(vao);
+  for (const sourceTexture of sourceTextures) gl.deleteTexture(sourceTexture);
+  gl.activeTexture(gl.TEXTURE0);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.bindTexture(gl.TEXTURE_2D, null);
   gl.deleteFramebuffer(framebuffer);
-  gl.deleteTexture(texture);
+  gl.deleteTexture(targetTexture);
 
   if (ratio < 0.9) {
-    throw new Error(`generated framebuffer is predominantly black (${(ratio * 100).toFixed(1)}% visible)`);
+    throw new Error(`generated world draw is predominantly black (${(ratio * 100).toFixed(1)}% visible)`);
   }
-  return { width, height, nonBlackRatio: ratio, sample };
+  const expected = [112, 80, 52, 255];
+  if (sample.some((channel, index) => Math.abs(channel - expected[index]) > 2)) {
+    throw new Error(`generated world draw returned ${sample.join(',')}, expected ${expected.join(',')}`);
+  }
+  return {
+    width, height, draw: 'textured world triangle', nonBlackRatio: ratio, sample,
+  };
 }
 
 export function runWebGLDiagnostics({ canvas = null } = {}) {
@@ -187,9 +244,10 @@ export function runWebGLDiagnostics({ canvas = null } = {}) {
   const programs = [];
   try {
     for (const [family, vertexSource, fragmentSource] of SHADER_FAMILIES) {
-      programs.push(compileProgram(gl, family, vertexSource, fragmentSource));
+      programs.push([family, compileProgram(gl, family, vertexSource, fragmentSource)]);
     }
-    const framebuffer = framebufferSelfTest(gl);
+    const worldProgram = programs.find(([family]) => family === 'world')?.[1];
+    const framebuffer = framebufferSelfTest(gl, worldProgram);
     const error = gl.getError();
     if (error !== gl.NO_ERROR) {
       throw new Error(`WebGL2 error after self-test: 0x${error.toString(16)}`);
@@ -211,7 +269,7 @@ export function runWebGLDiagnostics({ canvas = null } = {}) {
       framebuffer,
     };
   } finally {
-    for (const program of programs) gl.deleteProgram(program);
+    for (const [, program] of programs) gl.deleteProgram(program);
     gl.getExtension('WEBGL_lose_context')?.loseContext();
   }
 }

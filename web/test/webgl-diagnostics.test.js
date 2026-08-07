@@ -22,3 +22,10 @@ test('launcher blocks startup on a failed renderer self-test', async () => {
   assert.match(app, /!state\.rendererReady/);
   assert.match(app, /\[renderer:error\]/);
 });
+
+test('framebuffer self-test validates a generated world draw', async () => {
+  const diagnostics = await readFile(new URL('../lib/webgl-diagnostics.js', import.meta.url), 'utf8');
+  assert.match(diagnostics, /gl\.clearColor\(0, 0, 0, 1\)/);
+  assert.match(diagnostics, /gl\.drawArrays\(gl\.TRIANGLES, 0, 6\)/);
+  assert.match(diagnostics, /generated world draw returned/);
+});
