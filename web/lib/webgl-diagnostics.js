@@ -1,0 +1,217 @@
+const HEADER = `#version 300 es
+precision highp float;
+precision highp int;
+precision highp sampler2D;
+precision highp sampler3D;
+`;
+
+const GEOMETRY_VERTEX = `${HEADER}
+layout(location=0) in vec3 a_position;
+layout(location=1) in vec2 a_texcoord;
+layout(location=3) in vec4 a_color;
+out vec2 v_uv;
+out vec4 v_color;
+void main() {
+  v_uv = a_texcoord;
+  v_color = a_color;
+  gl_Position = vec4(a_position, 1.0);
+}`;
+
+const TEXTURED_FRAGMENT = `${HEADER}
+uniform sampler2D u_texture0;
+in vec2 v_uv;
+in vec4 v_color;
+out vec4 fragColor;
+void main() {
+  fragColor = texture(u_texture0, v_uv) * v_color;
+}`;
+
+const WORLD_FRAGMENT = `${HEADER}
+uniform sampler2D u_texture0;
+uniform sampler2D u_texture1;
+uniform sampler2D u_texture2;
+in vec2 v_uv;
+in vec4 v_color;
+out vec4 fragColor;
+void main() {
+  vec2 size = vec2(textureSize(u_texture1, 0));
+  vec3 albedo = texture(u_texture0, v_uv).rgb;
+  vec3 lightmap = texture(u_texture1, v_uv + vec2(0.5) / size).rgb;
+  vec3 fullbright = texture(u_texture2, v_uv).rgb;
+  fragColor = vec4(albedo * lightmap * v_color.rgb + fullbright, 1.0);
+}`;
+
+const FULLSCREEN_VERTEX = `${HEADER}
+out vec2 v_uv;
+void main() {
+  ivec2 v = ivec2(gl_VertexID & 1, gl_VertexID >> 1);
+  vec2 position = vec2(v) * 4.0 - 1.0;
+  v_uv = position * 0.5 + 0.5;
+  gl_Position = vec4(position, 0.0, 1.0);
+}`;
+
+const POSTPROCESS_FRAGMENT = `${HEADER}
+uniform sampler2D scene;
+uniform sampler3D paletteLUT;
+in vec2 v_uv;
+out vec4 fragColor;
+uint reverse8(uint value) {
+  value &= 0xffu;
+  value = ((value & 0x55u) << 1) | ((value >> 1) & 0x55u);
+  value = ((value & 0x33u) << 2) | ((value >> 2) & 0x33u);
+  return (value << 4) | (value >> 4);
+}
+void main() {
+  uint pattern = reverse8(uint(ivec2(gl_FragCoord.xy).x));
+  vec3 color = texture(scene, v_uv).rgb;
+  ivec3 index = ivec3(clamp(color, 0.0, 1.0) * 31.0);
+  float paletteIndex = texelFetch(paletteLUT, index, 0).r;
+  fragColor = vec4(pow(color, vec3(1.0)) + float(pattern) * 0.0 + paletteIndex * 0.0, 1.0);
+}`;
+
+const BLOOM_FRAGMENT = `${HEADER}
+uniform sampler2D u_scene;
+in vec2 v_uv;
+layout(location=0) out vec4 fragColor;
+void main() {
+  vec3 color = texture(u_scene, v_uv).rgb;
+  float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
+  fragColor = vec4(color * max(luminance, 0.001), 1.0);
+}`;
+
+const SHADER_FAMILIES = [
+  ['2d', GEOMETRY_VERTEX, TEXTURED_FRAGMENT],
+  ['flat', GEOMETRY_VERTEX, TEXTURED_FRAGMENT],
+  ['world', GEOMETRY_VERTEX, WORLD_FRAGMENT],
+  ['world_opaque', GEOMETRY_VERTEX, WORLD_FRAGMENT],
+  ['alias', GEOMETRY_VERTEX, TEXTURED_FRAGMENT],
+  ['particle', GEOMETRY_VERTEX, TEXTURED_FRAGMENT],
+  ['sky', GEOMETRY_VERTEX, TEXTURED_FRAGMENT],
+  ['postprocess', FULLSCREEN_VERTEX, POSTPROCESS_FRAGMENT],
+  ['bloom_bright', FULLSCREEN_VERTEX, BLOOM_FRAGMENT],
+  ['bloom_down', FULLSCREEN_VERTEX, BLOOM_FRAGMENT],
+  ['bloom_up', FULLSCREEN_VERTEX, BLOOM_FRAGMENT],
+];
+
+function compileShader(gl, type, source, family) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const message = gl.getShaderInfoLog(shader) || 'unknown compile error';
+    gl.deleteShader(shader);
+    throw new Error(`${family} shader compilation failed: ${message}`);
+  }
+  return shader;
+}
+
+function compileProgram(gl, family, vertexSource, fragmentSource) {
+  const vertex = compileShader(gl, gl.VERTEX_SHADER, vertexSource, family);
+  const fragment = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource, family);
+  const program = gl.createProgram();
+  gl.attachShader(program, vertex);
+  gl.attachShader(program, fragment);
+  gl.linkProgram(program);
+  gl.deleteShader(vertex);
+  gl.deleteShader(fragment);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    const message = gl.getProgramInfoLog(program) || 'unknown link error';
+    gl.deleteProgram(program);
+    throw new Error(`${family} shader link failed: ${message}`);
+  }
+  return program;
+}
+
+export function nonBlackPixelRatio(pixels, minimumLuminance = 8) {
+  if (!pixels?.length) return 0;
+  let visible = 0;
+  const pixelCount = Math.floor(pixels.length / 4);
+  for (let offset = 0; offset < pixelCount * 4; offset += 4) {
+    const luminance = pixels[offset] * 0.2126
+      + pixels[offset + 1] * 0.7152
+      + pixels[offset + 2] * 0.0722;
+    if (luminance >= minimumLuminance) visible += 1;
+  }
+  return visible / pixelCount;
+}
+
+function framebufferSelfTest(gl) {
+  const width = 32;
+  const height = 32;
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+  const framebuffer = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  if (status !== gl.FRAMEBUFFER_COMPLETE) {
+    throw new Error(`RGBA8 framebuffer incomplete: 0x${status.toString(16)}`);
+  }
+
+  gl.viewport(0, 0, width, height);
+  gl.clearColor(0.25, 0.5, 0.75, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  const pixels = new Uint8Array(width * height * 4);
+  gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  const ratio = nonBlackPixelRatio(pixels);
+  const sample = [...pixels.slice(0, 4)];
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.bindTexture(gl.TEXTURE_2D, null);
+  gl.deleteFramebuffer(framebuffer);
+  gl.deleteTexture(texture);
+
+  if (ratio < 0.9) {
+    throw new Error(`generated framebuffer is predominantly black (${(ratio * 100).toFixed(1)}% visible)`);
+  }
+  return { width, height, nonBlackRatio: ratio, sample };
+}
+
+export function runWebGLDiagnostics({ canvas = null } = {}) {
+  const target = canvas || document.createElement('canvas');
+  target.width = 32;
+  target.height = 32;
+  const gl = target.getContext('webgl2', {
+    alpha: false,
+    antialias: false,
+    depth: true,
+    stencil: true,
+    preserveDrawingBuffer: true,
+  });
+  if (!gl) throw new Error('WebGL2 context creation failed');
+
+  const programs = [];
+  try {
+    for (const [family, vertexSource, fragmentSource] of SHADER_FAMILIES) {
+      programs.push(compileProgram(gl, family, vertexSource, fragmentSource));
+    }
+    const framebuffer = framebufferSelfTest(gl);
+    const error = gl.getError();
+    if (error !== gl.NO_ERROR) {
+      throw new Error(`WebGL2 error after self-test: 0x${error.toString(16)}`);
+    }
+    return {
+      ok: true,
+      profile: gl.getParameter(gl.VERSION),
+      renderer: gl.getParameter(gl.RENDERER),
+      shadingLanguage: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+      extensions: {
+        colorBufferFloat: Boolean(gl.getExtension('EXT_color_buffer_float')),
+        anisotropy: Boolean(
+          gl.getExtension('EXT_texture_filter_anisotropic')
+          || gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic'),
+        ),
+        indexedBlend: Boolean(gl.getExtension('OES_draw_buffers_indexed')),
+      },
+      shaders: SHADER_FAMILIES.map(([family]) => family),
+      framebuffer,
+    };
+  } finally {
+    for (const program of programs) gl.deleteProgram(program);
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+  }
+}

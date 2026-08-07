@@ -4,6 +4,7 @@ import {
   createSaveBundle, getPakCompatibilityWarnings, isSavePath, planSaveImport, sha256, validateSaveBundle,
 } from './lib/save-bundle.js';
 import { PhoneControls, PHONE_CONTROL_KEYCODES } from './lib/phone-controls.js';
+import { runWebGLDiagnostics } from './lib/webgl-diagnostics.js';
 
 const BASE_DIR = '/persistent';
 const ENGINE_ARGUMENTS = ['-basedir', BASE_DIR];
@@ -18,6 +19,7 @@ const state = {
   storage: null,
   runtimeReady: false,
   runtimeLoaded: false,
+  rendererReady: false,
   storageReady: false,
   engineStarted: false,
   syncing: false,
@@ -118,15 +120,19 @@ function logToConsole(prefix, message, error = false) {
 function updateLaunchState() {
   const ready = hasRequiredBaseAssets([...state.storedPaths]);
   if (ui.launchButton) {
-    ui.launchButton.disabled = !ready || (state.engineStarted && !state.runtimeExited);
-    ui.launchButton.textContent = state.runtimeExited
+    ui.launchButton.disabled = !state.rendererReady || !ready || (state.engineStarted && !state.runtimeExited);
+    ui.launchButton.textContent = !state.rendererReady
+      ? 'WebGL2 unavailable'
+      : state.runtimeExited
       ? 'Restart game'
       : state.engineStarted
         ? 'Running'
         : ready ? 'Start game' : 'Import pak0.pak + pak1.pak first';
   }
   if (ui.requirementsText) {
-    ui.requirementsText.textContent = ready
+    ui.requirementsText.textContent = !state.rendererReady
+      ? 'WebGL2 renderer self-test failed. See the runtime log.'
+      : ready
       ? 'Required base game assets detected.'
       : 'Required: data1/pak0.pak and data1/pak1.pak from a legal Hexen II installation.';
   }
@@ -768,7 +774,7 @@ async function handleEngineQuit(kind = 'quit', message = '') {
 }
 
 async function maybeStartEngine() {
-  if (state.engineStarted || !state.runtimeReady || !state.storageReady || !hasRequiredBaseAssets([...state.storedPaths])) {
+  if (state.engineStarted || !state.rendererReady || !state.runtimeReady || !state.storageReady || !hasRequiredBaseAssets([...state.storedPaths])) {
     return;
   }
   if (state.runtimeExited) {
@@ -1263,6 +1269,20 @@ function bindBootCallbacks() {
 async function init() {
   loadPreferences();
   bindUi();
+  try {
+    const report = runWebGLDiagnostics();
+    state.rendererReady = true;
+    logToConsole('[renderer]', `${report.profile}; GLSL ${report.shadingLanguage}; `
+      + `shaders=${report.shaders.length}; RGBA8-FBO=${report.framebuffer.width}x${report.framebuffer.height}; `
+      + `visible=${(report.framebuffer.nonBlackRatio * 100).toFixed(0)}%; `
+      + `HDR=${report.extensions.colorBufferFloat ? 'available' : 'disabled'}; `
+      + `OIT=${report.extensions.indexedBlend ? 'extension present' : 'sorted fallback'}`);
+  } catch (error) {
+    state.rendererReady = false;
+    setEngineState('fatal');
+    logToConsole('[renderer:error]', error.message, true);
+    setStatus(`WebGL2 renderer self-test failed: ${error.message}`, 'error');
+  }
   updateTouchOnlyEnvironment();
   bindBootCallbacks();
   updateLaunchState();

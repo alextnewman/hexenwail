@@ -49,10 +49,10 @@
 
 #ifdef __EMSCRIPTEN__
 #define PP_VERT_HEADER	"#version 300 es\nprecision highp float;\nprecision highp int;\n"
-#define PP_FRAG_HEADER	"#version 300 es\nprecision highp float;\nprecision highp int;\n"
+#define PP_FRAG_HEADER	"#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nprecision highp sampler3D;\n"
 #else
-#define PP_VERT_HEADER	"#version 430 core\nprecision highp float;\nprecision highp int;\n"
-#define PP_FRAG_HEADER	"#version 430 core\nprecision highp float;\nprecision highp int;\n"
+#define PP_VERT_HEADER	"#version 430 core\n"
+#define PP_FRAG_HEADER	"#version 430 core\n"
 #endif
 
 /* ES 3.0 compatibility: GL_QUADS and GL_POLYGON don't exist */
@@ -645,6 +645,13 @@ static const char pp_frag_src[] =
 	"    #undef LM\n"
 	"}\n"
 	"\n"
+	"uint reverse8(uint v) {\n"
+	"    v &= 0xffu;\n"
+	"    v = ((v & 0x55u) << 1) | ((v >> 1) & 0x55u);\n"
+	"    v = ((v & 0x33u) << 2) | ((v >> 2) & 0x33u);\n"
+	"    return (v << 4) | (v >> 4);\n"
+	"}\n"
+	"\n"
 	"float bayer16(ivec2 c) {\n"
 	"    c &= 15;\n"
 	"    c.y ^= c.x;\n"
@@ -652,7 +659,7 @@ static const char pp_frag_src[] =
 	"    v = (v ^ (v << 2)) & 0x3333u;\n"
 	"    v = (v ^ (v << 1)) & 0x5555u;\n"
 	"    v |= v >> 7;\n"
-	"    v = bitfieldReverse(v) >> 24;\n"
+	"    v = reverse8(v);\n"
 	"    return float(v) / 256.0 - 0.5;\n"
 	"}\n"
 	"\n"

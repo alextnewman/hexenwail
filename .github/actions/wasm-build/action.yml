@@ -33,6 +33,10 @@ runs:
       shell: bash
       run: node --test web/test/*.test.js
 
+    - name: Run headless WebGL2 renderer smoke test
+      shell: bash
+      run: ./scripts/webgl-smoke-test.sh
+
     - name: Cache emsdk
       id: cache-emsdk
       uses: actions/cache@v4
