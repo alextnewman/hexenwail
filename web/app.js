@@ -3,9 +3,11 @@ import { hasRequiredBaseAssets, mapImportedPath } from './lib/paths.js';
 import {
   createSaveBundle, getPakCompatibilityWarnings, isSavePath, planSaveImport, sha256, validateSaveBundle,
 } from './lib/save-bundle.js';
+import { PhoneControls, PHONE_CONTROL_KEYCODES } from './lib/phone-controls.js';
 
 const BASE_DIR = '/persistent';
 const STORAGE_ROOT = 'hexenwail';
+const PREFERENCES_KEY = 'hexenwail-pwa-preferences-v1';
 const SAVE_SYNC_INTERVAL_MS = 10000;
 const MAX_IMPORT_BYTES = 2 * 1024 * 1024 * 1024;
 
@@ -21,6 +23,15 @@ const state = {
   storedPaths: new Set(),
   runtimeSnapshot: new Map(),
   lastStatus: 'Preparing launcher…',
+  runtimeExited: false,
+  quitInProgress: false,
+  phoneControls: null,
+  preferences: {
+    touchControls: 'auto',
+    handedness: 'right',
+    lookSensitivity: 1,
+    phoneHintSeen: false,
+  },
 };
 
 const ui = {};
@@ -59,6 +70,13 @@ function setStatus(message, kind = 'info') {
   }
 }
 
+function setEngineState(engineState) {
+  document.body.dataset.engineState = engineState;
+  if (engineState !== 'running') {
+    releasePhoneInputs();
+  }
+}
+
 function logToConsole(prefix, message, error = false) {
   const text = typeof message === 'string' ? message : String(message ?? '');
   if (error) {
@@ -71,8 +89,12 @@ function logToConsole(prefix, message, error = false) {
 function updateLaunchState() {
   const ready = hasRequiredBaseAssets([...state.storedPaths]);
   if (ui.launchButton) {
-    ui.launchButton.disabled = !ready;
-    ui.launchButton.textContent = state.engineStarted ? 'Running' : ready ? 'Start game' : 'Import pak0.pak + pak1.pak first';
+    ui.launchButton.disabled = !ready || (state.engineStarted && !state.runtimeExited);
+    ui.launchButton.textContent = state.runtimeExited
+      ? 'Restart game'
+      : state.engineStarted
+        ? 'Running'
+        : ready ? 'Start game' : 'Import pak0.pak + pak1.pak first';
   }
   if (ui.requirementsText) {
     ui.requirementsText.textContent = ready
@@ -558,19 +580,158 @@ async function importSaveBundle(file) {
   }
 }
 
+function loadPreferences() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PREFERENCES_KEY) ?? '{}');
+    if (['auto', 'on', 'off'].includes(saved.touchControls)) state.preferences.touchControls = saved.touchControls;
+    if (['right', 'left'].includes(saved.handedness)) state.preferences.handedness = saved.handedness;
+    const sensitivity = Number(saved.lookSensitivity);
+    if (Number.isFinite(sensitivity) && sensitivity >= 0.5 && sensitivity <= 2) state.preferences.lookSensitivity = sensitivity;
+    state.preferences.phoneHintSeen = Boolean(saved.phoneHintSeen);
+  } catch (error) {
+    console.warn('Could not load launcher preferences', error);
+  }
+}
+
+function savePreferences() {
+  try {
+    localStorage.setItem(PREFERENCES_KEY, JSON.stringify(state.preferences));
+  } catch (error) {
+    console.warn('Could not save launcher preferences', error);
+  }
+}
+
+function applyPreferences() {
+  document.body.dataset.touchControls = state.preferences.touchControls;
+  document.body.dataset.handedness = state.preferences.handedness;
+  if (ui.touchControlsSetting) ui.touchControlsSetting.value = state.preferences.touchControls;
+  if (ui.handednessSetting) ui.handednessSetting.value = state.preferences.handedness;
+  if (ui.lookSensitivitySetting) ui.lookSensitivitySetting.value = String(state.preferences.lookSensitivity);
+  if (ui.phoneHint && state.preferences.phoneHintSeen) {
+    ui.phoneHint.textContent = 'Phone controls are available during play. Landscape remains recommended.';
+  }
+  state.phoneControls?.setLookSensitivity(state.preferences.lookSensitivity);
+}
+
+function callEngine(name, returnType, args = []) {
+  const Module = getModule();
+  if (typeof Module.ccall !== 'function') {
+    return null;
+  }
+  try {
+    return Module.ccall(name, returnType, args.map(([type]) => type), args.map(([, value]) => value));
+  } catch (error) {
+    console.warn(`Engine call failed: ${name}`, error);
+    return null;
+  }
+}
+
+function engineKey(key, down) {
+  if (state.runtimeReady && !state.runtimeExited) {
+    const ok = callEngine('Hexenwail_TouchKey', 'number', [['number', key], ['number', down ? 1 : 0]]);
+    if (ok !== null) return;
+  }
+  const type = down ? 'keydown' : 'keyup';
+  const event = new KeyboardEvent(type, { key: String.fromCharCode(key), bubbles: true, cancelable: true });
+  ui.canvas?.dispatchEvent(event);
+}
+
+function engineLook(dx, dy) {
+  if (!state.runtimeReady || state.runtimeExited) return;
+  callEngine('Hexenwail_TouchLook', null, [['number', dx], ['number', dy]]);
+}
+
+function releasePhoneInputs() {
+  state.phoneControls?.releaseAll();
+}
+
+function openPhoneOverlay() {
+  releasePhoneInputs();
+  if (ui.phoneOverlay) ui.phoneOverlay.setAttribute('aria-hidden', 'false');
+}
+
+function closePhoneOverlay() {
+  if (ui.phoneOverlay) ui.phoneOverlay.setAttribute('aria-hidden', 'true');
+  tryCaptureInput();
+}
+
+async function syncAndReload() {
+  releasePhoneInputs();
+  setStatus('Syncing saves before restart…');
+  await syncRuntimeToStorage();
+  location.reload();
+}
+
+function resizeCanvasToViewport() {
+  if (!ui.canvas || !ui.viewport) return;
+  const rect = ui.viewport.getBoundingClientRect();
+  const cssWidth = Math.max(1, Math.floor(rect.width || globalThis.visualViewport?.width || innerWidth || 1));
+  const cssHeight = Math.max(1, Math.floor(rect.height || globalThis.visualViewport?.height || innerHeight || 1));
+  const dpr = Math.max(1, globalThis.devicePixelRatio || 1);
+  const pixelWidth = Math.max(1, Math.round(cssWidth * dpr));
+  const pixelHeight = Math.max(1, Math.round(cssHeight * dpr));
+  if (ui.canvas.width !== pixelWidth) ui.canvas.width = pixelWidth;
+  if (ui.canvas.height !== pixelHeight) ui.canvas.height = pixelHeight;
+  ui.canvas.style.width = `${cssWidth}px`;
+  ui.canvas.style.height = `${cssHeight}px`;
+  if (state.runtimeReady && !state.runtimeExited) {
+    callEngine('Hexenwail_ResizeCanvas', null, [['number', cssWidth], ['number', cssHeight]]);
+  }
+}
+
+function scheduleCanvasResize() {
+  requestAnimationFrame(() => {
+    resizeCanvasToViewport();
+    requestAnimationFrame(resizeCanvasToViewport);
+  });
+}
+
+async function handleEngineQuit(kind = 'quit', message = '') {
+  if (state.quitInProgress) return;
+  state.quitInProgress = true;
+  releasePhoneInputs();
+  const intentional = kind === 'quit';
+  try {
+    setStatus(intentional ? 'Hexenwail quit. Syncing saves…' : `Engine stopped unexpectedly. Syncing saves…`, intentional ? 'info' : 'error');
+    await syncRuntimeToStorage();
+  } catch (error) {
+    console.warn('Quit-time save sync failed', error);
+  } finally {
+    state.engineStarted = false;
+    state.runtimeExited = true;
+    setEngineState(intentional ? 'stopped' : 'fatal');
+    closePhoneOverlay();
+    setStatus(intentional
+      ? 'Hexenwail stopped. Use Restart game to start a fresh WASM runtime.'
+      : `Engine fatal error: ${message || 'unknown error'}. Restart game reloads a clean runtime.`, intentional ? 'info' : 'error');
+    updateLaunchState();
+    state.quitInProgress = false;
+  }
+}
+
 async function maybeStartEngine() {
   if (state.engineStarted || !state.runtimeReady || !state.storageReady || !hasRequiredBaseAssets([...state.storedPaths])) {
     return;
   }
+  if (state.runtimeExited) {
+    await syncAndReload();
+    return;
+  }
   state.engineStarted = true;
-  document.body.dataset.engineState = 'running';
+  setEngineState('running');
+  state.preferences.phoneHintSeen = true;
+  savePreferences();
+  applyPreferences();
+  scheduleCanvasResize();
   setStatus('Starting Hexenwail…');
   try {
     getModule().callMain?.([]);
+    scheduleCanvasResize();
     setStatus('Hexenwail running. Tap the canvas to focus input.');
   } catch (error) {
     state.engineStarted = false;
-    document.body.dataset.engineState = 'ready';
+    state.runtimeExited = true;
+    setEngineState('fatal');
     setStatus(`Engine start failed: ${error.message}`, 'error');
     throw error;
   }
@@ -602,7 +763,7 @@ async function clearImportedData() {
     }
   }
   state.engineStarted = false;
-  document.body.dataset.engineState = 'ready';
+  setEngineState(state.runtimeExited ? 'stopped' : 'ready');
   setImportMessage('Imported browser data cleared.', 'success');
   if (ui.rejectedList) ui.rejectedList.textContent = '';
   if (ui.progressText) ui.progressText.textContent = 'No imported assets yet.';
@@ -868,12 +1029,29 @@ function bindUi() {
     saveMessage: document.getElementById('save-message'),
     directoryInput: document.getElementById('directory-input'),
     dropZone: document.getElementById('drop-zone'),
+    viewport: document.querySelector('.viewport'),
     storageText: document.getElementById('storage-text'),
     storageBackendText: document.getElementById('storage-backend-text'),
     offlineText: document.getElementById('offline-text'),
     requirementsText: document.getElementById('requirements-text'),
     pointerLockHint: document.getElementById('pointer-lock-hint'),
+    touchControlsSetting: document.getElementById('touch-controls-setting'),
+    handednessSetting: document.getElementById('handedness-setting'),
+    lookSensitivitySetting: document.getElementById('look-sensitivity-setting'),
+    phoneHint: document.getElementById('phone-hint'),
+    phoneControlsRoot: document.getElementById('phone-controls'),
+    phoneMenuButton: document.getElementById('phone-menu-button'),
+    phoneOverlay: document.getElementById('phone-overlay'),
+    phoneResumeButton: document.getElementById('phone-resume-button'),
+    phoneEscapeButton: document.getElementById('phone-escape-button'),
+    phoneRestartButton: document.getElementById('phone-restart-button'),
   });
+
+  state.phoneControls = new PhoneControls(ui.phoneControlsRoot, {
+    key: engineKey,
+    look: engineLook,
+  }, { lookSensitivity: state.preferences.lookSensitivity });
+  state.phoneControls.attach();
 
   ui.importButton?.addEventListener('click', () => ui.fileInput?.click());
   ui.directoryButton?.addEventListener('click', () => ui.directoryInput?.click());
@@ -885,7 +1063,13 @@ function bindUi() {
     await handleImportedFiles(event.target.files);
     event.target.value = '';
   });
-  ui.launchButton?.addEventListener('click', () => maybeStartEngine());
+  ui.launchButton?.addEventListener('click', () => {
+    if (state.runtimeExited) {
+      syncAndReload().catch((error) => setStatus(`Restart failed: ${error.message}`, 'error'));
+    } else {
+      maybeStartEngine();
+    }
+  });
   ui.clearButton?.addEventListener('click', () => clearImportedData());
   ui.exportSavesButton?.addEventListener('click', () => exportSaves());
   ui.importSavesButton?.addEventListener('click', () => ui.saveFileInput?.click());
@@ -896,6 +1080,31 @@ function bindUi() {
   });
   ui.fullscreenButton?.addEventListener('click', () => requestFullscreenForCanvas());
   ui.canvas?.addEventListener('click', tryCaptureInput);
+  ui.phoneMenuButton?.addEventListener('click', openPhoneOverlay);
+  ui.phoneResumeButton?.addEventListener('click', closePhoneOverlay);
+  ui.phoneEscapeButton?.addEventListener('click', () => {
+    engineKey(PHONE_CONTROL_KEYCODES.menu, true);
+    engineKey(PHONE_CONTROL_KEYCODES.menu, false);
+    closePhoneOverlay();
+  });
+  ui.phoneRestartButton?.addEventListener('click', () => {
+    syncAndReload().catch((error) => setStatus(`Restart failed: ${error.message}`, 'error'));
+  });
+  ui.touchControlsSetting?.addEventListener('change', () => {
+    state.preferences.touchControls = ui.touchControlsSetting.value;
+    savePreferences();
+    applyPreferences();
+  });
+  ui.handednessSetting?.addEventListener('change', () => {
+    state.preferences.handedness = ui.handednessSetting.value;
+    savePreferences();
+    applyPreferences();
+  });
+  ui.lookSensitivitySetting?.addEventListener('input', () => {
+    state.preferences.lookSensitivity = Number(ui.lookSensitivitySetting.value);
+    savePreferences();
+    applyPreferences();
+  });
 
   if (ui.dropZone) {
     for (const eventName of ['dragenter', 'dragover']) {
@@ -952,6 +1161,7 @@ function bindBootCallbacks() {
     await loadStoredFilesIntoRuntime();
     await maybeStartEngine();
   };
+  boot.onQuit = (detail) => handleEngineQuit(detail?.kind ?? 'quit', detail?.message ?? '');
 
   if (boot.runtimeInitialized) {
     queueMicrotask(async () => {
@@ -963,7 +1173,9 @@ function bindBootCallbacks() {
 }
 
 async function init() {
+  loadPreferences();
   bindUi();
+  applyPreferences();
   bindBootCallbacks();
   updateLaunchState();
   setImportMessage('Import files, a directory, or a ZIP archive. All processing stays in your browser.');
@@ -983,8 +1195,19 @@ async function init() {
   }, SAVE_SYNC_INTERVAL_MS);
   addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
+      releasePhoneInputs();
       syncRuntimeToStorage().catch((error) => console.warn('Save sync failed', error));
     }
+  });
+  addEventListener('orientationchange', () => {
+    releasePhoneInputs();
+    scheduleCanvasResize();
+  });
+  addEventListener('resize', scheduleCanvasResize);
+  globalThis.visualViewport?.addEventListener('resize', scheduleCanvasResize);
+  globalThis.visualViewport?.addEventListener('scroll', scheduleCanvasResize);
+  addEventListener('hexenwailquit', (event) => {
+    handleEngineQuit(event.detail?.kind ?? 'quit', event.detail?.message ?? '').catch((error) => console.warn(error));
   });
   // 'pagehide' fires on tab close, app switch (iPadOS Safari/PWA backgrounding),
   // and bfcache eviction; 'beforeunload' and 'freeze' are extra safety nets so
