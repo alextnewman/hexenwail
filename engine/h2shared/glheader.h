@@ -107,6 +107,9 @@ typedef int64_t  GLint64;
 #ifndef GL_RGBA8
 #define GL_RGBA8				0x8058
 #endif
+#ifndef GL_RGB8
+#define GL_RGB8					0x8051
+#endif
 #ifndef GL_RENDERBUFFER
 #define GL_RENDERBUFFER				0x8D41
 #endif

@@ -47,7 +47,9 @@ without being compiled or initialized.
    family.
 2. Draws generated albedo, lightmap, and fullbright textures through the world
    contract into an RGBA8 FBO without game data.
-3. Rejects GL errors, unexpected pixels, and predominantly black output.
+3. Verifies gamma correction and RGB palette-LUT post-processing with generated
+   textures.
+4. Rejects GL errors, unexpected pixels, and predominantly black output.
 
 The same test runs in the shared PWA/WebAssembly CI action before the WASM
 build. `npm test` covers the black-frame detector and launcher failure gate.

@@ -53,6 +53,11 @@ void main() {
 const POSTPROCESS_FRAGMENT = `${HEADER}
 uniform sampler2D scene;
 uniform sampler3D paletteLUT;
+uniform float gamma;
+uniform float contrast;
+uniform int softemu;
+uniform float dither;
+uniform float scale;
 in vec2 v_uv;
 out vec4 fragColor;
 uint reverse8(uint value) {
@@ -61,12 +66,27 @@ uint reverse8(uint value) {
   value = ((value & 0x33u) << 2) | ((value >> 2) & 0x33u);
   return ((value & 0x0fu) << 4) | (value >> 4);
 }
+float bayer16(ivec2 coordinates) {
+  coordinates &= 15;
+  coordinates.y ^= coordinates.x;
+  uint value = uint(coordinates.y | (coordinates.x << 8));
+  value = (value ^ (value << 2)) & 0x3333u;
+  value = (value ^ (value << 1)) & 0x5555u;
+  value |= value >> 7;
+  return float(reverse8(value)) / 256.0 - 0.5;
+}
 void main() {
-  uint pattern = reverse8(uint(ivec2(gl_FragCoord.xy).x));
-  vec3 color = texture(scene, v_uv).rgb;
-  ivec3 index = ivec3(clamp(color, 0.0, 1.0) * 31.0);
-  float paletteIndex = texelFetch(paletteLUT, index, 0).r;
-  fragColor = vec4(pow(color, vec3(1.0)) + float(pattern) * 0.0 + paletteIndex * 0.0, 1.0);
+  vec4 color = texture(scene, v_uv);
+  if (contrast != 1.0) color.rgb = (color.rgb - 0.5) * contrast + 0.5;
+  if (gamma != 1.0) color.rgb = pow(max(color.rgb, vec3(0.0)), vec3(gamma));
+  color.rgb = clamp(color.rgb, 0.0, 1.0);
+  if (softemu > 0) {
+    vec3 adjusted = color.rgb;
+    if (softemu == 1) adjusted += bayer16(ivec2(gl_FragCoord.xy * scale)) * dither / 16.0;
+    ivec3 index = ivec3(clamp(adjusted, 0.0, 1.0) * 31.0 + 0.5);
+    color.rgb = texelFetch(paletteLUT, index, 0).rgb;
+  }
+  fragColor = color;
 }`;
 
 const BLOOM_FRAGMENT = `${HEADER}
@@ -150,6 +170,26 @@ function createSolidTexture(gl, unit, color) {
   return texture;
 }
 
+function createPaletteTexture(gl, unit, color) {
+  const texture = gl.createTexture();
+  const pixels = new Uint8Array(32 * 32 * 32 * 3);
+  for (let offset = 0; offset < pixels.length; offset += 3) {
+    pixels.set(color, offset);
+  }
+  gl.activeTexture(gl.TEXTURE0 + unit);
+  gl.bindTexture(gl.TEXTURE_3D, texture);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+  gl.texImage3D(
+    gl.TEXTURE_3D, 0, gl.RGB8, 32, 32, 32, 0, gl.RGB, gl.UNSIGNED_BYTE,
+    pixels,
+  );
+  return texture;
+}
+
 function framebufferSelfTest(gl, worldProgram) {
   const width = 32;
   const height = 32;
@@ -228,6 +268,80 @@ function framebufferSelfTest(gl, worldProgram) {
   };
 }
 
+function postprocessSelfTest(gl, postprocessProgram) {
+  const width = 8;
+  const height = 8;
+  const sceneTexture = createSolidTexture(gl, 0, [128, 96, 64, 255]);
+  const paletteColor = [40, 80, 120];
+  const paletteTexture = createPaletteTexture(gl, 1, paletteColor);
+  const targetTexture = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, targetTexture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+  const framebuffer = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, targetTexture, 0);
+  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  if (status !== gl.FRAMEBUFFER_COMPLETE) {
+    throw new Error(`post-process framebuffer incomplete: 0x${status.toString(16)}`);
+  }
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, sceneTexture);
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_3D, paletteTexture);
+
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  gl.useProgram(postprocessProgram);
+  gl.uniform1i(gl.getUniformLocation(postprocessProgram, 'scene'), 0);
+  gl.uniform1i(gl.getUniformLocation(postprocessProgram, 'paletteLUT'), 1);
+  gl.uniform1f(gl.getUniformLocation(postprocessProgram, 'contrast'), 1);
+  gl.uniform1f(gl.getUniformLocation(postprocessProgram, 'dither'), 0);
+  gl.uniform1f(gl.getUniformLocation(postprocessProgram, 'scale'), 1);
+  gl.viewport(0, 0, width, height);
+
+  const drawAndSample = (gamma, softemu) => {
+    gl.uniform1f(gl.getUniformLocation(postprocessProgram, 'gamma'), gamma);
+    gl.uniform1i(gl.getUniformLocation(postprocessProgram, 'softemu'), softemu);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const sample = new Uint8Array(4);
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, sample);
+    return [...sample];
+  };
+
+  const gammaSample = drawAndSample(2, 0);
+  const paletteSample = drawAndSample(1, 2);
+
+  gl.useProgram(null);
+  gl.bindVertexArray(null);
+  gl.deleteVertexArray(vao);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.deleteFramebuffer(framebuffer);
+  gl.deleteTexture(targetTexture);
+  gl.deleteTexture(sceneTexture);
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_3D, null);
+  gl.deleteTexture(paletteTexture);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, null);
+
+  const expectedGamma = [64, 36, 16, 255];
+  if (gammaSample.some((channel, index) => Math.abs(channel - expectedGamma[index]) > 2)) {
+    throw new Error(`gamma post-process returned ${gammaSample.join(',')}, expected ${expectedGamma.join(',')}`);
+  }
+  const expectedPalette = [...paletteColor, 255];
+  if (paletteSample.some((channel, index) => Math.abs(channel - expectedPalette[index]) > 2)) {
+    throw new Error(`palette post-process returned ${paletteSample.join(',')}, expected ${expectedPalette.join(',')}`);
+  }
+
+  return { gammaSample, paletteSample };
+}
+
 export function runWebGLDiagnostics({ canvas = null } = {}) {
   const target = canvas || document.createElement('canvas');
   target.width = 32;
@@ -247,7 +361,9 @@ export function runWebGLDiagnostics({ canvas = null } = {}) {
       programs.push([family, compileProgram(gl, family, vertexSource, fragmentSource)]);
     }
     const worldProgram = programs.find(([family]) => family === 'world')?.[1];
+    const postprocessProgram = programs.find(([family]) => family === 'postprocess')?.[1];
     const framebuffer = framebufferSelfTest(gl, worldProgram);
+    const postprocess = postprocessSelfTest(gl, postprocessProgram);
     const error = gl.getError();
     if (error !== gl.NO_ERROR) {
       throw new Error(`WebGL2 error after self-test: 0x${error.toString(16)}`);
@@ -267,6 +383,7 @@ export function runWebGLDiagnostics({ canvas = null } = {}) {
       },
       shaders: SHADER_FAMILIES.map(([family]) => family),
       framebuffer,
+      postprocess,
     };
   } finally {
     for (const [, program] of programs) gl.deleteProgram(program);

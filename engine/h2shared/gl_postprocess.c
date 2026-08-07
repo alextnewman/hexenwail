@@ -110,7 +110,6 @@ static GLint	pp_loc_mvp;
 static GLint	pp_loc_softemu;
 static GLint	pp_loc_dither;
 static GLint	pp_loc_paletteLUT;
-static GLint	pp_loc_palette;
 static GLint	pp_loc_scale;
 static GLint	pp_loc_waterwarp;
 static GLint	pp_loc_time;
@@ -604,7 +603,6 @@ static const char pp_frag_src[] =
 	"uniform int softemu;\n"
 	"uniform float dither;\n"
 	"uniform sampler3D paletteLUT;\n"
-	"uniform vec3 palette[256];\n"
 	"uniform float scale;\n"
 	"uniform float waterwarp;\n"
 	"uniform float time;\n"
@@ -700,8 +698,7 @@ static const char pp_frag_src[] =
 	"            c += d * dither / 16.0;\n"
 	"        }\n"
 	"        ivec3 idx = ivec3(clamp(c, 0.0, 1.0) * 31.0 + 0.5);\n"
-	"        int palIdx = int(texelFetch(paletteLUT, idx, 0).r * 255.0);\n"
-	"        color.rgb = palette[palIdx];\n"
+	"        color.rgb = texelFetch(paletteLUT, idx, 0).rgb;\n"
 	"    }\n"
 	"\n"
 	"    fragColor = color;\n"
@@ -772,7 +769,6 @@ static qboolean PP_InitShader (void)
 	pp_loc_softemu = glGetUniformLocation_fp(pp_program, "softemu");
 	pp_loc_dither = glGetUniformLocation_fp(pp_program, "dither");
 	pp_loc_paletteLUT = glGetUniformLocation_fp(pp_program, "paletteLUT");
-	pp_loc_palette = glGetUniformLocation_fp(pp_program, "palette");
 	pp_loc_scale = glGetUniformLocation_fp(pp_program, "scale");
 	pp_loc_waterwarp = glGetUniformLocation_fp(pp_program, "waterwarp");
 	pp_loc_time = glGetUniformLocation_fp(pp_program, "time");
@@ -861,7 +857,11 @@ extern unsigned int d_8to24table[256];
 
 static void PP_BuildPaletteLUT (void)
 {
-	unsigned char lut[32 * 32 * 32];
+	/* Store the resolved RGB color instead of an 8-bit palette index.  This
+	 * keeps the fragment shader below WebGL2's minimum uniform-vector limit;
+	 * a vec3[256] palette alone would require more than the guaranteed 224
+	 * fragment uniform vectors. */
+	static unsigned char lut[32 * 32 * 32 * 3];
 	int r, g, b, i;
 
 	if (!glTexImage3D_fp)
@@ -897,7 +897,13 @@ static void PP_BuildPaletteLUT (void)
 						best = i;
 					}
 				}
-				lut[b * 32 * 32 + g * 32 + r] = (unsigned char)best;
+				{
+					unsigned int color = d_8to24table[best];
+					int offset = (b * 32 * 32 + g * 32 + r) * 3;
+					lut[offset + 0] = (color >>  0) & 0xff;
+					lut[offset + 1] = (color >>  8) & 0xff;
+					lut[offset + 2] = (color >> 16) & 0xff;
+				}
 			}
 		}
 	}
@@ -905,8 +911,8 @@ static void PP_BuildPaletteLUT (void)
 	glGenTextures_fp(1, &pp_palette_lut);
 	glActiveTexture_fp(GL_TEXTURE0 + 1);
 	glBindTexture_fp(GL_TEXTURE_3D, pp_palette_lut);
-	glTexImage3D_fp(GL_TEXTURE_3D, 0, GL_R8, 32, 32, 32, 0,
-			GL_RED, GL_UNSIGNED_BYTE, lut);
+	glTexImage3D_fp(GL_TEXTURE_3D, 0, GL_RGB8, 32, 32, 32, 0,
+			GL_RGB, GL_UNSIGNED_BYTE, lut);
 	glTexParameterf_fp(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameterf_fp(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameterf_fp(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -1773,20 +1779,6 @@ apply_shader:
 		if (scale > 1.0f) scale = 1.0f;
 		glUniform1f_fp(pp_loc_scale, scale);
 	}
-	if ((int)r_softemu.value > 0 && pp_loc_palette >= 0 && glUniform3fv_fp)
-	{
-		float pal[256 * 3];
-		int i;
-		for (i = 0; i < 256; i++)
-		{
-			unsigned int c = d_8to24table[i];
-			pal[i * 3 + 0] = ((c >>  0) & 0xff) / 255.0f;
-			pal[i * 3 + 1] = ((c >>  8) & 0xff) / 255.0f;
-			pal[i * 3 + 2] = ((c >> 16) & 0xff) / 255.0f;
-		}
-		glUniform3fv_fp(pp_loc_palette, 256, pal);
-	}
-
 	/* Warp and blur: already baked into pp_native_color_tex when pp_native_active.
 	 * Apply here only for the copyback fallback path (pp_native_active=false). */
 	if (pp_loc_waterwarp >= 0)

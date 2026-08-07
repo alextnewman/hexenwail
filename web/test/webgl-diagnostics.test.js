@@ -28,4 +28,6 @@ test('framebuffer self-test validates a generated world draw', async () => {
   assert.match(diagnostics, /gl\.clearColor\(0, 0, 0, 1\)/);
   assert.match(diagnostics, /gl\.drawArrays\(gl\.TRIANGLES, 0, 6\)/);
   assert.match(diagnostics, /generated world draw returned/);
+  assert.match(diagnostics, /gamma post-process returned/);
+  assert.match(diagnostics, /palette post-process returned/);
 });

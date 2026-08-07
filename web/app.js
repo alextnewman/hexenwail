@@ -1275,6 +1275,7 @@ async function init() {
     logToConsole('[renderer]', `${report.profile}; GLSL ${report.shadingLanguage}; `
       + `shaders=${report.shaders.length}; RGBA8-FBO=${report.framebuffer.width}x${report.framebuffer.height}; `
       + `visible=${(report.framebuffer.nonBlackRatio * 100).toFixed(0)}%; `
+      + `postprocess=gamma/palette pass; `
       + `HDR=${report.extensions.colorBufferFloat ? 'available' : 'disabled'}; `
       + `OIT=${report.extensions.indexedBlend ? 'extension present' : 'sorted fallback'}`);
   } catch (error) {
