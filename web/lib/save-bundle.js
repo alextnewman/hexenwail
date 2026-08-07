@@ -190,7 +190,9 @@ export function getPakCompatibilityWarnings(requiredPaks, installedPaks) {
 
 export function planSaveImport(existingPaths, bundleFiles, mode) {
   assertBundle(mode === 'merge' || mode === 'replace', 'Invalid save import mode');
-  const writes = bundleFiles.map((file) => file.path);
+  const writes = mode === 'merge'
+    ? bundleFiles.map((file) => file.path).filter((path) => existingPaths.includes(path))
+    : bundleFiles.map((file) => file.path);
   const deletes = mode === 'replace' ? existingPaths.filter((path) => isSavePath(path) && !writes.includes(path)) : [];
   return { writes, deletes };
 }

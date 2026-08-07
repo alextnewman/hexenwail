@@ -76,8 +76,11 @@ test('rejects mismatched, duplicate, unlisted, and unsafe bundle files', async (
 
 test('plans merge and replace without deleting assets', () => {
   const existing = ['data1/pak0.pak', 'data1/s0/info.dat', 'data1/s1/clients.gip'];
-  assert.deepEqual(planSaveImport(existing, [save], 'merge'), { writes: ['data1/s0/clients.gip'], deletes: [] });
+  assert.deepEqual(planSaveImport(existing, [save], 'merge'), { writes: [], deletes: [] });
   assert.deepEqual(planSaveImport(existing, [save], 'replace'), { writes: ['data1/s0/clients.gip'], deletes: ['data1/s0/info.dat', 'data1/s1/clients.gip'] });
+
+  const existingWithSave = ['data1/pak0.pak', 'data1/s0/clients.gip', 'data1/s1/clients.gip'];
+  assert.deepEqual(planSaveImport(existingWithSave, [save], 'merge'), { writes: ['data1/s0/clients.gip'], deletes: [] });
 });
 
 test('reports missing and incompatible PAKs', () => {
