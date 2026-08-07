@@ -649,7 +649,7 @@ static const char pp_frag_src[] =
 	"    v &= 0xffu;\n"
 	"    v = ((v & 0x55u) << 1) | ((v >> 1) & 0x55u);\n"
 	"    v = ((v & 0x33u) << 2) | ((v >> 2) & 0x33u);\n"
-	"    return (v << 4) | (v >> 4);\n"
+	"    return ((v & 0x0fu) << 4) | (v >> 4);\n"
 	"}\n"
 	"\n"
 	"float bayer16(ivec2 c) {\n"

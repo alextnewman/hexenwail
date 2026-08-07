@@ -279,11 +279,11 @@ static void GL_InitRendererCaps (void)
 		gl_renderer_caps.anisotropy =
 			context > 0 &&
 			emscripten_webgl_enable_extension(context, "EXT_texture_filter_anisotropic")
-				== EMSCRIPTEN_RESULT_SUCCESS;
+				!= 0;
 		gl_renderer_caps.float_color_buffer =
 			context > 0 &&
 			emscripten_webgl_enable_extension(context, "EXT_color_buffer_float")
-				== EMSCRIPTEN_RESULT_SUCCESS;
+				!= 0;
 		gl_renderer_caps.postprocess = true;
 	}
 	gl_bindless_able = false;

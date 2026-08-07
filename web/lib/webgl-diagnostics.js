@@ -59,7 +59,7 @@ uint reverse8(uint value) {
   value &= 0xffu;
   value = ((value & 0x55u) << 1) | ((value >> 1) & 0x55u);
   value = ((value & 0x33u) << 2) | ((value >> 2) & 0x33u);
-  return (value << 4) | (value >> 4);
+  return ((value & 0x0fu) << 4) | (value >> 4);
 }
 void main() {
   uint pattern = reverse8(uint(ivec2(gl_FragCoord.xy).x));
