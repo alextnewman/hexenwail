@@ -10,10 +10,12 @@ test('launcher chrome exposes bounded runtime diagnostics in both shells', () =>
   for (const path of ['web/index.html', 'engine/web/shell.html']) {
     const html = readFileSync(join(repoRoot, path), 'utf8');
     assert.match(html, /id="runtime-log"/, `${path} is missing the runtime log`);
+    assert.match(html, /earlyLog/, `${path} does not buffer output emitted before app.js binds`);
   }
 
   assert.match(app, /MAX_RUNTIME_LOG_ENTRIES/);
   assert.match(app, /appendRuntimeLog\(prefix, text\)/);
+  assert.match(app, /boot\.earlyLog \?\? \[\]/);
   assert.match(app, /runtimeLog: document\.getElementById\('runtime-log'\)/);
 });
 

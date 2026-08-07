@@ -370,7 +370,14 @@
   </style>
   <script>
     window.__HEXENWAIL_EMSCRIPTEN_SCRIPT_EMBEDDED = false;
-    window.HexenwailBoot = { runtimeInitialized: false };
+    window.HexenwailBoot = {
+      runtimeInitialized: false,
+      earlyLog: [],
+      capture(prefix, message, error = false) {
+        this.earlyLog.push({ prefix, message: String(message ?? ''), error });
+        if (this.earlyLog.length > 200) this.earlyLog.shift();
+      }
+    };
     window.Module = {
       preRun: [],
       postRun: [],
@@ -379,8 +386,14 @@
       locateFile(path) { return new URL(path, document.baseURI).toString(); },
       onRuntimeInitialized() { window.HexenwailBoot.runtimeInitialized = true; },
       setStatus(text) { window.HexenwailBoot.lastStatus = text; },
-      print(text) { console.log('[hexenwail]', text); },
-      printErr(text) { console.error('[hexenwail:error]', text); }
+      print(text) {
+        window.HexenwailBoot.capture('[hexenwail]', text);
+        console.log('[hexenwail]', text);
+      },
+      printErr(text) {
+        window.HexenwailBoot.capture('[hexenwail:error]', text, true);
+        console.error('[hexenwail:error]', text);
+      }
     };
   </script>
 </head>

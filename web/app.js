@@ -86,8 +86,11 @@ function setEngineState(engineState) {
 
 function renderRuntimeLog() {
   if (!ui.runtimeLog) return;
+  const followTail = ui.runtimeLog.scrollHeight - ui.runtimeLog.scrollTop - ui.runtimeLog.clientHeight <= 8;
   ui.runtimeLog.textContent = state.runtimeLogEntries.join('\n');
-  ui.runtimeLog.scrollTop = ui.runtimeLog.scrollHeight;
+  if (followTail) {
+    ui.runtimeLog.scrollTop = ui.runtimeLog.scrollHeight;
+  }
 }
 
 function appendRuntimeLog(prefix, message) {
@@ -797,7 +800,6 @@ async function maybeStartEngine() {
     state.runtimeExited = true;
     setEngineState('fatal');
     setStatus(`Engine start failed: ${error.message}`, 'error');
-    throw error;
   }
 }
 
@@ -1225,6 +1227,10 @@ function bindBootCallbacks() {
   Module.printErr = (text) => {
     logToConsole('[hexenwail:error]', text, true);
   };
+  for (const entry of boot.earlyLog ?? []) {
+    logToConsole(entry.prefix, entry.message, entry.error);
+  }
+  boot.earlyLog = [];
   Module.setStatus = (text) => {
     if (text) {
       setStatus(text);
