@@ -4936,11 +4936,19 @@ static int	rprof_wpoly, rprof_epoly; /* saved from previous frame */
 
 static void R_ProfileInit (void)
 {
+#ifdef __EMSCRIPTEN__
+	/* GL_TIMESTAMP queries (EXT_disjoint_timer_query) aren't part of core
+	 * WebGL2/GLES3, so glGenQueries_fp is a compile-time no-op stub here
+	 * and can't be tested as a boolean; the profiler is simply unavailable
+	 * in the browser build. */
+	return;
+#else
 	if (rprof_available || !glGenQueries_fp)
 		return;
 	glGenQueries_fp(RPROF_COUNT + 1, rprof_queries);
 	rprof_available = true;
 	rprof_pending = false;
+#endif
 }
 
 static void R_ProfileTimestamp (int idx)

@@ -1037,8 +1037,15 @@ void OIT_BeginTranslucency (void)
 	static const float zeroes[4] = {0.f, 0.f, 0.f, 0.f};
 	static const float ones[4] = {1.f, 1.f, 1.f, 1.f};
 
-	if (!oit_available || !r_oit.integer || !glBlendFunci_fp)
+	if (!oit_available || !r_oit.integer)
 		return;
+#ifndef __EMSCRIPTEN__
+	/* glBlendFunci_fp is a compile-time no-op stub on Emscripten (WebGL2
+	 * has no per-buffer blending), so it can't be tested as a boolean;
+	 * oit_available already stays false there and short-circuits above. */
+	if (!glBlendFunci_fp)
+		return;
+#endif
 
 	oit_in_pass = true;
 	glBindFramebuffer_fp(GL_FRAMEBUFFER, oit_fbo);
@@ -1060,8 +1067,12 @@ void OIT_EndTranslucency (GLuint scene_fbo)
 	GLuint prog;
 	GLint loc_accum, loc_reveal;
 
-	if (!oit_available || !r_oit.integer || !glBlendFunci_fp)
+	if (!oit_available || !r_oit.integer)
 		return;
+#ifndef __EMSCRIPTEN__
+	if (!glBlendFunci_fp)
+		return;
+#endif
 
 	textarget = (oit_samples > 1) ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D;
 	prog = (oit_samples > 1) ? oit_resolve_prog_msaa : oit_resolve_prog;
@@ -1106,7 +1117,14 @@ void OIT_EndTranslucency (GLuint scene_fbo)
 
 qboolean OIT_Active (void)
 {
+#ifdef __EMSCRIPTEN__
+	/* glBlendFunci_fp is a compile-time no-op stub on Emscripten (no
+	 * per-buffer blending in WebGL2/GLES3); OIT_Init never sets
+	 * oit_available to true there, so this always evaluates false. */
+	return false;
+#else
 	return oit_available && r_oit.integer && glBlendFunci_fp != NULL;
+#endif
 }
 
 qboolean OIT_InPass (void)
@@ -1208,9 +1226,14 @@ void GL_PostProcess_Init (void)
 	pp_initialized = true;
 	Con_SafePrintf("PostProcess: gamma/contrast shader ready\n");
 
-	/* Init OIT resolve shader (FBO created lazily when scene FBO is ready) */
+	/* Init OIT resolve shader (FBO created lazily when scene FBO is ready).
+	 * glBlendFunci_fp is a compile-time no-op stub on Emscripten, so it
+	 * can't be tested as a boolean there — WBOIT per-buffer blending is
+	 * unavailable in WebGL2/GLES3 anyway. */
+#ifndef __EMSCRIPTEN__
 	if (glBlendFunci_fp && glDrawBuffers_fp && glClearBufferfv_fp)
 		OIT_InitShader();
+#endif
 }
 
 void GL_PostProcess_Shutdown (void)

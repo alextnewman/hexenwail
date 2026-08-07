@@ -1,0 +1,62 @@
+name: 'Build hexenwail WebAssembly + PWA artifact'
+description: >-
+  Installs a pinned Emscripten SDK (with caching), runs the lightweight
+  Node PWA tests, builds the full WebAssembly client, and assembles the
+  static Pages/PWA artifact. Single source of truth shared by the PR
+  "PWA / WebAssembly" check and the GitHub Pages deployment workflow so
+  the two build recipes cannot drift apart.
+
+inputs:
+  emsdk-version:
+    description: 'Pinned emsdk/Emscripten version to install (never "latest").'
+    required: true
+  dist-dir:
+    description: 'Directory to assemble the static PWA artifact into.'
+    required: false
+    default: 'dist'
+
+outputs:
+  dist-dir:
+    description: 'Directory containing the assembled PWA artifact.'
+    value: ${{ inputs.dist-dir }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install native build dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake pkg-config python3
+
+    - name: Run lightweight PWA tests
+      shell: bash
+      run: node --test web/test/*.test.js
+
+    - name: Cache emsdk
+      id: cache-emsdk
+      uses: actions/cache@v4
+      with:
+        path: emsdk
+        key: emsdk-${{ runner.os }}-${{ inputs.emsdk-version }}
+
+    - name: Install emsdk
+      shell: bash
+      run: |
+        if [ ! -d emsdk/.git ]; then
+          rm -rf emsdk
+          git clone https://github.com/emscripten-core/emsdk.git emsdk
+        fi
+        cd emsdk
+        ./emsdk install "${{ inputs.emsdk-version }}"
+        ./emsdk activate "${{ inputs.emsdk-version }}"
+
+    - name: Build WebAssembly client
+      shell: bash
+      run: |
+        source "$PWD/emsdk/emsdk_env.sh"
+        ./scripts/wasm-build.sh
+
+    - name: Assemble PWA artifact
+      shell: bash
+      run: ./scripts/wasm-assemble-artifact.sh "${{ inputs.dist-dir }}"

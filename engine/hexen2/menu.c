@@ -30,6 +30,16 @@
 #include "sbar.h"
 #include "sdl_inc.h"
 
+/* ES 3.0 compatibility: GL_QUADS doesn't exist (used only as an
+ * application-side primitive tag passed through to GL_ImmEnd, which
+ * triangulates on the CPU — see gl_rmain.c / gl_vbo.c for the same
+ * pattern). */
+#ifdef EMSCRIPTEN
+#ifndef GL_QUADS
+#define GL_QUADS 0
+#endif
+#endif
+
 void (*vid_menudrawfn)(void);
 
 void (*vid_menukeyfn)(int key);
