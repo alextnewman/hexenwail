@@ -149,10 +149,15 @@ for a clean restart.
 
 ### Touch mappings
 
-Touch controls are shown by default on phone-sized coarse-pointer devices while
-playing. The launcher setting can force them on/off, choose left- or right-handed
-layout, and adjust look sensitivity. Preferences are stored in local browser
-storage, separate from imported game assets and saves.
+Touch controls are shown only when the launcher believes the device is a
+touch-only phone environment: phone-sized coarse pointer, no hover/fine pointer,
+and no connected gamepad. If a touchpad/mouse, physical keyboard activity, pen,
+wheel, or controller is detected, the overlay is hidden and all held touch inputs
+are released so it does not appear on an iPad with a keyboard/trackpad or when a
+controller is available. Within that touch-only gate, the launcher setting can
+choose auto/on/off behavior, left- or right-handed layout, and look sensitivity.
+Preferences are stored in local browser storage, separate from imported game
+assets and saves.
 
 Default mappings reuse existing engine input bindings:
 

@@ -101,7 +101,10 @@ test('phone mode DOM includes playing layout, touch visibility rules, and quit h
   const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
   assert.match(html, /body\[data-engine-state="running"\]/);
   assert.match(html, /id="phone-controls"/);
+  assert.match(html, /data-touch-only="true"/);
   assert.match(html, /@media \(pointer: coarse\) and \(max-width: 820px\)/);
+  assert.match(app, /isLikelyTouchOnlyEnvironment/);
+  assert.match(app, /gamepadconnected/);
   assert.match(app, /hexenwailquit/);
   assert.match(app, /Hexenwail_ResizeCanvas/);
 });

@@ -304,11 +304,11 @@
       right: auto;
       left: max(10.5rem, calc(var(--safe-left) + 9.5rem));
     }
-    body[data-engine-state="running"][data-touch-controls="on"] .phone-controls {
+    body[data-engine-state="running"][data-touch-only="true"][data-touch-controls="on"] .phone-controls {
       display: block;
     }
     @media (pointer: coarse) and (max-width: 820px) {
-      body[data-engine-state="running"][data-touch-controls="auto"] .phone-controls {
+      body[data-engine-state="running"][data-touch-only="true"][data-touch-controls="auto"] .phone-controls {
         display: block;
       }
     }

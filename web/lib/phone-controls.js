@@ -3,13 +3,13 @@ export const PHONE_CONTROL_KEYCODES = Object.freeze({
   back: 's'.charCodeAt(0),
   left: 'a'.charCodeAt(0),
   right: 'd'.charCodeAt(0),
-  attack: 200,
-  jump: 32,
-  use: 251,
-  menu: 27,
-  nextWeapon: 248,
-  prevWeapon: 247,
-  run: 134,
+  attack: 200, // K_MOUSE1
+  jump: 32, // K_SPACE
+  use: 251, // K_GP_LTHUMB, default binding "impulse 13" lift/use
+  menu: 27, // K_ESCAPE
+  nextWeapon: 248, // K_GP_RSHOULDER, default binding "impulse 10"
+  prevWeapon: 247, // K_GP_LSHOULDER, default binding "impulse 12"
+  run: 134, // K_SHIFT
 });
 
 export const DEFAULT_PHONE_CONTROL_OPTIONS = Object.freeze({

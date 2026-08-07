@@ -32,6 +32,7 @@ const state = {
     lookSensitivity: 1,
     phoneHintSeen: false,
   },
+  touchOnlyEnvironment: false,
 };
 
 const ui = {};
@@ -604,6 +605,7 @@ function savePreferences() {
 function applyPreferences() {
   document.body.dataset.touchControls = state.preferences.touchControls;
   document.body.dataset.handedness = state.preferences.handedness;
+  document.body.dataset.touchOnly = state.touchOnlyEnvironment ? 'true' : 'false';
   if (ui.touchControlsSetting) ui.touchControlsSetting.value = state.preferences.touchControls;
   if (ui.handednessSetting) ui.handednessSetting.value = state.preferences.handedness;
   if (ui.lookSensitivitySetting) ui.lookSensitivitySetting.value = String(state.preferences.lookSensitivity);
@@ -629,7 +631,7 @@ function callEngine(name, returnType, args = []) {
 function engineKey(key, down) {
   if (state.runtimeReady && !state.runtimeExited) {
     const ok = callEngine('Hexenwail_TouchKey', 'number', [['number', key], ['number', down ? 1 : 0]]);
-    if (ok !== null) return;
+    if (ok) return;
   }
   const type = down ? 'keydown' : 'keyup';
   const event = new KeyboardEvent(type, { key: String.fromCharCode(key), bubbles: true, cancelable: true });
@@ -643,6 +645,28 @@ function engineLook(dx, dy) {
 
 function releasePhoneInputs() {
   state.phoneControls?.releaseAll();
+}
+
+function hasConnectedGamepad() {
+  try {
+    return Boolean(navigator.getGamepads?.().some(Boolean));
+  } catch {
+    return false;
+  }
+}
+
+function isLikelyTouchOnlyEnvironment() {
+  const phoneSizedTouch = matchMedia('(pointer: coarse) and (hover: none) and (max-width: 820px)').matches;
+  const hasFinePointer = matchMedia('(any-pointer: fine)').matches || matchMedia('(any-hover: hover)').matches;
+  return phoneSizedTouch && !hasFinePointer && !hasConnectedGamepad();
+}
+
+function updateTouchOnlyEnvironment(forceOff = false) {
+  state.touchOnlyEnvironment = !forceOff && isLikelyTouchOnlyEnvironment();
+  if (!state.touchOnlyEnvironment) {
+    releasePhoneInputs();
+  }
+  applyPreferences();
 }
 
 function openPhoneOverlay() {
@@ -1106,6 +1130,25 @@ function bindUi() {
     applyPreferences();
   });
 
+  for (const query of [
+    '(pointer: coarse) and (hover: none) and (max-width: 820px)',
+    '(any-pointer: fine)',
+    '(any-hover: hover)',
+  ]) {
+    matchMedia(query).addEventListener('change', () => updateTouchOnlyEnvironment());
+  }
+  addEventListener('gamepadconnected', () => updateTouchOnlyEnvironment(true));
+  addEventListener('gamepaddisconnected', () => updateTouchOnlyEnvironment());
+  addEventListener('keydown', (event) => {
+    if (event.isTrusted !== false) updateTouchOnlyEnvironment(true);
+  });
+  addEventListener('wheel', () => updateTouchOnlyEnvironment(true), { passive: true });
+  addEventListener('pointerdown', (event) => {
+    if (event.pointerType === 'mouse' || event.pointerType === 'pen') {
+      updateTouchOnlyEnvironment(true);
+    }
+  }, { passive: true });
+
   if (ui.dropZone) {
     for (const eventName of ['dragenter', 'dragover']) {
       ui.dropZone.addEventListener(eventName, (event) => {
@@ -1175,7 +1218,7 @@ function bindBootCallbacks() {
 async function init() {
   loadPreferences();
   bindUi();
-  applyPreferences();
+  updateTouchOnlyEnvironment();
   bindBootCallbacks();
   updateLaunchState();
   setImportMessage('Import files, a directory, or a ZIP archive. All processing stays in your browser.');
