@@ -86,6 +86,10 @@ if(EMSCRIPTEN)
     set(USE_CODEC_FLAC OFF)
     set(USE_CODEC_OPUS OFF)
     set(USE_CODEC_XMP OFF)
+    # -sUSE_SDL=3 must also be passed at compile time (not just link time):
+    # Emscripten's SDL3 port only makes the SDL3/*.h headers available to the
+    # compiler when this flag is present on the compile command line too.
+    add_compile_options(-sUSE_SDL=3)
 elseif(WIN32)
     add_definitions(-DWIN32_LEAN_AND_MEAN -DGLQUAKE -DSDLQUAKE -DGL_DLSYM -DNO_SPLASHES)
     set(USE_ALSA OFF)
