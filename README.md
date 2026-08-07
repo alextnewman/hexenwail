@@ -122,6 +122,10 @@ Two ways to attach music to a custom map:
 
 See [BUILD.md](BUILD.md) for full instructions.
 
+### Web / iPadOS PWA
+
+A GitHub-Pages-deployable WebAssembly/PWA shell now lives under [`web/`](web/) with setup notes in [docs/PWA.md](docs/PWA.md). It targets installable, offline-capable play after the user imports their own legal Hexen II assets.
+
 **Quick start (any Linux):**
 ```bash
 cd engine && mkdir build && cd build
