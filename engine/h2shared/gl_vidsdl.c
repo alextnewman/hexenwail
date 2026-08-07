@@ -1329,7 +1329,9 @@ static void VID_ChangeVideoMode (int newmode)
 	GL_PostProcess_Shutdown();
 	R_FreeWorldVBO();
 	R_FreeSkyStencilVBO();
+#ifndef __EMSCRIPTEN__
 	R_FreeWorldCull();
+#endif
 	GL_ImmInvalidateState();
 	GL_VBO_Shutdown();
 	R_GPU_Particles_Shutdown();

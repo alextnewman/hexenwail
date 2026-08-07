@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Validates that the assembled PWA "dist" artifact contains everything the
+# offline-installable client needs: the Emscripten-generated runtime plus
+# the PWA shell (manifest + service worker). Used by the PR "PWA /
+# WebAssembly" check to catch artifact-assembly regressions before merge,
+# without actually deploying anything.
+#
+# Usage: scripts/wasm-validate-artifact.sh [dist-dir]
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+DIST_DIR="${1:-dist}"
+missing=0
+
+require() {
+	local path="$1"
+	if [ ! -s "$DIST_DIR/$path" ]; then
+		echo "MISSING (or empty): $DIST_DIR/$path" >&2
+		missing=1
+	else
+		echo "OK: $DIST_DIR/$path"
+	fi
+}
+
+require "hexenwail.js"
+require "hexenwail.wasm"
+require "engine-shell-debug.html"
+require "index.html"
+require "manifest.webmanifest"
+require "sw.js"
+
+# .data / .worker.js are optional depending on build options (e.g. preload
+# file packaging), so only report their presence informationally.
+for optional in hexenwail.data hexenwail.worker.js; do
+	if [ -s "$DIST_DIR/$optional" ]; then
+		echo "OK (optional present): $DIST_DIR/$optional"
+	else
+		echo "info: optional artifact not present: $DIST_DIR/$optional"
+	fi
+done
+
+if [ "$missing" -ne 0 ]; then
+	echo "PWA artifact validation FAILED: required files are missing." >&2
+	exit 1
+fi
+
+echo "PWA artifact validation passed."

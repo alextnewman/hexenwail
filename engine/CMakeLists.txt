@@ -86,6 +86,10 @@ if(EMSCRIPTEN)
     set(USE_CODEC_FLAC OFF)
     set(USE_CODEC_OPUS OFF)
     set(USE_CODEC_XMP OFF)
+    # -sUSE_SDL=3 must also be passed at compile time (not just link time):
+    # Emscripten's SDL3 port only makes the SDL3/*.h headers available to the
+    # compiler when this flag is present on the compile command line too.
+    add_compile_options(-sUSE_SDL=3)
 elseif(WIN32)
     add_definitions(-DWIN32_LEAN_AND_MEAN -DGLQUAKE -DSDLQUAKE -DGL_DLSYM -DNO_SPLASHES)
     set(USE_ALSA OFF)
@@ -126,27 +130,14 @@ if(WIN32)
     set(SDL_FOUND TRUE)
 else()
     if(EMSCRIPTEN)
-        # Emscripten: find SDL3 via both find_package and pkg-config
-        set(SDL_FOUND TRUE)  # Assume SDL3 is available
-        find_package(SDL3 QUIET)
-        if(SDL3_FOUND)
-            set(SDL_INCLUDE_DIR ${SDL3_INCLUDE_DIRS})
-        else()
-            # Try pkg-config as fallback
-            find_package(PkgConfig QUIET)
-            if(PKG_CONFIG_FOUND)
-                pkg_check_modules(SDL3 QUIET sdl3)
-                if(SDL3_FOUND)
-                    set(SDL_INCLUDE_DIR ${SDL3_INCLUDE_DIRS})
-                else()
-                    message(WARNING "SDL3 not found via pkg-config, trying system paths")
-                    set(SDL_INCLUDE_DIR "/usr/include")
-                endif()
-            else()
-                message(WARNING "pkg-config not found, using system paths for SDL3")
-                set(SDL_INCLUDE_DIR "/usr/include")
-            endif()
-        endif()
+        # Emscripten supplies SDL3 headers and libraries itself through
+        # -sUSE_SDL=3 (see target_link_options below). Never fall back to
+        # native SDL3 discovery (find_package/pkg-config) or host system
+        # paths like /usr/include here: those mix Ubuntu/glibc headers into
+        # the Emscripten cross-compile sysroot and break the build (e.g.
+        # "bits/wordsize.h file not found" from glibc's features-time64.h).
+        set(SDL_FOUND TRUE)
+        set(SDL_INCLUDE_DIR "")
         set(SDL_LIBRARY "")  # Link flag is set in target_link_options (-sUSE_SDL=3)
     else()
         find_package(SDL3 QUIET)
@@ -520,8 +511,12 @@ endif()
 # Link Libraries
 #============================================================================
 # SDL is always required
-target_link_libraries(${EXECUTABLE_NAME} PRIVATE ${SDL_LIBRARY})
-target_include_directories(${EXECUTABLE_NAME} PRIVATE ${SDL_INCLUDE_DIR})
+if(SDL_LIBRARY)
+    target_link_libraries(${EXECUTABLE_NAME} PRIVATE ${SDL_LIBRARY})
+endif()
+if(SDL_INCLUDE_DIR)
+    target_include_directories(${EXECUTABLE_NAME} PRIVATE ${SDL_INCLUDE_DIR})
+endif()
 
 # Platform-specific linking
 if(EMSCRIPTEN)

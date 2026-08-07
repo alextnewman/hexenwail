@@ -7,6 +7,17 @@ on:
       - '**'
   pull_request:
     branches: [master]
+  workflow_dispatch:
+
+env:
+  # Pinned to a known-working release — keep in sync with pages.yml.
+  # Never "latest": see the Pages workflow for the rationale.
+  EMSDK_VERSION: '4.0.23'
+
+# Least-privilege default: none of these jobs need to write anything back
+# to the repo, so restrict GITHUB_TOKEN to read-only.
+permissions:
+  contents: read
 
 jobs:
   lint:
@@ -18,7 +29,36 @@ jobs:
         run: sudo apt-get install -y shellcheck
 
       - name: Shellcheck
-        run: shellcheck scripts/mkrelease.sh flatpak/hexenwail.sh
+        run: |
+          shellcheck scripts/mkrelease.sh flatpak/hexenwail.sh \
+            scripts/wasm-build.sh scripts/wasm-assemble-artifact.sh \
+            scripts/wasm-validate-artifact.sh
+
+  # Dedicated PWA/WebAssembly validation, required on every pull request.
+  # Runs the lightweight Node PWA tests, builds the *full* WebAssembly
+  # client with the same Emscripten configuration as the Pages deployment
+  # (via the shared .github/actions/wasm-build composite action + scripts/
+  # wasm-*.sh), and validates the assembled static artifact — without
+  # deploying it. This is what would have caught the host-header
+  # contamination (`bits/wordsize.h` not found) before merge.
+  pwa:
+    name: PWA / WebAssembly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build WebAssembly client + assemble PWA artifact
+        uses: ./.github/actions/wasm-build
+        with:
+          emsdk-version: ${{ env.EMSDK_VERSION }}
+          dist-dir: dist
+
+      - name: Validate assembled PWA artifact
+        run: ./scripts/wasm-validate-artifact.sh dist
 
   build:
     runs-on: ubuntu-latest
@@ -46,6 +86,15 @@ jobs:
         run: nix build .#win64 --print-build-logs
 
   flatpak:
+    # The Flatpak build is slow and unrelated to routine PWA/native PR
+    # validation (it doesn't catch WebAssembly regressions and previously
+    # ran on every PR just adding minutes without signal for this goal).
+    # Tagged releases already build+publish it via release.yml; here it's
+    # opt-in only: manual "Run workflow", or a PR explicitly labeled
+    # "flatpak" for when a change actually touches the Flatpak manifest.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'flatpak')
     runs-on: ubuntu-latest
     # flatpak + flatpak-builder are installed directly on the runner — the
     # bilelmoussaoui/flatpak-github-actions container image worked until

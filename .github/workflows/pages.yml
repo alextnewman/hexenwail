@@ -12,7 +12,10 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  EMSDK_VERSION: latest
+  # Pinned to a known-working release (SDL3 support via -sUSE_SDL=3 landed
+  # in 3.1.73; 4.0.23 is a later, well-exercised release on the same
+  # numbering scheme). Never "latest" — keep in sync with ci.yml.
+  EMSDK_VERSION: '4.0.23'
 
 concurrency:
   group: github-pages
@@ -28,43 +31,14 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install native build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake pkg-config python3
+      - name: Build WebAssembly client + assemble PWA artifact
+        uses: ./.github/actions/wasm-build
+        with:
+          emsdk-version: ${{ env.EMSDK_VERSION }}
+          dist-dir: dist
 
-      - name: Install emsdk
-        run: |
-          git clone https://github.com/emscripten-core/emsdk.git emsdk
-          cd emsdk
-          ./emsdk install "$EMSDK_VERSION"
-          ./emsdk activate "$EMSDK_VERSION"
-          echo "EMSDK=$PWD" >> "$GITHUB_ENV"
-          echo "$PWD" >> "$GITHUB_PATH"
-          echo "$PWD/upstream/emscripten" >> "$GITHUB_PATH"
-
-      - name: Run lightweight PWA tests
-        run: node --test web/test/*.test.js
-
-      - name: Build WebAssembly client
-        shell: bash
-        run: |
-          source "$EMSDK/emsdk_env.sh"
-          mkdir -p engine/build
-          cd engine/build
-          emcmake cmake -DCMAKE_BUILD_TYPE=Release -DUSE_CODEC_VORBIS=OFF -DUSE_ALSA=OFF -DUSE_SDL3_STATIC=ON ..
-          emmake make -j"$(nproc)"
-
-      - name: Assemble Pages artifact
-        run: |
-          rm -rf dist
-          mkdir -p dist
-          cp -r web/. dist/
-          cp engine/build/bin/hexenwail.js dist/
-          cp engine/build/bin/hexenwail.wasm dist/
-          if [ -f engine/build/bin/hexenwail.data ]; then cp engine/build/bin/hexenwail.data dist/; fi
-          if [ -f engine/build/bin/hexenwail.worker.js ]; then cp engine/build/bin/hexenwail.worker.js dist/; fi
-          cp engine/build/bin/hexenwail.html dist/engine-shell-debug.html
+      - name: Validate assembled Pages artifact
+        run: ./scripts/wasm-validate-artifact.sh dist
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
