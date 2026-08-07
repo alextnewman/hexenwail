@@ -34,7 +34,7 @@
  * application-side primitive tag passed through to GL_ImmEnd, which
  * triangulates on the CPU — see gl_rmain.c / gl_vbo.c for the same
  * pattern). */
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 #ifndef GL_QUADS
 #define GL_QUADS 0
 #endif
