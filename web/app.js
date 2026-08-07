@@ -503,6 +503,7 @@ async function applySaveImport(bundle, mode) {
     }
     try {
       for (const file of bundle.files) {
+        if (!writes.includes(file.path)) continue;
         await state.storage.writeFile(file.path, file.bytes, { size: file.bytes.byteLength, mtimeMs: Date.now() });
         state.storedPaths.add(file.path);
       }
@@ -524,7 +525,10 @@ async function applySaveImport(bundle, mode) {
       throw new Error(`Save import could not be committed; prior saves were restored (${error.message})`);
     }
     try {
-      for (const file of bundle.files) await writeRuntimeFile(file.path, file.bytes);
+      for (const file of bundle.files) {
+        if (!writes.includes(file.path)) continue;
+        await writeRuntimeFile(file.path, file.bytes);
+      }
       for (const path of deletes) await deleteRuntimeFile(path);
     } catch (error) {
       console.warn('Imported saves will be loaded after reload', error);
