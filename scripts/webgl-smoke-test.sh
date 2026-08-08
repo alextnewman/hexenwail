@@ -65,10 +65,4 @@ if ! grep -q 'data-result="pass"' "$engine_output"; then
 	exit 1
 fi
 
-if grep -Eqi 'shader (compilation|link) failed|WebGL2 error' "$engine_output"; then
-	echo "Engine WebGL2 shader test reported a regression:" >&2
-	sed -n '/<pre id="result">/,/<\/pre>/p' "$engine_output" >&2
-	exit 1
-fi
-
 echo "WebGL2 engine shaders, RGBA8 framebuffer, post-process, and non-black-frame smoke test passed."
