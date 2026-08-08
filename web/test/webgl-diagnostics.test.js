@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { nonBlackPixelRatio } from '../lib/webgl-diagnostics.js';
+import { extractEngineWebGLPrograms } from '../../scripts/webgl-engine-shader-smoke.mjs';
 
 test('black-frame detector distinguishes visible and dark frames', () => {
   assert.equal(nonBlackPixelRatio(new Uint8Array(16)), 0);
@@ -44,5 +45,25 @@ test('engine WebGL profile uses shared high-precision shaders and CPU brush fall
   assert.match(header, /GLSL_FRAGMENT_PRECISION[\s\S]*"precision highp float;\\n"/);
   assert.match(shader, /GLSL_FRAG_HEADER/);
   assert.match(postprocess, /GLSL_FRAG_HEADER/);
-  assert.match(renderer, /gl_renderer_caps\.profile == GL_RENDERER_WEBGL2[\s\S]*return false;/);
+  assert.match(renderer, /if \(gl_renderer_caps\.profile == GL_RENDERER_WEBGL2\)\s*\n\s*return false;/);
+});
+
+test('headless smoke gate compiles the actual engine WebGL shader sources', async () => {
+  const programs = await extractEngineWebGLPrograms();
+  const byName = Object.fromEntries(programs.map((program) => [program.name, program]));
+
+  assert.deepEqual(programs.map(({ name }) => name), [
+    '2d', 'flat', 'world', 'world_opaque', 'alias', 'particle', 'sky',
+    'postprocess', 'bloom_bright', 'bloom_down', 'bloom_up',
+  ]);
+  assert.match(byName.world.fragment, /vec4 BicubicLightmap/);
+  assert.match(byName.world.fragment, /float Caustics/);
+  assert.match(byName.postprocess.fragment, /vec4 fxaa/);
+  assert.match(byName.postprocess.fragment, /HDR tonemapping/);
+  for (const program of programs) {
+    assert.match(program.vertex, /^#version 300 es\n#define BINDLESS 0\n/);
+    assert.match(program.fragment, /^#version 300 es\n#define BINDLESS 0\n/);
+    assert.doesNotMatch(program.vertex, /#version 430/);
+    assert.doesNotMatch(program.fragment, /#version 430/);
+  }
 });

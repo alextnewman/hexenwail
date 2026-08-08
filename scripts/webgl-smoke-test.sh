@@ -17,7 +17,9 @@ if [ -z "$browser" ]; then
 fi
 
 output="$(mktemp)"
-trap 'rm -f "$output"' EXIT
+engine_output="$(mktemp)"
+engine_page="$(mktemp --suffix=.html)"
+trap 'rm -f "$output" "$engine_output" "$engine_page"' EXIT
 
 timeout 45 "$browser" \
 	--headless=new \
@@ -43,4 +45,30 @@ if grep -Eqi 'shader (compilation|link) failed|WebGL2 error|predominantly black'
 	exit 1
 fi
 
-echo "WebGL2 shader, RGBA8 framebuffer, and non-black-frame smoke test passed."
+node scripts/webgl-engine-shader-smoke.mjs "$engine_page"
+
+timeout 45 "$browser" \
+	--headless=new \
+	--no-sandbox \
+	--disable-dev-shm-usage \
+	--allow-file-access-from-files \
+	--use-gl=angle \
+	--use-angle=swiftshader \
+	--enable-unsafe-swiftshader \
+	--virtual-time-budget=5000 \
+	--dump-dom \
+	"file://$engine_page" >"$engine_output"
+
+if ! grep -q 'data-result="pass"' "$engine_output"; then
+	echo "Engine WebGL2 shader test failed:" >&2
+	sed -n '/<pre id="result">/,/<\/pre>/p' "$engine_output" >&2
+	exit 1
+fi
+
+if grep -Eqi 'shader (compilation|link) failed|WebGL2 error' "$engine_output"; then
+	echo "Engine WebGL2 shader test reported a regression:" >&2
+	sed -n '/<pre id="result">/,/<\/pre>/p' "$engine_output" >&2
+	exit 1
+fi
+
+echo "WebGL2 engine shaders, RGBA8 framebuffer, post-process, and non-black-frame smoke test passed."

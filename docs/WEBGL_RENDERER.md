@@ -44,8 +44,8 @@ without being compiled or initialized.
 
 `scripts/webgl-smoke-test.sh` runs Chrome/Chromium with software WebGL2 and:
 
-1. Compiles and links browser-profile contracts for every supported shader
-   family.
+1. Extracts the engine's actual shader strings and compiles and links every
+   supported browser-profile family in WebGL2.
 2. Draws generated albedo, lightmap, and fullbright textures through the world
    contract into an RGBA8 FBO without game data.
 3. Verifies gamma correction and RGB palette-LUT post-processing with generated
