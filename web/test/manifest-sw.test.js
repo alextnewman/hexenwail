@@ -32,7 +32,7 @@ test('service worker precaches repo-managed launcher assets', () => {
 test('service worker cache is deployment-versioned and refreshes core assets', () => {
   assert.match(swText, /CACHE_VERSION = `\$\{CACHE_PREFIX\}__HEXENWAIL_BUILD_VERSION__`/);
   assert.match(swText, /new Request\(url, \{ cache: 'reload' \}\)/);
-  assert.match(swText, /const response = await fetch\(request\)/);
+  assert.match(swText, /const cached = await caches\.match\(request\)/);
   assert.match(assembleScript, /GITHUB_SHA/);
   assert.match(assembleScript, /s\/__HEXENWAIL_BUILD_VERSION__\/\$BUILD_VERSION\/g/);
 });

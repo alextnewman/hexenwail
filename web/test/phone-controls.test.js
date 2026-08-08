@@ -133,6 +133,8 @@ test('phone mode DOM includes playing layout, touch visibility rules, and quit h
   assert.match(app, /gamepadconnected/);
   assert.match(app, /hexenwailquit/);
   assert.match(app, /Hexenwail_ResizeCanvas/);
+  assert.match(app, /const hadController = Boolean\(navigator\.serviceWorker\.controller\)/);
+  assert.match(app, /addEventListener\('pageshow', checkForServiceWorkerUpdate\)/);
   assert.equal([...app.matchAll(/startEngineFromUserAction\(/g)].length, 2,
     'engine startup should only be defined and invoked by the launch-button handler');
 });

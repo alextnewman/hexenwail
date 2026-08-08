@@ -31,6 +31,7 @@ const state = {
   runtimeExited: false,
   quitInProgress: false,
   serviceWorkerReloading: false,
+  serviceWorkerRegistration: null,
   runtimeLogEntries: [],
   phoneControls: null,
   preferences: {
@@ -1044,7 +1045,12 @@ async function registerServiceWorker() {
   }
 
   try {
+    const hadController = Boolean(navigator.serviceWorker.controller);
     navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) {
+        ui.offlineText.textContent = 'Offline shell ready. Imported game data stays outside the service worker cache.';
+        return;
+      }
       if (state.engineStarted && !state.runtimeExited) {
         ui.offlineText.textContent = 'Update installed. Exit to the launcher to load it.';
         return;
@@ -1058,7 +1064,7 @@ async function registerServiceWorker() {
       scope: './',
       updateViaCache: 'none',
     });
-    await registration.update();
+    state.serviceWorkerRegistration = registration;
     if (navigator.serviceWorker.controller) {
       ui.offlineText.textContent = 'Offline shell ready. Imported game data stays outside the service worker cache.';
     } else if (registration.active || registration.installing || registration.waiting) {
@@ -1069,6 +1075,12 @@ async function registerServiceWorker() {
   } catch (error) {
     ui.offlineText.textContent = `Offline shell unavailable: ${error.message}`;
   }
+}
+
+function checkForServiceWorkerUpdate() {
+  state.serviceWorkerRegistration?.update().catch((error) => {
+    console.warn('Service worker update check failed', error);
+  });
 }
 
 async function ensureEngineScriptLoaded() {
@@ -1323,8 +1335,11 @@ async function init() {
     if (document.visibilityState === 'hidden') {
       releasePhoneInputs();
       syncRuntimeToStorage().catch((error) => console.warn('Save sync failed', error));
+    } else {
+      checkForServiceWorkerUpdate();
     }
   });
+  addEventListener('pageshow', checkForServiceWorkerUpdate);
   addEventListener('orientationchange', () => {
     releasePhoneInputs();
     scheduleCanvasResize();
