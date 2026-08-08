@@ -30,7 +30,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "gl_sky.h"
 
 /* ES 3.0 compatibility: GL_QUADS and GL_POLYGON don't exist */
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 #ifndef GL_QUADS
 #define GL_QUADS 0
 #endif

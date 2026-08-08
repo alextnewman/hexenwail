@@ -76,7 +76,7 @@ typedef union {
 
 
 /* ES 3.0 compatibility: GL_QUADS and GL_POLYGON don't exist */
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 #ifndef GL_QUADS
 #define GL_QUADS 0
 #endif
@@ -153,6 +153,7 @@ static byte	lightmaps[4*MAX_LIGHTMAPS*BLOCK_WIDTH*BLOCK_HEIGHT];
 #define LM_ATLAS_HEIGHT	(LM_ATLAS_ROWS * BLOCK_HEIGHT)	/* 2048 */
 GLuint	lm_atlas_texture;	/* non-static — accessed by gl_worldcull.c */
 static int	lm_atlas_layers;	/* number of pages in the atlas */
+static size_t	lm_atlas_nonzero_bytes;
 qboolean	lm_atlas_enabled;	/* false = fall back to per-surface binds */
 
 /* ====================================================================
@@ -344,6 +345,15 @@ from Mod_LoadLighting().
 */
 void GL_SetupLightmapFmt (void)
 {
+#ifdef __EMSCRIPTEN__
+	/* GL_LUMINANCE is not a legal WebGL2 texture format.  Migrate legacy
+	 * configs and command lines to the sized RGBA8 browser baseline. */
+	if (q_strcasecmp(gl_lightmapfmt.string, "GL_RGBA"))
+		Con_SafePrintf("[RENDERER] Migrating browser lightmaps from '%s' to RGBA8\n",
+			       gl_lightmapfmt.string);
+	gl_lightmap_format = GL_RGBA;
+	Cvar_SetQuick (&gl_lightmapfmt, "GL_RGBA");
+#else
 	// only GL_LUMINANCE and GL_RGBA are supported
 	if (!q_strcasecmp(gl_lightmapfmt.string, "GL_LUMINANCE"))
 		gl_lightmap_format = GL_LUMINANCE;
@@ -368,6 +378,7 @@ void GL_SetupLightmapFmt (void)
 			Cvar_SetQuick (&gl_lightmapfmt, "GL_RGBA");
 		}
 	}
+#endif
 
 	switch (gl_lightmap_format)
 	{
@@ -3279,6 +3290,7 @@ R_DrawWorld
 void R_DrawWorld (void)
 {
 	double t0;
+	static qboolean first_world_draw = true;
 #define DW_BEGIN()	(t0 = (r_speeds.integer >= 2) ? Sys_DoubleTime() : 0)
 #define DW_END(slot)	do { if (r_speeds.integer >= 2) (slot) = Sys_DoubleTime() - t0; } while (0)
 
@@ -3346,6 +3358,12 @@ void R_DrawWorld (void)
 	DW_BEGIN();
 	DrawTextureChains (&r_worldentity);
 	DW_END(rprof_cpu_chains);
+	if (first_world_draw)
+	{
+		GL_CheckErrors("first world draw");
+		Con_SafePrintf("[RENDERER] First world draw completed\n");
+		first_world_draw = false;
+	}
 	gpu_cull_active = false;
 #undef DW_BEGIN
 #undef DW_END
@@ -3595,15 +3613,23 @@ static void LM_StitchAtlas (void)
 {
 	byte	*atlas;
 	int	page, row, col, y;
+	size_t	i, atlas_size;
 	int	page_stride = BLOCK_WIDTH * lightmap_bytes;
 	int	atlas_stride = LM_ATLAS_WIDTH * lightmap_bytes;
 
 	if (!lm_atlas_enabled)
+	{
+		lm_atlas_nonzero_bytes = 0;
 		return;
+	}
 
-	atlas = (byte *) calloc(1, LM_ATLAS_WIDTH * LM_ATLAS_HEIGHT * lightmap_bytes);
+	atlas_size = LM_ATLAS_WIDTH * LM_ATLAS_HEIGHT * lightmap_bytes;
+	atlas = (byte *) calloc(1, atlas_size);
 	if (!atlas)
+	{
+		lm_atlas_nonzero_bytes = 0;
 		return;
+	}
 
 	for (page = 0; page < lm_atlas_layers; page++)
 	{
@@ -3617,6 +3643,13 @@ static void LM_StitchAtlas (void)
 					  + col * page_stride;
 			memcpy(dst, src, page_stride);
 		}
+	}
+
+	lm_atlas_nonzero_bytes = 0;
+	for (i = 0; i < atlas_size; i += lightmap_bytes)
+	{
+		if (atlas[i] || (lightmap_bytes == 4 && (atlas[i + 1] || atlas[i + 2])))
+			lm_atlas_nonzero_bytes++;
 	}
 
 	if (!lm_atlas_texture)
@@ -3638,6 +3671,16 @@ static void LM_StitchAtlas (void)
 	 * the next frame's first GL_Bind skip its bind and draw a surface with
 	 * the atlas wrongly bound.  Invalidate the cache like R_UpdateLightmaps. */
 	currenttexture = GL_UNUSED_TEXTURE;
+}
+
+void GL_ReportLightmapStatus (void)
+{
+	Con_Printf("[RENDERER] lightmaps: format=%s internal=0x%x bytes=%d "
+		   "atlas=%s texture=%u pages=%d lit-texels=%zu\n",
+		   gl_lightmap_format == GL_RGBA ? "RGBA8" : "LUMINANCE",
+		   lightmap_internalformat, lightmap_bytes,
+		   lm_atlas_enabled ? "enabled" : "per-page fallback",
+		   lm_atlas_texture, lm_atlas_layers, lm_atlas_nonzero_bytes);
 }
 
 
@@ -3723,8 +3766,12 @@ void GL_BuildLightmaps (void)
 	if (lm_atlas_enabled && lm_atlas_texture)
 		Con_SafePrintf("Lightmap atlas: %d pages in %dx%d texture\n",
 			       lm_atlas_layers, LM_ATLAS_WIDTH, LM_ATLAS_HEIGHT);
+	if (lm_atlas_enabled && lm_atlas_layers > 0 && !lm_atlas_nonzero_bytes)
+		Con_Printf("[RENDERER] WARNING: lightmap atlas contains no lit texels\n");
 
 	glActiveTexture_fp (GL_TEXTURE0);
+	GL_ReportLightmapStatus();
+	GL_CheckErrors("lightmap upload");
 }
 
 
@@ -3805,4 +3852,3 @@ void R_OverbrightChanged (cvar_t *var)
 	(void)var;
 	R_RebuildAllLightmaps ();
 }
-

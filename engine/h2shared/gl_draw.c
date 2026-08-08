@@ -33,7 +33,7 @@
 #endif
 
 /* ES 3.0 compatibility: GL_QUADS and GL_POLYGON don't exist */
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 #ifndef GL_QUADS
 #define GL_QUADS 0
 #endif
@@ -2608,4 +2608,3 @@ GLuint GL_LoadPicTexture (qpic_t *pic)
 {
 	return GL_LoadTexture ("", pic->data, pic->width, pic->height, TEX_ALPHA|TEX_NEAREST);
 }
-

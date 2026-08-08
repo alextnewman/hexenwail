@@ -174,34 +174,27 @@ static GLuint GL_CompileOITFragShader (const char *frag_src)
 		"}\n"
 		"#define main main_body\n";
 
-	/* Find end of #version line */
-	const char *rest = strchr(frag_src, '\n');
-	if (!rest) return 0;
-	rest++; /* skip past newline */
-
-	/* Build modified source: version line + OIT preamble + rest (minus `out vec4 fragColor;\n`) */
+	/* Insert at the original output declaration.  This deliberately leaves
+	 * the version and ES precision declarations first in the source. */
 	{
-		/* Skip the `out vec4 fragColor;\n` line in the rest */
-		const char *skip = strstr(rest, "out vec4 fragColor;\n");
-		if (!skip) return 0;
-		skip += strlen("out vec4 fragColor;\n");
-
-		/* Allocate buffer: version + preamble + (rest before fragColor) + (rest after fragColor) */
-		size_t ver_len = rest - frag_src;
-		size_t before_len = skip - strlen("out vec4 fragColor;\n") - rest;
-		size_t after_start = skip - frag_src;
-		size_t total = ver_len + strlen(oit_preamble) + before_len + strlen(skip) + 1;
-		char *buf = (char *)malloc(total);
+		const char *output = strstr(frag_src, "out vec4 fragColor;\n");
+		const char *skip;
+		size_t before_len;
+		size_t total;
+		char *buf;
 		GLuint shader;
 
+		if (!output) return 0;
+		skip = output + strlen("out vec4 fragColor;\n");
+		before_len = output - frag_src;
+		total = before_len + strlen(oit_preamble) + strlen(skip) + 1;
+		buf = (char *)malloc(total);
 		if (!buf)
 			Sys_Error("GL_CompileOITFragShader: out of memory");
-		memcpy(buf, frag_src, ver_len);
-		memcpy(buf + ver_len, oit_preamble, strlen(oit_preamble));
-		/* Copy everything between version line and "out vec4 fragColor;\n" */
-		memcpy(buf + ver_len + strlen(oit_preamble), rest, before_len);
-		/* Copy everything after "out vec4 fragColor;\n" */
-		strcpy(buf + ver_len + strlen(oit_preamble) + before_len, skip);
+
+		memcpy(buf, frag_src, before_len);
+		memcpy(buf + before_len, oit_preamble, strlen(oit_preamble));
+		strcpy(buf + before_len + strlen(oit_preamble), skip);
 
 		shader = GL_CompileShader(GL_FRAGMENT_SHADER, buf);
 		free(buf);
@@ -282,6 +275,7 @@ static void GL_InitProgramUniforms (glprogram_t *p)
 	p->u_caustics        = glGetUniformLocation_fp(p->program, "u_caustics");
 	p->u_overbright      = glGetUniformLocation_fp(p->program, "u_overbright");
 	p->u_lightmap_bicubic = glGetUniformLocation_fp(p->program, "u_lightmap_bicubic");
+	p->u_world_debug     = glGetUniformLocation_fp(p->program, "u_world_debug");
 	p->u_force_opaque_alpha = glGetUniformLocation_fp(p->program, "u_force_opaque_alpha");
 	p->u_alias_fullbright = glGetUniformLocation_fp(p->program, "u_alias_fullbright");
 	p->u_alias_nofog      = glGetUniformLocation_fp(p->program, "u_alias_nofog");
@@ -293,34 +287,6 @@ static void GL_InitProgramUniforms (glprogram_t *p)
 /* Shader sources                                                      */
 /* ------------------------------------------------------------------ */
 
-/* GLSL version header: desktop GL 4.3 vs WebGL2 (ES 3.0) */
-#ifdef __EMSCRIPTEN__
-#define GLSL_VERT_HEADER	"#version 300 es\nprecision highp float;\n"
-#define GLSL_FRAG_HEADER	"#version 300 es\nprecision mediump float;\n"
-/* GLSL ES 3.00 doesn't support early_fragment_tests */
-#define GLSL_EARLY_Z		""
-#define GLSL_EARLY_Z_OPAQUE	""
-#else
-/* uhexen2-khsa r27: explicit `precision highp float;` in the vertex
- * shader header too.  r23 added it only to the fragment shader, but
- * Mathuzzz's dither survived — and interpolated varyings (v_color,
- * v_fogdist) are produced by the vertex shader.  If the vertex stage
- * emits them at mediump, the fragment stage's highp can't recover the
- * lost precision: the interpolator's input is already noisy.  Force
- * highp on both stages so the varying interpolation stays FP32 end-
- * to-end. */
-#define GLSL_VERT_HEADER	"#version 430 core\nprecision highp float;\n"
-/* uhexen2-khsa r23: explicit `precision highp float;` in the fragment
- * shader header.  GLSL 4.30 core defaults to highp, but some NVIDIA
- * drivers have been observed to silently demote interpolated
- * varying math (v_color * tex + fog mix) to mediump, producing per-
- * pixel rounding noise that compounds across the multiply + fog chain.
- * Mathuzzz's screen-door bisect (r22): neither r_alias_fullbright 1
- * nor r_alias_nofog 1 alone fixes the dither, but the combo does —
- * which is exactly the signature of a precision interaction between
- * the two computations.  Explicit highp forces the compiler to keep
- * full FP32 throughout. */
-#define GLSL_FRAG_HEADER	"#version 430 core\nprecision highp float;\n"
 /* Cutout shaders that use `discard` MUST NOT force early_fragment_tests:
  * early tests run depth+stencil — and write them — BEFORE the fragment
  * shader executes; a later `discard` cannot undo the depth write that
@@ -329,12 +295,10 @@ static void GL_InitProgramUniforms (glprogram_t *p)
  * entity drawn after at that pixel even though no color was written there.
  * Visible on mill.bsp (SoT): bush silhouette z-rejected the tree behind
  * it.  uhexen2-238u. */
-#define GLSL_EARLY_Z		""
-/* Opaque-only variant has no discard, so early_fragment_tests is safe and
+/* Opaque-only desktop variant has no discard, so early_fragment_tests is safe and
  * recovers Hi-Z on the world bucket (+0.34ms regression measured in
- * uhexen2-23a9).  Used by gl_shader_world_opaque (uhexen2-5c6r). */
-#define GLSL_EARLY_Z_OPAQUE	"layout(early_fragment_tests) in;\n"
-#endif
+ * uhexen2-23a9).  GLSL ES 3.00 leaves this qualifier empty.  Used by
+ * gl_shader_world_opaque (uhexen2-5c6r). */
 
 /* --- shader_2d: orthographic HUD/text rendering --- */
 static const char s2d_vert[] =
@@ -493,6 +457,7 @@ static const char sworld_frag[] =
 	"uniform vec2 u_caustics;\n"		/* x=intensity (0=off), y=time (uhexen2-6bfm) */
 	"uniform float u_overbright;\n"		/* lightmap multiplier: 1.0=off, 2.0=on (uhexen2-f29y) */
 	"uniform float u_lightmap_bicubic;\n"	/* 0=bilinear, 1=4-tap B-spline bicubic (uhexen2-b2f0) */
+	"uniform float u_world_debug;\n"
 	"in vec2 v_texcoord;\n"
 	"in vec2 v_lmcoord;\n"
 	"in vec4 v_color;\n"
@@ -531,17 +496,24 @@ static const char sworld_frag[] =
 	"    color.rgb *= u_overbright;\n"		/* Ironwail-style overbright (uhexen2-f29y) */
 	"    if (color.a < u_alpha_threshold) discard;\n"
 	"    color.rgb += fb;\n"
+	"    if (u_world_debug > 0.5 && u_world_debug < 1.5)\n"
+	"        color = vec4(tex.rgb, 1.0);\n"
+	"    else if (u_world_debug > 1.5 && u_world_debug < 2.5)\n"
+	"        color = vec4(lm.rgb * u_overbright, 1.0);\n"
+	"    else if (u_world_debug > 2.5)\n"
+	"        color = vec4(tex.rgb + fb, 1.0);\n"
 	/* Underwater caustics: gated by u_caustics.x (set to 0 by C when the
 	 * view leaf is not CONTENTS_WATER or the cvar is off, otherwise to
 	 * r_caustics_intensity).  Applied as a brightness multiplier so dark
 	 * areas still receive a visible highlight band.  uhexen2-6bfm. */
-	"    if (u_caustics.x > 0.0) {\n"
+	"    if (u_world_debug < 0.5 && u_caustics.x > 0.0) {\n"
 	"        float c = Caustics(v_worldxy, u_caustics.y);\n"
 	"        color.rgb += color.rgb * c * u_caustics.x;\n"
 	"    }\n"
 	"    float fogfac = u_fog_density * v_fogdist;\n"
 	"    float fog = exp(-fogfac * fogfac);\n"
-	"    color.rgb = mix(u_fog_color, color.rgb, clamp(fog, 0.0, 1.0));\n"
+	"    if (u_world_debug < 0.5)\n"
+	"        color.rgb = mix(u_fog_color, color.rgb, clamp(fog, 0.0, 1.0));\n"
 	/* For cutout alpha-test (threshold > 0.5 = fence/holey, A2C enabled):
 	 * surviving fragments are by definition opaque, so force alpha=1 to
 	 * stop A2C from dithering their coverage based on the noisy
@@ -588,6 +560,7 @@ static const char sworld_frag_opaque[] =
 	"uniform vec2 u_caustics;\n"		/* x=intensity, y=time (uhexen2-6bfm) */
 	"uniform float u_overbright;\n"		/* lightmap multiplier: 1.0=off, 2.0=on (uhexen2-f29y) */
 	"uniform float u_lightmap_bicubic;\n"	/* 0=bilinear, 1=4-tap B-spline bicubic (uhexen2-b2f0) */
+	"uniform float u_world_debug;\n"
 	"in vec2 v_texcoord;\n"
 	"in vec2 v_lmcoord;\n"
 	"in vec4 v_color;\n"
@@ -616,13 +589,20 @@ static const char sworld_frag_opaque[] =
 	"    vec3 fb = texture(u_texture2, v_texcoord).rgb;\n"
 	"#endif\n"
 	"    color.rgb += fb;\n"
-	"    if (u_caustics.x > 0.0) {\n"
+	"    if (u_world_debug > 0.5 && u_world_debug < 1.5)\n"
+	"        color = vec4(tex.rgb, 1.0);\n"
+	"    else if (u_world_debug > 1.5 && u_world_debug < 2.5)\n"
+	"        color = vec4(lm.rgb * u_overbright, 1.0);\n"
+	"    else if (u_world_debug > 2.5)\n"
+	"        color = vec4(tex.rgb + fb, 1.0);\n"
+	"    if (u_world_debug < 0.5 && u_caustics.x > 0.0) {\n"
 	"        float c = Caustics(v_worldxy, u_caustics.y);\n"
 	"        color.rgb += color.rgb * c * u_caustics.x;\n"
 	"    }\n"
 	"    float fogfac = u_fog_density * v_fogdist;\n"
 	"    float fog = exp(-fogfac * fogfac);\n"
-	"    color.rgb = mix(u_fog_color, color.rgb, clamp(fog, 0.0, 1.0));\n"
+	"    if (u_world_debug < 0.5)\n"
+	"        color.rgb = mix(u_fog_color, color.rgb, clamp(fog, 0.0, 1.0));\n"
 	"    fragColor = vec4(color.rgb, 1.0);\n"
 	"}\n";
 
@@ -1229,6 +1209,11 @@ static qboolean GL_InitAliasInstProgram (gl_alias_inst_prog_t *p)
 void GL_AliasInst_Init (void)
 {
 #ifndef __EMSCRIPTEN__
+	if (!gl_renderer_caps.shader_storage)
+	{
+		Con_SafePrintf("  alias_instanced: skipped (SSBO unavailable)\n");
+		return;
+	}
 	if (!GL_InitAliasInstProgram(&gl_shader_alias_inst))
 		Sys_Printf("WARNING: instanced alias shader failed to init\n");
 #endif
@@ -1245,16 +1230,24 @@ void GL_AliasInst_Shutdown (void)
 
 void GL_Shaders_Init (void)
 {
+	qboolean mandatory_ok = true;
+
 	Con_SafePrintf("Initializing shaders...\n");
 
-	GL_InitProgram(&gl_shader_2d,       "2d",       s2d_vert,    s2d_frag);
-	GL_InitProgram(&gl_shader_flat,     "flat",     sflat_vert,  sflat_frag);
-	GL_InitProgram(&gl_shader_world,    "world",    sworld_vert, sworld_frag);
-	GL_InitProgram(&gl_shader_world_opaque, "world_opaque", sworld_vert, sworld_frag_opaque);
-	GL_InitProgram(&gl_shader_alias,    "alias",    salias_vert, salias_frag);
-	GL_InitProgram(&gl_shader_skeletal, "skeletal", sskeletal_vert, salias_frag);
-	GL_InitProgram(&gl_shader_particle, "particle", spart_vert,  spart_frag);
-	GL_InitProgram(&gl_shader_sky,      "sky",      ssky_vert,   ssky_frag);
+	mandatory_ok &= GL_InitProgram(&gl_shader_2d,       "2d",       s2d_vert,    s2d_frag);
+	mandatory_ok &= GL_InitProgram(&gl_shader_flat,     "flat",     sflat_vert,  sflat_frag);
+	mandatory_ok &= GL_InitProgram(&gl_shader_world,    "world",    sworld_vert, sworld_frag);
+	mandatory_ok &= GL_InitProgram(&gl_shader_world_opaque, "world_opaque", sworld_vert, sworld_frag_opaque);
+	mandatory_ok &= GL_InitProgram(&gl_shader_alias,    "alias",    salias_vert, salias_frag);
+	mandatory_ok &= GL_InitProgram(&gl_shader_particle, "particle", spart_vert,  spart_frag);
+	mandatory_ok &= GL_InitProgram(&gl_shader_sky,      "sky",      ssky_vert,   ssky_frag);
+	if (!mandatory_ok)
+		Sys_Error("Mandatory renderer shader initialization failed");
+
+	if (gl_renderer_caps.skeletal_animation)
+		GL_InitProgram(&gl_shader_skeletal, "skeletal", sskeletal_vert, salias_frag);
+	else
+		Con_SafePrintf("  shader 'skeletal': skipped (CPU model fallback)\n");
 
 	/* Create the 1x1 black sentinel texture used as u_texture2 in
 	 * gl_shader_world for surfaces with no fullbright pixels.  Sampled
@@ -1264,7 +1257,7 @@ void GL_Shaders_Init (void)
 		static const unsigned char black_pixel[4] = {0, 0, 0, 255};
 		glGenTextures_fp(1, &gl_null_fb_texture);
 		glBindTexture_fp(GL_TEXTURE_2D, gl_null_fb_texture);
-		glTexImage2D_fp(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0,
+		glTexImage2D_fp(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0,
 				GL_RGBA, GL_UNSIGNED_BYTE, black_pixel);
 		glTexParameterf_fp(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameterf_fp(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -1272,15 +1265,39 @@ void GL_Shaders_Init (void)
 		glTexParameterf_fp(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	}
 
-	/* OIT variants for translucent rendering */
-	GL_InitOITProgram(&gl_shader_world_oit,    "world",    sworld_vert, sworld_frag);
-	GL_InitOITProgram(&gl_shader_alias_oit,    "alias",    salias_vert, salias_frag);
-	GL_InitOITProgram(&gl_shader_particle_oit, "particle", spart_vert,  spart_frag);
+	if (gl_renderer_caps.oit)
+	{
+		GL_InitOITProgram(&gl_shader_world_oit,    "world",    sworld_vert, sworld_frag);
+		GL_InitOITProgram(&gl_shader_alias_oit,    "alias",    salias_vert, salias_frag);
+		GL_InitOITProgram(&gl_shader_particle_oit, "particle", spart_vert,  spart_frag);
+	}
+	else
+		Con_SafePrintf("  OIT shaders: skipped (sorted transparency fallback)\n");
 
 #ifndef __EMSCRIPTEN__
-	GL_InitParticleGPUProgram(&gl_shader_particle_gpu);
+	if (gl_renderer_caps.gpu_particles)
+		GL_InitParticleGPUProgram(&gl_shader_particle_gpu);
+	else
+		Con_SafePrintf("  shader 'particle_gpu': skipped (CPU particle fallback)\n");
 #endif
 	GL_AliasInst_Init();
+}
+
+void GL_ReportShaderStatus (void)
+{
+	Con_Printf("[RENDERER] shaders: 2d=%s flat=%s world=%s world_opaque=%s "
+		   "alias=%s particle=%s sky=%s skeletal=%s OIT=%s/%s/%s\n",
+		   gl_shader_2d.program ? "ok" : "FAILED",
+		   gl_shader_flat.program ? "ok" : "FAILED",
+		   gl_shader_world.program ? "ok" : "FAILED",
+		   gl_shader_world_opaque.program ? "ok" : "FAILED",
+		   gl_shader_alias.program ? "ok" : "FAILED",
+		   gl_shader_particle.program ? "ok" : "FAILED",
+		   gl_shader_sky.program ? "ok" : "FAILED",
+		   gl_shader_skeletal.program ? "ok" : "disabled",
+		   gl_shader_world_oit.program ? "ok" : "disabled",
+		   gl_shader_alias_oit.program ? "ok" : "disabled",
+		   gl_shader_particle_oit.program ? "ok" : "disabled");
 }
 
 void GL_Shaders_Shutdown (void)
@@ -1303,4 +1320,9 @@ void GL_Shaders_Shutdown (void)
 		}
 	}
 	GL_AliasInst_Shutdown();
+	if (gl_null_fb_texture)
+	{
+		glDeleteTextures_fp(1, &gl_null_fb_texture);
+		gl_null_fb_texture = 0;
+	}
 }

@@ -30,6 +30,7 @@
 /* GPU particle SSBO rendering                                         */
 /* ------------------------------------------------------------------ */
 
+#ifndef __EMSCRIPTEN__
 typedef struct {
     float   pos[3];
     float   die;
@@ -44,6 +45,9 @@ static GLuint           gpu_particle_vao;
 
 static void R_GPU_Particles_Init (void)
 {
+    if (!gl_renderer_caps.gpu_particles)
+        return;
+
     glGenBuffers_fp(1, &gpu_particle_ssbo);
     glBindBuffer_fp(GL_SHADER_STORAGE_BUFFER, gpu_particle_ssbo);
     glBufferData_fp(GL_SHADER_STORAGE_BUFFER,
@@ -70,6 +74,16 @@ void R_GPU_Particles_Shutdown (void)
         gpu_particle_vao = 0;
     }
 }
+#else
+static void R_GPU_Particles_Init (void)
+{
+	Con_SafePrintf("GPU particles: disabled (CPU particle fallback)\n");
+}
+
+void R_GPU_Particles_Shutdown (void)
+{
+}
+#endif
 #endif
 
 
@@ -2113,4 +2127,3 @@ void R_UpdateParticles (void)
 		}
 	}
 }
-

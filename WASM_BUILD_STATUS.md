@@ -1,5 +1,8 @@
 # Hexenwail WASM/Emscripten Build Status
 
+See [docs/WEBGL_RENDERER.md](docs/WEBGL_RENDERER.md) for the current WebGL2
+feature matrix, fallbacks, diagnostics, and graphical regression gates.
+
 ## Current State (2026-03-26)
 
 ### ✅ Completed

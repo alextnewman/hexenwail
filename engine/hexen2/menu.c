@@ -34,7 +34,7 @@
  * application-side primitive tag passed through to GL_ImmEnd, which
  * triangulates on the CPU — see gl_rmain.c / gl_vbo.c for the same
  * pattern). */
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 #ifndef GL_QUADS
 #define GL_QUADS 0
 #endif
@@ -2797,6 +2797,11 @@ static const char *rend_labels[REND_ITEMS] = {
 static qboolean M_Rendering_IsSkip (int i)
 {
 	if (i < 0 || i >= REND_ITEMS)
+		return true;
+	if (i == REND_ANISOTROPY && !gl_renderer_caps.anisotropy)
+		return true;
+	if ((i == REND_HDR || i == REND_HDR_EXPOSURE) &&
+	    !gl_renderer_caps.float_color_buffer)
 		return true;
 	return M_Filter_Active() && !M_Filter_Matches(rend_labels[i]);
 }
@@ -7244,4 +7249,3 @@ static void BGM_RestartMusic (void)
 		BGM_Stop();
 	}
 }
-

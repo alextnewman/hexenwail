@@ -32,7 +32,7 @@ jobs:
         run: |
           shellcheck scripts/mkrelease.sh flatpak/hexenwail.sh \
             scripts/wasm-build.sh scripts/wasm-assemble-artifact.sh \
-            scripts/wasm-validate-artifact.sh
+            scripts/wasm-validate-artifact.sh scripts/webgl-smoke-test.sh
 
   # Dedicated PWA/WebAssembly validation, required on every pull request.
   # Runs the lightweight Node PWA tests, builds the *full* WebAssembly

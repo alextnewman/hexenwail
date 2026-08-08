@@ -48,7 +48,7 @@
 #endif
 
 /* ES 3.0 compatibility: GL_QUADS and GL_POLYGON don't exist */
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 #ifndef GL_QUADS
 #define GL_QUADS 0
 #endif
@@ -102,7 +102,6 @@ static GLint	pp_loc_mvp;
 static GLint	pp_loc_softemu;
 static GLint	pp_loc_dither;
 static GLint	pp_loc_paletteLUT;
-static GLint	pp_loc_palette;
 static GLint	pp_loc_scale;
 static GLint	pp_loc_waterwarp;
 static GLint	pp_loc_time;
@@ -136,6 +135,11 @@ cvar_t	r_bloom = {"r_bloom", "0", CVAR_ARCHIVE};		/* bloom post-process */
 cvar_t	r_bloom_intensity = {"r_bloom_intensity", "1.0", CVAR_ARCHIVE};	/* bloom glow strength */
 cvar_t	r_bloom_threshold = {"r_bloom_threshold", "1.0", CVAR_ARCHIVE};	/* luminance threshold */
 
+static qboolean PP_HDRActive (void)
+{
+	return r_hdr.integer && gl_renderer_caps.float_color_buffer;
+}
+
 /* ------------------------------------------------------------------ */
 /* Order-Independent Transparency (McGuire & Bavoil WBOIT)            */
 /* ------------------------------------------------------------------ */
@@ -163,7 +167,7 @@ static qboolean	oit_in_pass;		/* true between Begin/EndTranslucency */
 
 /* OIT resolve shaders */
 static const char oit_resolve_vert[] =
-	"#version 430 core\n"
+	GLSL_VERT_HEADER
 	"void main() {\n"
 	"    ivec2 v = ivec2(gl_VertexID & 1, gl_VertexID >> 1);\n"
 	"    gl_Position = vec4(vec2(v) * 4.0 - 1.0, 0.0, 1.0);\n"
@@ -172,9 +176,9 @@ static const char oit_resolve_vert[] =
 /* No stencil gate, no early_fragment_tests. WBOIT handles empty pixels
  * via math: accum=0, revealage=1 → alpha=0 → transparent → scene unchanged. */
 static const char oit_resolve_frag[] =
-	"#version 430 core\n"
-	"layout(binding=0) uniform sampler2D TexAccum;\n"
-	"layout(binding=1) uniform sampler2D TexReveal;\n"
+	GLSL_FRAG_HEADER
+	"uniform sampler2D TexAccum;\n"
+	"uniform sampler2D TexReveal;\n"
 	"layout(location=0) out vec4 out_fragcolor;\n"
 	"float max3(vec3 v) { return max(max(v.x, v.y), v.z); }\n"
 	"void main() {\n"
@@ -190,9 +194,9 @@ static const char oit_resolve_frag[] =
 /* MSAA variant: per-sample resolve via sampler2DMS + gl_SampleID, used when
  * the OIT accum/revealage targets are GL_TEXTURE_2D_MULTISAMPLE. */
 static const char oit_resolve_frag_msaa[] =
-	"#version 430 core\n"
-	"layout(binding=0) uniform sampler2DMS TexAccum;\n"
-	"layout(binding=1) uniform sampler2DMS TexReveal;\n"
+	GLSL_FRAG_HEADER
+	"uniform sampler2DMS TexAccum;\n"
+	"uniform sampler2DMS TexReveal;\n"
 	"layout(location=0) out vec4 out_fragcolor;\n"
 	"float max3(vec3 v) { return max(max(v.x, v.y), v.z); }\n"
 	"void main() {\n"
@@ -210,7 +214,7 @@ static const char oit_resolve_frag_msaa[] =
 /* ------------------------------------------------------------------ */
 
 static const char bloom_vert_src[] =
-	"#version 430 core\n"
+	GLSL_VERT_HEADER
 	"out vec2 v_uv;\n"
 	"void main() {\n"
 	"    ivec2 v = ivec2(gl_VertexID & 1, gl_VertexID >> 1);\n"
@@ -220,8 +224,8 @@ static const char bloom_vert_src[] =
 	"}\n";
 
 static const char bloom_bright_frag_src[] =
-	"#version 430 core\n"
-	"layout(binding=0) uniform sampler2D u_scene;\n"
+	GLSL_FRAG_HEADER
+	"uniform sampler2D u_scene;\n"
 	"uniform float u_threshold;\n"
 	"uniform vec2 u_rcpframe;\n"
 	"in vec2 v_uv;\n"
@@ -234,8 +238,8 @@ static const char bloom_bright_frag_src[] =
 	"}\n";
 
 static const char bloom_down_frag_src[] =
-	"#version 430 core\n"
-	"layout(binding=0) uniform sampler2D u_scene;\n"
+	GLSL_FRAG_HEADER
+	"uniform sampler2D u_scene;\n"
 	"uniform vec2 u_rcpframe;\n"
 	"in vec2 v_uv;\n"
 	"layout(location=0) out vec4 fragColor;\n"
@@ -249,8 +253,8 @@ static const char bloom_down_frag_src[] =
 	"}\n";
 
 static const char bloom_up_frag_src[] =
-	"#version 430 core\n"
-	"layout(binding=0) uniform sampler2D u_scene;\n"
+	GLSL_FRAG_HEADER
+	"uniform sampler2D u_scene;\n"
 	"uniform vec2 u_rcpframe;\n"
 	"in vec2 v_uv;\n"
 	"layout(location=0) out vec4 fragColor;\n"
@@ -286,7 +290,7 @@ static qboolean PP_NeedsPostProcess (void)
 		return true;
 	if (Cvar_VariableValue("r_motionblur") > 0)
 		return true;
-	if (r_hdr.integer)
+	if (PP_HDRActive())
 		return true;
 	/* OIT's accum/revealage FBO is built as a sibling of the scene FBO
 	 * in PP_CreateFBO and shares its depth/stencil attachment, so the
@@ -347,8 +351,8 @@ static qboolean PP_CreateNativeFBO (int width, int height)
 	PP_DeleteNativeFBO();
 
 	{
-	GLenum native_fmt = r_hdr.integer ? GL_RGBA16F : GL_RGBA8;
-	GLenum native_type = r_hdr.integer ? GL_FLOAT : GL_UNSIGNED_BYTE;
+	GLenum native_fmt = PP_HDRActive() ? GL_RGBA16F : GL_RGBA8;
+	GLenum native_type = PP_HDRActive() ? GL_FLOAT : GL_UNSIGNED_BYTE;
 	glGenTextures_fp(1, &pp_native_color_tex);
 	glBindTexture_fp(GL_TEXTURE_2D, pp_native_color_tex);
 	glTexImage2D_fp(GL_TEXTURE_2D, 0, native_fmt, width, height, 0,
@@ -403,8 +407,8 @@ static qboolean PP_CreateBloomFBOs (int width, int height)
 
 	PP_DeleteBloomFBOs();
 
-	color_fmt = r_hdr.integer ? GL_RGBA16F : GL_RGBA8;
-	color_type = r_hdr.integer ? GL_FLOAT : GL_UNSIGNED_BYTE;
+	color_fmt = PP_HDRActive() ? GL_RGBA16F : GL_RGBA8;
+	color_type = PP_HDRActive() ? GL_FLOAT : GL_UNSIGNED_BYTE;
 
 	for (i = 0; i < BLOOM_LEVELS; i++)
 	{
@@ -455,8 +459,8 @@ static qboolean PP_CreateFBO (int width, int height)
 
 	/* resolve texture (always non-multisampled — this is what the shader reads) */
 	{
-		GLenum color_fmt = r_hdr.integer ? GL_RGBA16F : GL_RGBA8;
-		GLenum color_type = r_hdr.integer ? GL_FLOAT : GL_UNSIGNED_BYTE;
+		GLenum color_fmt = PP_HDRActive() ? GL_RGBA16F : GL_RGBA8;
+		GLenum color_type = PP_HDRActive() ? GL_FLOAT : GL_UNSIGNED_BYTE;
 	glGenTextures_fp(1, &pp_color_tex);
 	glBindTexture_fp(GL_TEXTURE_2D, pp_color_tex);
 	glTexImage2D_fp(GL_TEXTURE_2D, 0, color_fmt, width, height, 0,
@@ -573,7 +577,7 @@ static qboolean PP_CreateFBO (int width, int height)
 /* ------------------------------------------------------------------ */
 
 static const char pp_vert_src[] =
-	"#version 430 core\n"
+	GLSL_VERT_HEADER
 	"layout(location = 0) in vec3 a_position;\n"
 	"layout(location = 1) in vec2 a_texcoord;\n"
 	"out vec2 v_texcoord;\n"
@@ -584,14 +588,13 @@ static const char pp_vert_src[] =
 	"}\n";
 
 static const char pp_frag_src[] =
-	"#version 430 core\n"
+	GLSL_FRAG_HEADER
 	"uniform sampler2D scene;\n"
 	"uniform float gamma;\n"
 	"uniform float contrast;\n"
 	"uniform int softemu;\n"
 	"uniform float dither;\n"
 	"uniform sampler3D paletteLUT;\n"
-	"uniform vec3 palette[256];\n"
 	"uniform float scale;\n"
 	"uniform float waterwarp;\n"
 	"uniform float time;\n"
@@ -632,6 +635,13 @@ static const char pp_frag_src[] =
 	"    #undef LM\n"
 	"}\n"
 	"\n"
+	"uint reverse8(uint v) {\n"
+	"    v &= 0xffu;\n"
+	"    v = ((v & 0x55u) << 1) | ((v >> 1) & 0x55u);\n"
+	"    v = ((v & 0x33u) << 2) | ((v >> 2) & 0x33u);\n"
+	"    return ((v & 0x0fu) << 4) | (v >> 4);\n"
+	"}\n"
+	"\n"
 	"float bayer16(ivec2 c) {\n"
 	"    c &= 15;\n"
 	"    c.y ^= c.x;\n"
@@ -639,7 +649,7 @@ static const char pp_frag_src[] =
 	"    v = (v ^ (v << 2)) & 0x3333u;\n"
 	"    v = (v ^ (v << 1)) & 0x5555u;\n"
 	"    v |= v >> 7;\n"
-	"    v = bitfieldReverse(v) >> 24;\n"
+	"    v = reverse8(v);\n"
 	"    return float(v) / 256.0 - 0.5;\n"
 	"}\n"
 	"\n"
@@ -680,8 +690,7 @@ static const char pp_frag_src[] =
 	"            c += d * dither / 16.0;\n"
 	"        }\n"
 	"        ivec3 idx = ivec3(clamp(c, 0.0, 1.0) * 31.0 + 0.5);\n"
-	"        int palIdx = int(texelFetch(paletteLUT, idx, 0).r * 255.0);\n"
-	"        color.rgb = palette[palIdx];\n"
+	"        color.rgb = texelFetch(paletteLUT, idx, 0).rgb;\n"
 	"    }\n"
 	"\n"
 	"    fragColor = color;\n"
@@ -752,7 +761,6 @@ static qboolean PP_InitShader (void)
 	pp_loc_softemu = glGetUniformLocation_fp(pp_program, "softemu");
 	pp_loc_dither = glGetUniformLocation_fp(pp_program, "dither");
 	pp_loc_paletteLUT = glGetUniformLocation_fp(pp_program, "paletteLUT");
-	pp_loc_palette = glGetUniformLocation_fp(pp_program, "palette");
 	pp_loc_scale = glGetUniformLocation_fp(pp_program, "scale");
 	pp_loc_waterwarp = glGetUniformLocation_fp(pp_program, "waterwarp");
 	pp_loc_time = glGetUniformLocation_fp(pp_program, "time");
@@ -787,6 +795,10 @@ static qboolean PP_InitShader (void)
 	bloom_bright_loc_scene = glGetUniformLocation_fp(bloom_bright_prog, "u_scene");
 	bloom_bright_loc_threshold = glGetUniformLocation_fp(bloom_bright_prog, "u_threshold");
 	bloom_bright_loc_rcpframe = glGetUniformLocation_fp(bloom_bright_prog, "u_rcpframe");
+	glUseProgram_fp(bloom_bright_prog);
+	if (bloom_bright_loc_scene >= 0)
+		glUniform1i_fp(bloom_bright_loc_scene, 0);
+	glUseProgram_fp(0);
 
 	vs = PP_CompileShader(GL_VERTEX_SHADER, bloom_vert_src);
 	if (!vs) return true;
@@ -799,6 +811,10 @@ static qboolean PP_InitShader (void)
 
 	bloom_down_loc_scene = glGetUniformLocation_fp(bloom_down_prog, "u_scene");
 	bloom_down_loc_rcpframe = glGetUniformLocation_fp(bloom_down_prog, "u_rcpframe");
+	glUseProgram_fp(bloom_down_prog);
+	if (bloom_down_loc_scene >= 0)
+		glUniform1i_fp(bloom_down_loc_scene, 0);
+	glUseProgram_fp(0);
 
 	vs = PP_CompileShader(GL_VERTEX_SHADER, bloom_vert_src);
 	if (!vs) return true;
@@ -812,6 +828,12 @@ static qboolean PP_InitShader (void)
 	bloom_up_loc_scene = glGetUniformLocation_fp(bloom_up_prog, "u_scene");
 	bloom_up_loc_prev = glGetUniformLocation_fp(bloom_up_prog, "u_prev");
 	bloom_up_loc_rcpframe = glGetUniformLocation_fp(bloom_up_prog, "u_rcpframe");
+	glUseProgram_fp(bloom_up_prog);
+	if (bloom_up_loc_scene >= 0)
+		glUniform1i_fp(bloom_up_loc_scene, 0);
+	if (bloom_up_loc_prev >= 0)
+		glUniform1i_fp(bloom_up_loc_prev, 1);
+	glUseProgram_fp(0);
 
 	/* GL 4.3 core profile requires a VAO bound for any draw call. */
 	glGenVertexArrays_fp(1, &bloom_dummy_vao);
@@ -827,7 +849,11 @@ extern unsigned int d_8to24table[256];
 
 static void PP_BuildPaletteLUT (void)
 {
-	unsigned char lut[32 * 32 * 32];
+	/* Store the resolved RGB color instead of an 8-bit palette index.  This
+	 * keeps the fragment shader below WebGL2's minimum uniform-vector limit;
+	 * a vec3[256] palette alone would require more than the guaranteed 224
+	 * fragment uniform vectors. */
+	static unsigned char lut[32 * 32 * 32 * 3];
 	int r, g, b, i;
 
 	if (!glTexImage3D_fp)
@@ -863,7 +889,13 @@ static void PP_BuildPaletteLUT (void)
 						best = i;
 					}
 				}
-				lut[b * 32 * 32 + g * 32 + r] = (unsigned char)best;
+				{
+					unsigned int color = d_8to24table[best];
+					int offset = (b * 32 * 32 + g * 32 + r) * 3;
+					lut[offset + 0] = (color >>  0) & 0xff;
+					lut[offset + 1] = (color >>  8) & 0xff;
+					lut[offset + 2] = (color >> 16) & 0xff;
+				}
 			}
 		}
 	}
@@ -871,8 +903,8 @@ static void PP_BuildPaletteLUT (void)
 	glGenTextures_fp(1, &pp_palette_lut);
 	glActiveTexture_fp(GL_TEXTURE0 + 1);
 	glBindTexture_fp(GL_TEXTURE_3D, pp_palette_lut);
-	glTexImage3D_fp(GL_TEXTURE_3D, 0, GL_R8, 32, 32, 32, 0,
-			GL_RED, GL_UNSIGNED_BYTE, lut);
+	glTexImage3D_fp(GL_TEXTURE_3D, 0, GL_RGB8, 32, 32, 32, 0,
+			GL_RGB, GL_UNSIGNED_BYTE, lut);
 	glTexParameterf_fp(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameterf_fp(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameterf_fp(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -903,6 +935,9 @@ static qboolean OIT_CreateFBO (int width, int height, GLuint depth_stencil_rb, G
 	GLenum status;
 	GLenum drawbufs[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
 	GLenum textarget = (samples > 1) ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D;
+
+	if (!gl_renderer_caps.oit)
+		return false;
 
 	OIT_DeleteFBO();
 	oit_samples = (samples > 1) ? samples : 0;
@@ -1166,8 +1201,16 @@ void GL_PostProcess_Init (void)
 	Cvar_RegisterVariable(&r_bloom);
 	Cvar_RegisterVariable(&r_bloom_intensity);
 	Cvar_RegisterVariable(&r_bloom_threshold);
-	if (r_oit.integer)
+	if (!gl_renderer_caps.oit && r_oit.integer)
+	{
+		Con_SafePrintf("[RENDERER] OIT unavailable; using sorted transparency\n");
 		Cvar_Set("r_oit", "0");
+	}
+	if (!gl_renderer_caps.float_color_buffer && r_hdr.integer)
+	{
+		Con_SafePrintf("[RENDERER] Floating-point render targets unavailable; disabling HDR\n");
+		Cvar_Set("r_hdr", "0");
+	}
 
 	pp_initialized = false;
 	pp_active = false;
@@ -1181,7 +1224,7 @@ void GL_PostProcess_Init (void)
 	/* GL 4.3: shaders always available */
 
 	/* check for FBO function pointers */
-#ifndef EMSCRIPTEN
+#ifndef __EMSCRIPTEN__
 	/* On desktop GL, dynamically load function pointers */
 	glGenFramebuffers_fp = (glGenFramebuffers_f) SDL_GL_GetProcAddress("glGenFramebuffers");
 	glDeleteFramebuffers_fp = (glDeleteFramebuffers_f) SDL_GL_GetProcAddress("glDeleteFramebuffers");
@@ -1212,7 +1255,7 @@ void GL_PostProcess_Init (void)
 	glUniform3fv_fp = (glUniform3fv_f) SDL_GL_GetProcAddress("glUniform3fv");
 	if (!glUniform2f_fp)
 		glUniform2f_fp = (glUniform2f_f) SDL_GL_GetProcAddress("glUniform2f");
-#endif /* !EMSCRIPTEN */
+#endif /* !__EMSCRIPTEN__ */
 
 	if (!PP_InitShader())
 	{
@@ -1231,7 +1274,7 @@ void GL_PostProcess_Init (void)
 	 * can't be tested as a boolean there — WBOIT per-buffer blending is
 	 * unavailable in WebGL2/GLES3 anyway. */
 #ifndef __EMSCRIPTEN__
-	if (glBlendFunci_fp && glDrawBuffers_fp && glClearBufferfv_fp)
+	if (gl_renderer_caps.oit)
 		OIT_InitShader();
 #endif
 }
@@ -1714,7 +1757,7 @@ apply_shader:
 	if (pp_loc_contrast >= 0)
 		glUniform1f_fp(pp_loc_contrast, v_contrast.value);
 	if (pp_loc_hdr_exposure >= 0)
-		glUniform1f_fp(pp_loc_hdr_exposure, r_hdr.integer ? r_hdr_exposure.value : 0.0f);
+		glUniform1f_fp(pp_loc_hdr_exposure, PP_HDRActive() ? r_hdr_exposure.value : 0.0f);
 
 	/* softemu uniforms */
 	if (pp_loc_softemu >= 0)
@@ -1728,20 +1771,6 @@ apply_shader:
 		if (scale > 1.0f) scale = 1.0f;
 		glUniform1f_fp(pp_loc_scale, scale);
 	}
-	if ((int)r_softemu.value > 0 && pp_loc_palette >= 0 && glUniform3fv_fp)
-	{
-		float pal[256 * 3];
-		int i;
-		for (i = 0; i < 256; i++)
-		{
-			unsigned int c = d_8to24table[i];
-			pal[i * 3 + 0] = ((c >>  0) & 0xff) / 255.0f;
-			pal[i * 3 + 1] = ((c >>  8) & 0xff) / 255.0f;
-			pal[i * 3 + 2] = ((c >> 16) & 0xff) / 255.0f;
-		}
-		glUniform3fv_fp(pp_loc_palette, 256, pal);
-	}
-
 	/* Warp and blur: already baked into pp_native_color_tex when pp_native_active.
 	 * Apply here only for the copyback fallback path (pp_native_active=false). */
 	if (pp_loc_waterwarp >= 0)
@@ -1840,6 +1869,11 @@ apply_shader:
 qboolean GL_PostProcess_Active (void)
 {
 	return pp_active;
+}
+
+qboolean GL_PostProcess_Available (void)
+{
+	return pp_initialized;
 }
 
 void GL_PostProcess_RequestWaterwarpPreview (float duration)
