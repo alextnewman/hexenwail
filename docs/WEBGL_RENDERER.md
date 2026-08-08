@@ -9,7 +9,8 @@ PWA runtime log.
 
 | Feature | WebGL2 behavior |
 | --- | --- |
-| World and brush entities | GLSL ES 3.00, RGBA8 lightmaps |
+| World | GLSL ES 3.00, RGBA8 lightmaps |
+| Brush entities | Legacy CPU submission with the world shader |
 | Alias models | CPU submission path |
 | Skeletal SSBO path | Disabled; CPU model fallback |
 | Particles | CPU-built triangles/points |

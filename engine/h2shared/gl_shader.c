@@ -287,34 +287,6 @@ static void GL_InitProgramUniforms (glprogram_t *p)
 /* Shader sources                                                      */
 /* ------------------------------------------------------------------ */
 
-/* GLSL version header: desktop GL 4.3 vs WebGL2 (ES 3.0) */
-#ifdef __EMSCRIPTEN__
-#define GLSL_VERT_HEADER	"#version 300 es\nprecision highp float;\n"
-#define GLSL_FRAG_HEADER	"#version 300 es\nprecision mediump float;\n"
-/* GLSL ES 3.00 doesn't support early_fragment_tests */
-#define GLSL_EARLY_Z		""
-#define GLSL_EARLY_Z_OPAQUE	""
-#else
-/* uhexen2-khsa r27: explicit `precision highp float;` in the vertex
- * shader header too.  r23 added it only to the fragment shader, but
- * Mathuzzz's dither survived — and interpolated varyings (v_color,
- * v_fogdist) are produced by the vertex shader.  If the vertex stage
- * emits them at mediump, the fragment stage's highp can't recover the
- * lost precision: the interpolator's input is already noisy.  Force
- * highp on both stages so the varying interpolation stays FP32 end-
- * to-end. */
-#define GLSL_VERT_HEADER	"#version 430 core\nprecision highp float;\n"
-/* uhexen2-khsa r23: explicit `precision highp float;` in the fragment
- * shader header.  GLSL 4.30 core defaults to highp, but some NVIDIA
- * drivers have been observed to silently demote interpolated
- * varying math (v_color * tex + fog mix) to mediump, producing per-
- * pixel rounding noise that compounds across the multiply + fog chain.
- * Mathuzzz's screen-door bisect (r22): neither r_alias_fullbright 1
- * nor r_alias_nofog 1 alone fixes the dither, but the combo does —
- * which is exactly the signature of a precision interaction between
- * the two computations.  Explicit highp forces the compiler to keep
- * full FP32 throughout. */
-#define GLSL_FRAG_HEADER	"#version 430 core\nprecision highp float;\n"
 /* Cutout shaders that use `discard` MUST NOT force early_fragment_tests:
  * early tests run depth+stencil — and write them — BEFORE the fragment
  * shader executes; a later `discard` cannot undo the depth write that
@@ -323,12 +295,10 @@ static void GL_InitProgramUniforms (glprogram_t *p)
  * entity drawn after at that pixel even though no color was written there.
  * Visible on mill.bsp (SoT): bush silhouette z-rejected the tree behind
  * it.  uhexen2-238u. */
-#define GLSL_EARLY_Z		""
-/* Opaque-only variant has no discard, so early_fragment_tests is safe and
+/* Opaque-only desktop variant has no discard, so early_fragment_tests is safe and
  * recovers Hi-Z on the world bucket (+0.34ms regression measured in
- * uhexen2-23a9).  Used by gl_shader_world_opaque (uhexen2-5c6r). */
-#define GLSL_EARLY_Z_OPAQUE	"layout(early_fragment_tests) in;\n"
-#endif
+ * uhexen2-23a9).  GLSL ES 3.00 leaves this qualifier empty.  Used by
+ * gl_shader_world_opaque (uhexen2-5c6r). */
 
 /* --- shader_2d: orthographic HUD/text rendering --- */
 static const char s2d_vert[] =

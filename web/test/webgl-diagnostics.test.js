@@ -31,3 +31,18 @@ test('framebuffer self-test validates a generated world draw', async () => {
   assert.match(diagnostics, /gamma post-process returned/);
   assert.match(diagnostics, /palette post-process returned/);
 });
+
+test('engine WebGL profile uses shared high-precision shaders and CPU brush fallback', async () => {
+  const [header, shader, postprocess, renderer] = await Promise.all([
+    readFile(new URL('../../engine/h2shared/gl_shader.h', import.meta.url), 'utf8'),
+    readFile(new URL('../../engine/h2shared/gl_shader.c', import.meta.url), 'utf8'),
+    readFile(new URL('../../engine/h2shared/gl_postprocess.c', import.meta.url), 'utf8'),
+    readFile(new URL('../../engine/hexen2/gl_rmain.c', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(header, /#define GLSL_PROFILE_VERSION\s+"#version 300 es\\n"/);
+  assert.match(header, /GLSL_FRAGMENT_PRECISION[\s\S]*"precision highp float;\\n"/);
+  assert.match(shader, /GLSL_FRAG_HEADER/);
+  assert.match(postprocess, /GLSL_FRAG_HEADER/);
+  assert.match(renderer, /gl_renderer_caps\.profile == GL_RENDERER_WEBGL2[\s\S]*return false;/);
+});

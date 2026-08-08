@@ -11,6 +11,29 @@
 #ifndef GL_SHADER_H
 #define GL_SHADER_H
 
+/* Shared profile headers for every renderer shader family. */
+#define GLSL_VERTEX_PRECISION \
+	"precision highp float;\n" \
+	"precision highp int;\n"
+#define GLSL_FRAGMENT_PRECISION \
+	"precision highp float;\n" \
+	"precision highp int;\n" \
+	"precision highp sampler2D;\n" \
+	"precision highp sampler3D;\n"
+
+#ifdef __EMSCRIPTEN__
+#define GLSL_PROFILE_VERSION	"#version 300 es\n"
+#define GLSL_EARLY_Z		""
+#define GLSL_EARLY_Z_OPAQUE	""
+#else
+#define GLSL_PROFILE_VERSION	"#version 430 core\n"
+#define GLSL_EARLY_Z		""
+#define GLSL_EARLY_Z_OPAQUE	"layout(early_fragment_tests) in;\n"
+#endif
+
+#define GLSL_VERT_HEADER	GLSL_PROFILE_VERSION GLSL_VERTEX_PRECISION
+#define GLSL_FRAG_HEADER	GLSL_PROFILE_VERSION GLSL_FRAGMENT_PRECISION
+
 /* Shader compilation helpers */
 GLuint	GL_CompileShader (GLenum type, const char *source);
 GLuint	GL_LinkProgram (GLuint vert, GLuint frag);

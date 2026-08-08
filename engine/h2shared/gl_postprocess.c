@@ -47,14 +47,6 @@
 #define GL_TEXTURE_2D_MULTISAMPLE 0x9100
 #endif
 
-#ifdef __EMSCRIPTEN__
-#define PP_VERT_HEADER	"#version 300 es\nprecision highp float;\nprecision highp int;\n"
-#define PP_FRAG_HEADER	"#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nprecision highp sampler3D;\n"
-#else
-#define PP_VERT_HEADER	"#version 430 core\n"
-#define PP_FRAG_HEADER	"#version 430 core\n"
-#endif
-
 /* ES 3.0 compatibility: GL_QUADS and GL_POLYGON don't exist */
 #ifdef __EMSCRIPTEN__
 #ifndef GL_QUADS
@@ -175,7 +167,7 @@ static qboolean	oit_in_pass;		/* true between Begin/EndTranslucency */
 
 /* OIT resolve shaders */
 static const char oit_resolve_vert[] =
-	PP_VERT_HEADER
+	GLSL_VERT_HEADER
 	"void main() {\n"
 	"    ivec2 v = ivec2(gl_VertexID & 1, gl_VertexID >> 1);\n"
 	"    gl_Position = vec4(vec2(v) * 4.0 - 1.0, 0.0, 1.0);\n"
@@ -184,7 +176,7 @@ static const char oit_resolve_vert[] =
 /* No stencil gate, no early_fragment_tests. WBOIT handles empty pixels
  * via math: accum=0, revealage=1 → alpha=0 → transparent → scene unchanged. */
 static const char oit_resolve_frag[] =
-	PP_FRAG_HEADER
+	GLSL_FRAG_HEADER
 	"uniform sampler2D TexAccum;\n"
 	"uniform sampler2D TexReveal;\n"
 	"layout(location=0) out vec4 out_fragcolor;\n"
@@ -202,7 +194,7 @@ static const char oit_resolve_frag[] =
 /* MSAA variant: per-sample resolve via sampler2DMS + gl_SampleID, used when
  * the OIT accum/revealage targets are GL_TEXTURE_2D_MULTISAMPLE. */
 static const char oit_resolve_frag_msaa[] =
-	PP_FRAG_HEADER
+	GLSL_FRAG_HEADER
 	"uniform sampler2DMS TexAccum;\n"
 	"uniform sampler2DMS TexReveal;\n"
 	"layout(location=0) out vec4 out_fragcolor;\n"
@@ -222,7 +214,7 @@ static const char oit_resolve_frag_msaa[] =
 /* ------------------------------------------------------------------ */
 
 static const char bloom_vert_src[] =
-	PP_VERT_HEADER
+	GLSL_VERT_HEADER
 	"out vec2 v_uv;\n"
 	"void main() {\n"
 	"    ivec2 v = ivec2(gl_VertexID & 1, gl_VertexID >> 1);\n"
@@ -232,7 +224,7 @@ static const char bloom_vert_src[] =
 	"}\n";
 
 static const char bloom_bright_frag_src[] =
-	PP_FRAG_HEADER
+	GLSL_FRAG_HEADER
 	"uniform sampler2D u_scene;\n"
 	"uniform float u_threshold;\n"
 	"uniform vec2 u_rcpframe;\n"
@@ -246,7 +238,7 @@ static const char bloom_bright_frag_src[] =
 	"}\n";
 
 static const char bloom_down_frag_src[] =
-	PP_FRAG_HEADER
+	GLSL_FRAG_HEADER
 	"uniform sampler2D u_scene;\n"
 	"uniform vec2 u_rcpframe;\n"
 	"in vec2 v_uv;\n"
@@ -261,7 +253,7 @@ static const char bloom_down_frag_src[] =
 	"}\n";
 
 static const char bloom_up_frag_src[] =
-	PP_FRAG_HEADER
+	GLSL_FRAG_HEADER
 	"uniform sampler2D u_scene;\n"
 	"uniform vec2 u_rcpframe;\n"
 	"in vec2 v_uv;\n"
@@ -585,7 +577,7 @@ static qboolean PP_CreateFBO (int width, int height)
 /* ------------------------------------------------------------------ */
 
 static const char pp_vert_src[] =
-	PP_VERT_HEADER
+	GLSL_VERT_HEADER
 	"layout(location = 0) in vec3 a_position;\n"
 	"layout(location = 1) in vec2 a_texcoord;\n"
 	"out vec2 v_texcoord;\n"
@@ -596,7 +588,7 @@ static const char pp_vert_src[] =
 	"}\n";
 
 static const char pp_frag_src[] =
-	PP_FRAG_HEADER
+	GLSL_FRAG_HEADER
 	"uniform sampler2D scene;\n"
 	"uniform float gamma;\n"
 	"uniform float contrast;\n"
