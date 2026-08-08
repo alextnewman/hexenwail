@@ -3626,7 +3626,10 @@ static void LM_StitchAtlas (void)
 	atlas_size = LM_ATLAS_WIDTH * LM_ATLAS_HEIGHT * lightmap_bytes;
 	atlas = (byte *) calloc(1, atlas_size);
 	if (!atlas)
+	{
+		lm_atlas_nonzero_bytes = 0;
 		return;
+	}
 
 	for (page = 0; page < lm_atlas_layers; page++)
 	{

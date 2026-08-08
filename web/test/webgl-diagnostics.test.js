@@ -6,6 +6,10 @@ import { nonBlackPixelRatio } from '../lib/webgl-diagnostics.js';
 import { extractEngineWebGLPrograms } from '../../scripts/webgl-engine-shader-smoke.mjs';
 
 test('black-frame detector distinguishes visible and dark frames', () => {
+  assert.equal(nonBlackPixelRatio(null), 0);
+  assert.equal(nonBlackPixelRatio(undefined), 0);
+  assert.equal(nonBlackPixelRatio(new Uint8Array(0)), 0);
+  assert.equal(nonBlackPixelRatio(new Uint8Array(3)), 0);
   assert.equal(nonBlackPixelRatio(new Uint8Array(16)), 0);
   assert.equal(nonBlackPixelRatio(new Uint8Array([
     64, 128, 192, 255,

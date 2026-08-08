@@ -144,8 +144,9 @@ function compileProgram(gl, family, vertexSource, fragmentSource) {
 
 export function nonBlackPixelRatio(pixels, minimumLuminance = 8) {
   if (!pixels?.length) return 0;
-  let visible = 0;
   const pixelCount = Math.floor(pixels.length / 4);
+  if (pixelCount === 0) return 0;
+  let visible = 0;
   for (let offset = 0; offset < pixelCount * 4; offset += 4) {
     const luminance = pixels[offset] * 0.2126
       + pixels[offset + 1] * 0.7152
