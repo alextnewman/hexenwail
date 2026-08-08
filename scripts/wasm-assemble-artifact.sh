@@ -24,7 +24,8 @@ rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
 cp -r web/. "$DIST_DIR/"
-sed -i "s/__HEXENWAIL_BUILD_VERSION__/$BUILD_VERSION/g" "$DIST_DIR/sw.js"
+sed -i.bak "s/__HEXENWAIL_BUILD_VERSION__/$BUILD_VERSION/g" "$DIST_DIR/sw.js"
+rm -f "$DIST_DIR/sw.js.bak"
 
 cp "$BUILD_BIN/hexenwail.js" "$DIST_DIR/"
 cp "$BUILD_BIN/hexenwail.wasm" "$DIST_DIR/"

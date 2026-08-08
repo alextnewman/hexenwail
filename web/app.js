@@ -1162,7 +1162,7 @@ function bindUi() {
   });
   ui.launchButton?.addEventListener('click', () => {
     if (state.runtimeExited) {
-      returnToLauncher().catch((error) => setStatus(`Restart failed: ${error.message}`, 'error'));
+      returnToLauncher().catch((error) => setStatus(`Exit failed: ${error.message}`, 'error'));
     } else {
       startEngineFromUserAction();
     }
