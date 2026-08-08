@@ -30,6 +30,11 @@ require "index.html"
 require "manifest.webmanifest"
 require "sw.js"
 
+if grep -q '__HEXENWAIL_BUILD_VERSION__' "$DIST_DIR/sw.js"; then
+	echo "INVALID: $DIST_DIR/sw.js still contains the build-version placeholder" >&2
+	missing=1
+fi
+
 # .data / .worker.js are optional depending on build options (e.g. preload
 # file packaging), so only report their presence informationally.
 for optional in hexenwail.data hexenwail.worker.js; do
