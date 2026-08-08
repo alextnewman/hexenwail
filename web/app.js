@@ -30,6 +30,8 @@ const state = {
   lastStatus: 'Preparing launcher…',
   runtimeExited: false,
   quitInProgress: false,
+  serviceWorkerReloading: false,
+  serviceWorkerRegistration: null,
   runtimeLogEntries: [],
   phoneControls: null,
   preferences: {
@@ -128,6 +130,9 @@ function updateLaunchState() {
       : state.engineStarted
         ? 'Running'
         : ready ? 'Start game' : 'Import pak0.pak + pak1.pak first';
+  }
+  if (ui.exitButton) {
+    ui.exitButton.disabled = !state.engineStarted || state.runtimeExited;
   }
   if (ui.requirementsText) {
     ui.requirementsText.textContent = !state.rendererReady
@@ -467,10 +472,9 @@ async function handleImportedFiles(fileList) {
 
   await updateStorageIndicator();
   updateLaunchState();
-  await maybeStartEngine();
 
   if (accepted.length) {
-    setImportMessage(`Imported ${accepted.length} file(s). Existing files were replaced when names matched.`, 'success');
+    setImportMessage(`Imported ${accepted.length} file(s). Existing files were replaced when names matched. Start the game when ready.`, 'success');
   } else {
     setImportMessage('No recognized Hexen II assets were imported.', 'error');
   }
@@ -719,9 +723,9 @@ function closePhoneOverlay() {
   tryCaptureInput();
 }
 
-async function syncAndReload() {
+async function returnToLauncher() {
   releasePhoneInputs();
-  setStatus('Syncing saves before restart…');
+  setStatus('Syncing saves before returning to the launcher…');
   await syncRuntimeToStorage();
   location.reload();
 }
@@ -773,12 +777,8 @@ async function handleEngineQuit(kind = 'quit', message = '') {
   }
 }
 
-async function maybeStartEngine() {
+async function startEngineFromUserAction() {
   if (state.engineStarted || !state.rendererReady || !state.runtimeReady || !state.storageReady || !hasRequiredBaseAssets([...state.storedPaths])) {
-    return;
-  }
-  if (state.runtimeExited) {
-    await syncAndReload();
     return;
   }
   state.engineStarted = true;
@@ -1045,7 +1045,26 @@ async function registerServiceWorker() {
   }
 
   try {
-    const registration = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) {
+        ui.offlineText.textContent = 'Offline shell ready. Imported game data stays outside the service worker cache.';
+        return;
+      }
+      if (state.engineStarted && !state.runtimeExited) {
+        ui.offlineText.textContent = 'Update installed. Exit to the launcher to load it.';
+        return;
+      }
+      if (!state.serviceWorkerReloading) {
+        state.serviceWorkerReloading = true;
+        location.reload();
+      }
+    });
+    const registration = await navigator.serviceWorker.register('./sw.js', {
+      scope: './',
+      updateViaCache: 'none',
+    });
+    state.serviceWorkerRegistration = registration;
     if (navigator.serviceWorker.controller) {
       ui.offlineText.textContent = 'Offline shell ready. Imported game data stays outside the service worker cache.';
     } else if (registration.active || registration.installing || registration.waiting) {
@@ -1053,12 +1072,15 @@ async function registerServiceWorker() {
     } else {
       ui.offlineText.textContent = 'Installing offline shell… keep this tab open until the status changes.';
     }
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      ui.offlineText.textContent = 'Offline shell ready. Imported game data stays outside the service worker cache.';
-    });
   } catch (error) {
     ui.offlineText.textContent = `Offline shell unavailable: ${error.message}`;
   }
+}
+
+function checkForServiceWorkerUpdate() {
+  state.serviceWorkerRegistration?.update().catch((error) => {
+    console.warn('Service worker update check failed', error);
+  });
 }
 
 async function ensureEngineScriptLoaded() {
@@ -1090,6 +1112,7 @@ function bindUi() {
     importMessage: document.getElementById('import-message'),
     rejectedList: document.getElementById('rejected-list'),
     launchButton: document.getElementById('launch-button'),
+    exitButton: document.getElementById('exit-button'),
     importButton: document.getElementById('import-button'),
     directoryButton: document.getElementById('directory-button'),
     fullscreenButton: document.getElementById('fullscreen-button'),
@@ -1117,7 +1140,7 @@ function bindUi() {
     phoneOverlay: document.getElementById('phone-overlay'),
     phoneResumeButton: document.getElementById('phone-resume-button'),
     phoneEscapeButton: document.getElementById('phone-escape-button'),
-    phoneRestartButton: document.getElementById('phone-restart-button'),
+    phoneExitButton: document.getElementById('phone-exit-button'),
   });
   appendRuntimeLog('[launcher]', state.lastStatus);
 
@@ -1139,10 +1162,13 @@ function bindUi() {
   });
   ui.launchButton?.addEventListener('click', () => {
     if (state.runtimeExited) {
-      syncAndReload().catch((error) => setStatus(`Restart failed: ${error.message}`, 'error'));
+      returnToLauncher().catch((error) => setStatus(`Exit failed: ${error.message}`, 'error'));
     } else {
-      maybeStartEngine();
+      startEngineFromUserAction();
     }
+  });
+  ui.exitButton?.addEventListener('click', () => {
+    returnToLauncher().catch((error) => setStatus(`Exit failed: ${error.message}`, 'error'));
   });
   ui.clearButton?.addEventListener('click', () => clearImportedData());
   ui.exportSavesButton?.addEventListener('click', () => exportSaves());
@@ -1161,8 +1187,8 @@ function bindUi() {
     engineKey(PHONE_CONTROL_KEYCODES.menu, false);
     closePhoneOverlay();
   });
-  ui.phoneRestartButton?.addEventListener('click', () => {
-    syncAndReload().catch((error) => setStatus(`Restart failed: ${error.message}`, 'error'));
+  ui.phoneExitButton?.addEventListener('click', () => {
+    returnToLauncher().catch((error) => setStatus(`Exit failed: ${error.message}`, 'error'));
   });
   ui.touchControlsSetting?.addEventListener('change', () => {
     state.preferences.touchControls = ui.touchControlsSetting.value;
@@ -1253,7 +1279,8 @@ function bindBootCallbacks() {
     boot.runtimeInitialized = true;
     setStatus('Engine runtime ready. Restoring persistent data…');
     await loadStoredFilesIntoRuntime();
-    await maybeStartEngine();
+    setStatus('Engine ready. Start the game when ready.');
+    updateLaunchState();
   };
   boot.onQuit = (detail) => handleEngineQuit(detail?.kind ?? 'quit', detail?.message ?? '');
 
@@ -1261,7 +1288,8 @@ function bindBootCallbacks() {
     queueMicrotask(async () => {
       state.runtimeReady = true;
       await loadStoredFilesIntoRuntime();
-      await maybeStartEngine();
+      setStatus('Engine ready. Start the game when ready.');
+      updateLaunchState();
     });
   }
 }
@@ -1296,7 +1324,8 @@ async function init() {
   await ensureEngineScriptLoaded();
   if (state.runtimeReady) {
     await loadStoredFilesIntoRuntime();
-    await maybeStartEngine();
+    setStatus('Engine ready. Start the game when ready.');
+    updateLaunchState();
   }
 
   setInterval(() => {
@@ -1306,8 +1335,11 @@ async function init() {
     if (document.visibilityState === 'hidden') {
       releasePhoneInputs();
       syncRuntimeToStorage().catch((error) => console.warn('Save sync failed', error));
+    } else {
+      checkForServiceWorkerUpdate();
     }
   });
+  addEventListener('pageshow', checkForServiceWorkerUpdate);
   addEventListener('orientationchange', () => {
     releasePhoneInputs();
     scheduleCanvasResize();
