@@ -16,6 +16,17 @@ option(USE_DEBUG "Debug build" OFF)
 option(USE_SOUND "Enable the browser audio backend" ON)
 set(GAME_DATA_DIR "" CACHE PATH "Optional game data directory to preload")
 
+# Renderer selection. "software" is the shipping configuration: the classic
+# 8bpp software rasterizer presented through an accelerated canvas. "webgl2"
+# keeps the experimental GPU renderer buildable.
+# See docs/web/SOFTWARE_RENDERER.md and docs/web/ARCHITECTURE.md.
+set(WEB_RENDERER "software" CACHE STRING "Web renderer: software or webgl2")
+set_property(CACHE WEB_RENDERER PROPERTY STRINGS software webgl2)
+if(NOT WEB_RENDERER STREQUAL "software" AND NOT WEB_RENDERER STREQUAL "webgl2")
+    message(FATAL_ERROR "WEB_RENDERER must be 'software' or 'webgl2' (got '${WEB_RENDERER}')")
+endif()
+message(STATUS "Web renderer: ${WEB_RENDERER}")
+
 add_compile_options(
     -Wall
     -Wextra
@@ -45,12 +56,50 @@ include_directories(
 )
 
 set(RENDERER_SOURCES
-    ${ENGINE_TOP}/hexen2/r_webgl2.c
     ${ENGINE_TOP}/hexen2/r_part.c
-    ${COMMONDIR}/draw_webgl2.c
     ${COMMONDIR}/model.c
     ${COMMONDIR}/screen.c
 )
+
+if(WEB_RENDERER STREQUAL "webgl2")
+    add_compile_definitions(WEBGL2QUAKE)
+    list(APPEND RENDERER_SOURCES
+        ${ENGINE_TOP}/hexen2/r_webgl2.c
+        ${COMMONDIR}/draw_webgl2.c
+    )
+else()
+    add_compile_definitions(WEBSOFT)
+    list(APPEND RENDERER_SOURCES
+        ${ENGINE_TOP}/hexen2/r_alias.c
+        ${ENGINE_TOP}/hexen2/r_main.c
+        ${ENGINE_TOP}/hexen2/r_misc.c
+        ${ENGINE_TOP}/hexen2/r_soft_web.c
+        ${COMMONDIR}/d_edge.c
+        ${COMMONDIR}/d_fill.c
+        ${COMMONDIR}/d_init.c
+        ${COMMONDIR}/d_modech.c
+        ${COMMONDIR}/d_part.c
+        ${COMMONDIR}/d_polyse.c
+        ${COMMONDIR}/d_scan.c
+        ${COMMONDIR}/d_sky.c
+        ${COMMONDIR}/d_sprite.c
+        ${COMMONDIR}/d_surf.c
+        ${COMMONDIR}/d_vars.c
+        ${COMMONDIR}/d_zpoint.c
+        ${COMMONDIR}/r_aclip.c
+        ${COMMONDIR}/r_bsp.c
+        ${COMMONDIR}/r_draw.c
+        ${COMMONDIR}/r_edge.c
+        ${COMMONDIR}/r_efrag.c
+        ${COMMONDIR}/r_light.c
+        ${COMMONDIR}/r_sky.c
+        ${COMMONDIR}/r_sprite.c
+        ${COMMONDIR}/r_surf.c
+        ${COMMONDIR}/r_vars.c
+        ${COMMONDIR}/draw.c
+        ${COMMONDIR}/draw_soft_web.c
+    )
+endif()
 
 set(CLIENT_SOURCES
     ${ENGINE_TOP}/hexen2/cl_demo.c
@@ -129,11 +178,18 @@ endif()
 
 set(PLATFORM_SOURCES
     ${ENGINE_TOP}/hexen2/sys_web.c
-    ${COMMONDIR}/vid_webgl2.c
     ${COMMONDIR}/in_web.c
     ${COMMONDIR}/midi_nul.c
     ${COMMONDIR}/cd_null.c
 )
+if(WEB_RENDERER STREQUAL "webgl2")
+    list(APPEND PLATFORM_SOURCES ${COMMONDIR}/vid_webgl2.c)
+else()
+    list(APPEND PLATFORM_SOURCES
+        ${COMMONDIR}/vid_soft_web.c
+        ${COMMONDIR}/web_canvas_gl2.c
+    )
+endif()
 add_compile_definitions(_NO_MIDIDRV)
 
 add_executable(uhexen2_web

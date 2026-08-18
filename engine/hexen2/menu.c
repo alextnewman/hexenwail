@@ -2799,11 +2799,33 @@ static qboolean M_Rendering_IsSkip (int i)
 {
 	if (i < 0 || i >= REND_ITEMS)
 		return true;
+#if defined(WEBQUAKE) && !defined(WEBGL2QUAKE)
+	/* GPU-only rows have no counterpart in the software rasteriser. */
+	switch (i)
+	{
+	case REND_RENDERSCALE:
+	case REND_SOFTEMU:
+	case REND_DITHER:
+	case REND_TEXFILTER:
+	case REND_ANISOTROPY:
+	case REND_LMBICUBIC:
+	case REND_FULLBRIGHTS:
+	case REND_WATERALPHA:
+	case REND_FXAA:
+	case REND_MOTIONBLUR:
+	case REND_HDR:
+	case REND_HDR_EXPOSURE:
+		return true;
+	default:
+		break;
+	}
+#else
 	if (i == REND_ANISOTROPY && !gl_renderer_caps.anisotropy)
 		return true;
 	if ((i == REND_HDR || i == REND_HDR_EXPOSURE) &&
 	    !gl_renderer_caps.float_color_buffer)
 		return true;
+#endif
 	return M_Filter_Active() && !M_Filter_Matches(rend_labels[i]);
 }
 

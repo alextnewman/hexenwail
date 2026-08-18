@@ -20,6 +20,9 @@
  */
 
 #include "quakedef.h"
+#if defined(WEBQUAKE) && !defined(WEBGL2QUAKE)
+#include "r_local.h"
+#endif
 #ifdef GLQUAKE
 #include "gl_shader.h"
 #include "gl_vbo.h"
@@ -1438,7 +1441,7 @@ R_DrawParticles
 */
 extern	cvar_t	sv_gravity;
 
-#if defined(WEBQUAKE)
+#if defined(WEBGL2QUAKE)
 void R_DrawParticles (void)
 {
 	WebGL2_DrawParticles(active_particles);
