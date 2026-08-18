@@ -37,6 +37,8 @@ static GLuint console_texture, backtile_texture;
 static byte player_pixels[MAX_PLAYER_CLASS][WEB_PLAYER_WIDTH * WEB_PLAYER_HEIGHT];
 static float character_alpha = 1.0f;
 static int canvas_width, canvas_height;
+/* Origin of the current 2D canvas, in screen pixels (see GL_SetCanvas). */
+static int canvas_x, canvas_y;
 
 static const char *ui_vertex_source =
 	"#version 300 es\n"
@@ -140,9 +142,11 @@ static GLuint Draw_LoadTexture (const byte *pixels, int width, int height,
 static void Draw_Quad (GLuint texture, float x, float y, float width, float height,
 	float sl, float tl, float sh, float th, float r, float g, float b, float a)
 {
+	/* canvas coordinates -> screen coordinates */
+	const float x0 = x + canvas_x, y0 = y + canvas_y;
 	webui_vertex_t vertices[6] = {
-		{x, y, sl, tl}, {x + width, y, sh, tl}, {x + width, y + height, sh, th},
-		{x, y, sl, tl}, {x + width, y + height, sh, th}, {x, y + height, sl, th}
+		{x0, y0, sl, tl}, {x0 + width, y0, sh, tl}, {x0 + width, y0 + height, sh, th},
+		{x0, y0, sl, tl}, {x0 + width, y0 + height, sh, th}, {x0, y0 + height, sl, th}
 	};
 	if (!texture)
 		return;
@@ -275,9 +279,49 @@ void Draw_Init (void)
 }
 
 void Draw_ReInit (void) { draw_reinit = true; Draw_Init(); draw_reinit = false; }
-void GL_SetCanvas (canvastype canvas) { (void)canvas; canvas_width = vid.width; canvas_height = vid.height; }
+/*
+================
+GL_SetCanvas
+
+Places one of the fixed-size logical UI canvases on the screen. Draw_Quad
+translates every 2D vertex by the canvas origin, which is what anchors the
+status bar to the bottom of the screen and centres the menus; sbar.c and
+menu.c draw in canvas coordinates. The UI scale is 1 here -- the software
+renderer's canvases must land in the same place, and it cannot scale 2D.
+================
+*/
+void GL_SetCanvas (canvastype canvas)
+{
+	canvas_width = vid.width;
+	canvas_height = vid.height;
+
+	switch (canvas)
+	{
+	case CANVAS_SBAR:
+		canvas_x = (vid.width - UI_CANVAS_WIDTH) / 2;
+		canvas_y = vid.height - UI_SBAR_CANVAS_HEIGHT;
+		break;
+	case CANVAS_MENU:
+		canvas_x = (vid.width - UI_CANVAS_WIDTH) / 2;
+		canvas_y = 0;
+		break;
+	default:
+		canvas_x = 0;
+		canvas_y = 0;
+		break;
+	}
+
+	if (canvas_x < 0)
+		canvas_x = 0;
+	if (canvas_y < 0)
+		canvas_y = 0;
+}
 void Draw_FlushCharBatch (void) {}
-float SCR_CalcUIScale (cvar_t *user) { return q_max(1.0f, user->value); }
+/* The web 2D layers do not scale the UI canvases -- both renderers place
+ * them at scale 1 -- so report that honestly. menu.c derives its mouse
+ * hit-testing from this value, and a scale the canvas does not actually
+ * apply would move the hit boxes away from the glyphs. */
+float SCR_CalcUIScale (cvar_t *user) { (void)user; return 1.0f; }
 
 void Draw_Pic (int x, int y, qpic_t *pic)
 {
