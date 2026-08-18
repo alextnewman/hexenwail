@@ -15,6 +15,16 @@ cvar_t joy_exponent_move = {"joy_exponent_move", "1.5", CVAR_ARCHIVE};
 cvar_t joy_invert = {"joy_invert", "0", CVAR_ARCHIVE};
 cvar_t joy_swapmovelook = {"joy_swapmovelook", "0", CVAR_ARCHIVE};
 cvar_t joy_rumble = {"joy_rumble", "1", CVAR_ARCHIVE};
+cvar_t m_filter = {"m_filter", "1", CVAR_ARCHIVE};
+cvar_t _enable_mouse = {"_enable_mouse", "1", CVAR_ARCHIVE};
+
+/* Menu mouse cursor position, in menu canvas coordinates.  Fed by the
+ * pointer callbacks below; consumed by the menu hit-testing code. */
+int menu_mouse_x, menu_mouse_y;
+
+/* Gamepad "alt" modifier chord, mirrored from the SDL input backend so
+ * keys.c can share its gamepad binding logic. */
+qboolean joy_altmodifier_pressed = false;
 
 static double look_x, look_y;
 static qboolean mouse_active;
@@ -60,7 +70,7 @@ static EM_BOOL Web_KeyboardCallback (int event_type,
 	Key_Event(key, event_type == EMSCRIPTEN_EVENT_KEYDOWN);
 	if (event_type == EMSCRIPTEN_EVENT_KEYDOWN && event->key[0] && !event->key[1] &&
 		event->key[0] >= 32 && event->key[0] < 127)
-		Key_CharEvent((unsigned char)event->key[0]);
+		Key_CharEvent(event->key);
 	return EM_TRUE;
 }
 
@@ -120,6 +130,8 @@ void IN_Init (void)
 	Cvar_RegisterVariable(&joy_invert);
 	Cvar_RegisterVariable(&joy_swapmovelook);
 	Cvar_RegisterVariable(&joy_rumble);
+	Cvar_RegisterVariable(&m_filter);
+	Cvar_RegisterVariable(&_enable_mouse);
 	emscripten_set_keydown_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, NULL, true,
 		Web_KeyboardCallback);
 	emscripten_set_keyup_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, NULL, true,

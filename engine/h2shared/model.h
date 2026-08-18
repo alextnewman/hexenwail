@@ -408,6 +408,28 @@ typedef enum {mod_brush, mod_sprite, mod_alias} modtype_t;
 #define	LIGHT_STYLE 8
 #define	LIGHT_RADIUS 9
 
+// Per-entity PimpModel overrides, applied by the pimpmodel() builtin
+// (PF_pimpmodel).  The renderer owns the table; see R_GetPimpOverride.
+typedef struct {
+	qboolean	active;
+	int		ex_flags;
+	int		trail_flags;	// per-entity model flags (EF_ROCKET, EF_GIB, etc.)
+	qboolean	trail_override;	// true if trail_flags should replace model->flags
+	float		glow_settings[GLOW_SETTINGS_COUNT];
+} pimp_override_t;
+
+void R_ClearPimpOverrides (void);
+pimp_override_t *R_GetPimpOverride (int entnum);
+int R_GetEntityModelFlags (entity_t *e);
+int R_GetPimpFlags (entity_t *e, float **gsettings_out);
+
+// XF_ Extra model effects set by engine: qmodel_t->ex_flags
+// effects are model name dependent
+#define XF_TORCH_GLOW		(1 << 0 )	/* glowing torches				*/
+#define XF_TORCH_GLOW_EGYPT	(1 << 30)	/* glowing torches, egypt			*/
+#define XF_GLOW			(1 << 1 )	/* other glows					*/
+#define XF_MISSILE_GLOW		(1 << 2 )	/* missile glows				*/
+
 typedef struct qmodel_s
 {
 	char		name[MAX_QPATH];
@@ -477,7 +499,20 @@ typedef struct qmodel_s
 //
 // additional model data
 //
+	int		ex_flags;
 	float		glow_settings[GLOW_SETTINGS_COUNT];
+
+	/* Snapshot of the model's load-time flags / ex_flags / glow_settings,
+	 * captured at the end of Mod_LoadAliasModel{,New}.  PimpModel writes
+	 * through to mod->flags etc. so misc_modelpimp can change rendering
+	 * for every entity sharing this model on the current map; on map
+	 * change Mod_RestoreAliasModelDefaults walks mod_known[] and resets
+	 * to these snapshots so the next map starts from MDL defaults.
+	 * uhexen2-oq0a. */
+	int		orig_flags;
+	int		orig_ex_flags;
+	float		orig_glow_settings[GLOW_SETTINGS_COUNT];
+	qboolean	orig_state_saved;
 	cache_user_t	cache;		// only access through Mod_Extradata
 } qmodel_t;
 
@@ -490,6 +525,7 @@ typedef struct qmodel_s
 
 void	Mod_Init (void);
 void	Mod_ClearAll (void);
+void	Mod_SaveAliasModelDefaults (qmodel_t *mod);
 void	Mod_RestoreAliasModelDefaults (void);
 qmodel_t *Mod_ForName (const char *name, qboolean crash);
 qmodel_t *Mod_FindName (const char *name);

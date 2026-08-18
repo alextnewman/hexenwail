@@ -27,7 +27,15 @@
 #include "q_ctype.h"
 #include "bgmusic.h"
 #include "cdaudio.h"
+#if defined(GLQUAKE)
+#include "gl_postprocess.h"
+#include "gl_vbo.h"
+#include "gl_shader.h"
+#endif
 #include "sbar.h"
+#if !defined(WEBQUAKE)
+#include "sdl_inc.h"
+#endif
 
 void (*vid_menudrawfn)(void);
 
@@ -5013,7 +5021,7 @@ static void M_Menu_Help_f (void)
 
 
 #if FULLSCREEN_INTERMISSIONS
-#	ifdef GLQUAKE
+#	if defined(GLQUAKE) || defined(WEBQUAKE)
 #		define	Load_HelpPic_FN(X,Y,Z)	Draw_CachePicNoTrans((X))
 #		define	Draw_HelpPic_FN(X,Y,Z)	Draw_IntermissionPic((Z))
 #	else
@@ -6873,7 +6881,7 @@ void M_Draw (void)
 			{
 				const float bg_x0 = 32, bg_y0 = 80;
 				const float bg_x1 = 288, bg_y1 = 168;
-				Draw_SetCanvas (CANVAS_MENU);
+				GL_SetCanvas (CANVAS_MENU);
 				Draw_FillAlpha ((int)bg_x0, (int)bg_y0,
 					(int)(bg_x1 - bg_x0), (int)(bg_y1 - bg_y0),
 					0, 0, 0, 0.5f);
@@ -6890,7 +6898,7 @@ void M_Draw (void)
 	/* All menu draws happen inside the 320x200 CANVAS_MENU. Backgrounds
 	 * (fade, console) above this line stay in CANVAS_DEFAULT so they
 	 * fill the whole screen. */
-	Draw_SetCanvas (CANVAS_MENU);
+	GL_SetCanvas (CANVAS_MENU);
 	m_canvas_active = true;
 
 	switch (m_state)
@@ -6976,9 +6984,9 @@ void M_Draw (void)
 		 * then put the menu canvas back so the post-switch teardown
 		 * matches state. */
 		m_canvas_active = false;
-		Draw_SetCanvas (CANVAS_DEFAULT);
+		GL_SetCanvas (CANVAS_DEFAULT);
 		M_Help_Draw ();
-		Draw_SetCanvas (CANVAS_MENU);
+		GL_SetCanvas (CANVAS_MENU);
 		m_canvas_active = true;
 		break;
 
@@ -7004,7 +7012,7 @@ void M_Draw (void)
 	}
 
 	m_canvas_active = false;
-	Draw_SetCanvas (CANVAS_DEFAULT);
+	GL_SetCanvas (CANVAS_DEFAULT);
 
 	/* Restore default character alpha in case live preview reduced it. */
 	Draw_SetCharacterAlpha (1.0f);

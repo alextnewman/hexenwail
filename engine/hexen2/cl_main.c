@@ -815,9 +815,65 @@ static void CL_RelinkEntities (void)
 			dl->color[3] = 0.7;
 		}
 
-		/* Apply the classic trail flags carried by the loaded model. */
+		/* Wall torch dynamic lights — cast small dlight for
+		 * torch-flagged models so they illuminate nearby entities */
 		{
-		int mflags = ent->model->flags;
+			float *gs;
+			int pflags = R_GetPimpFlags(ent, &gs);
+			if (gl_torch_dlight.integer && (pflags & XF_TORCH_GLOW))
+			{
+				dl = CL_AllocDlight (i);
+				VectorCopy (ent->origin, dl->origin);
+				dl->origin[2] += 8;
+				dl->radius = 150;
+				dl->die = cl.time + 0.001;
+				dl->color[0] = gs[COLOR_R];
+				dl->color[1] = gs[COLOR_G];
+				dl->color[2] = gs[COLOR_B];
+				dl->color[3] = 0.7f;
+			}
+		}
+
+		/* Inky: misc_modelpimp cast light */
+		{
+			float *gs;
+			int pflags = R_GetPimpFlags(ent, &gs);
+			if (pflags & EF_ILLUMINATE)
+			{
+				int k, l;
+				float intensity;
+
+				dl = CL_AllocDlight (i);
+				VectorCopy (ent->origin, dl->origin);
+				dl->origin[0] += gs[ORB_OFFSET_X];
+				dl->origin[1] += gs[ORB_OFFSET_Y];
+				dl->origin[2] += gs[ORB_OFFSET_Z];
+				dl->radius = (gs[LIGHT_RADIUS] >= 1.0f) ? gs[LIGHT_RADIUS] : 200;
+				dl->die = cl.time + 0.001;
+				dl->color[0] = (gs[COLOR_R] != 0.0f) ? gs[COLOR_R] : 1.0f;
+				dl->color[1] = (gs[COLOR_G] != 0.0f) ? gs[COLOR_G] : 1.0f;
+				dl->color[2] = (gs[COLOR_B] != 0.0f) ? gs[COLOR_B] : 1.0f;
+				dl->color[3] = (gs[COLOR_A] != 0.0f) ? gs[COLOR_A] : 1.0f;
+				/* Apply light style flicker */
+				k = (int)(cl.time * 10);
+				l = (int)gs[LIGHT_STYLE];
+				if (l <= 0 || !cl_lightstyle[l].length)
+					intensity = 1.0f;
+				else
+				{
+					l = cl_lightstyle[(int)gs[LIGHT_STYLE]].map[k % cl_lightstyle[(int)gs[LIGHT_STYLE]].length] - 'a';
+					intensity = (float)(l * 22) / 255.0f;
+				}
+				dl->color[0] *= intensity;
+				dl->color[1] *= intensity;
+				dl->color[2] *= intensity;
+			}
+		}
+
+		/* Use per-entity trail flags from PimpModel overrides if set,
+		 * otherwise fall back to the shared model flags */
+		{
+		int mflags = R_GetEntityModelFlags(ent);
 		if (mflags & EF_GIB)
 			R_RocketTrail (oldorg, ent->origin, 2);
 		else if (mflags & EF_ZOMGIB)
@@ -1134,3 +1190,4 @@ void CL_Init (void)
 	Cmd_AddCommand ("viewpos", CL_Viewpos_f);
 	Cmd_AddCommand ("r_pos", CL_Viewpos_f);
 }
+

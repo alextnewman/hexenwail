@@ -53,7 +53,6 @@ cvar_t r_lightmap_bicubic = {"r_lightmap_bicubic", "0", CVAR_ARCHIVE};
 cvar_t r_motionblur = {"r_motionblur", "0", CVAR_ARCHIVE};
 cvar_t r_scale = {"r_scale", "1", CVAR_ARCHIVE};
 cvar_t r_softemu = {"r_softemu", "0", CVAR_ARCHIVE};
-cvar_t r_watercolor = {"r_watercolor", "1", CVAR_ARCHIVE};
 int gl_filter_idx;
 int gl_max_anisotropy = 1;
 webgl2_caps_t gl_renderer_caps;
@@ -63,6 +62,52 @@ const int color_offsets[MAX_PLAYER_CLASS] = {
 };
 
 qboolean r_cache_thrash;
+
+/* Per-entity PimpModel overrides, keyed by entity number.  Written by the
+ * pimpmodel() QuakeC builtin (PF_pimpmodel) and cleared per map; the
+ * WebGL2 renderer does not consume the glow/trail data yet. */
+static pimp_override_t	pimp_overrides[MAX_EDICTS];
+
+void R_ClearPimpOverrides (void)
+{
+	memset(pimp_overrides, 0, sizeof(pimp_overrides));
+}
+
+pimp_override_t *R_GetPimpOverride (int entnum)
+{
+	if (entnum < 0 || entnum >= MAX_EDICTS)
+		return NULL;
+	return &pimp_overrides[entnum];
+}
+
+// Returns model flags for an entity, with per-entity trail overrides
+int R_GetEntityModelFlags (entity_t *e)
+{
+	int entnum = (int)(e - cl_entities);
+	if (entnum >= 0 && entnum < MAX_EDICTS && pimp_overrides[entnum].active
+		&& pimp_overrides[entnum].trail_override)
+	{
+		return pimp_overrides[entnum].trail_flags;
+	}
+	return e->model ? e->model->flags : 0;
+}
+
+// Returns combined ex_flags for an entity (pimp override | model defaults)
+// and sets *gsettings_out to the active glow settings
+static float null_glow_settings[GLOW_SETTINGS_COUNT];
+int R_GetPimpFlags (entity_t *e, float **gsettings_out)
+{
+	int entnum = (int)(e - cl_entities);
+	if (entnum >= 0 && entnum < MAX_EDICTS && pimp_overrides[entnum].active)
+	{
+		if (gsettings_out)
+			*gsettings_out = pimp_overrides[entnum].glow_settings;
+		return pimp_overrides[entnum].ex_flags | (e->model ? e->model->ex_flags : 0);
+	}
+	if (gsettings_out)
+		*gsettings_out = e->model ? e->model->glow_settings : null_glow_settings;
+	return e->model ? e->model->ex_flags : 0;
+}
 
 static void Web_RegisterRendererCvars (void)
 {
@@ -108,7 +153,6 @@ static void Web_RegisterRendererCvars (void)
 	Cvar_RegisterVariable(&r_motionblur);
 	Cvar_RegisterVariable(&r_scale);
 	Cvar_RegisterVariable(&r_softemu);
-	Cvar_RegisterVariable(&r_watercolor);
 }
 
 void WebGL2_Init (void)
@@ -178,6 +222,10 @@ void R_NewMap (void)
 		d_lightstylevalue[i] = 264;
 	memset(&r_worldentity, 0, sizeof(r_worldentity));
 	r_worldentity.model = cl.worldmodel;
+	/* Roll back any misc_modelpimp mutations from the previous map
+	 * before clearing the per-entity overrides. uhexen2-oq0a. */
+	Mod_RestoreAliasModelDefaults();
+	R_ClearPimpOverrides();
 	R_ClearParticles();
 }
 

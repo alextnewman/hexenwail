@@ -21,7 +21,9 @@
  */
 
 #include "quakedef.h"
+#ifndef __EMSCRIPTEN__
 #include "sdl_inc.h"
+#endif
 
 #ifdef __EMSCRIPTEN__
 /* No pthreads in Emscripten build — APC is no-op, save is synchronous. */

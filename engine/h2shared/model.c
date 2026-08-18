@@ -192,6 +192,53 @@ void Mod_ClearAll (void)
 }
 
 /*
+=================
+Mod_SaveAliasModelDefaults
+
+Snapshot the model's load-time flags / ex_flags / glow_settings.  The
+pimpmodel() builtin writes through to the shared model so a map's
+misc_modelpimp affects every entity using that model; the snapshot is
+what Mod_RestoreAliasModelDefaults rolls back to on map change.
+
+uhexen2-oq0a.
+=================
+*/
+void Mod_SaveAliasModelDefaults (qmodel_t *mod)
+{
+	mod->orig_flags = mod->flags;
+	mod->orig_ex_flags = mod->ex_flags;
+	memcpy(mod->orig_glow_settings, mod->glow_settings, sizeof(mod->orig_glow_settings));
+	mod->orig_state_saved = true;
+}
+
+/*
+=================
+Mod_RestoreAliasModelDefaults
+
+Walk every loaded alias model and restore the snapshot taken at load
+time.  Called on map change, before the renderer's per-entity override
+table is cleared, so a map's misc_modelpimp mutations don't bleed into
+the next map.
+
+uhexen2-oq0a.
+=================
+*/
+void Mod_RestoreAliasModelDefaults (void)
+{
+	int		i;
+
+	for (i = 0; i < mod_numknown; i++)
+	{
+		qmodel_t *mod = &mod_known[i];
+		if (mod->type != mod_alias || !mod->orig_state_saved)
+			continue;
+		mod->flags = mod->orig_flags;
+		mod->ex_flags = mod->orig_ex_flags;
+		memcpy(mod->glow_settings, mod->orig_glow_settings, sizeof(mod->glow_settings));
+	}
+}
+
+/*
 ==================
 Mod_FindName
 
@@ -2203,6 +2250,7 @@ static void Mod_LoadAliasModelNew (qmodel_t *mod, void *buffer)
 	}
 
 	mod->type = mod_alias;
+	Mod_SaveAliasModelDefaults (mod);
 
 // FIXME: do this right
 //	mod->mins[0] = mod->mins[1] = mod->mins[2] = -16;
@@ -2469,6 +2517,7 @@ static void Mod_LoadAliasModel (qmodel_t *mod, void *buffer)
 	}
 
 	mod->type = mod_alias;
+	Mod_SaveAliasModelDefaults (mod);
 
 // FIXME: do this right
 //	mod->mins[0] = mod->mins[1] = mod->mins[2] = -16;

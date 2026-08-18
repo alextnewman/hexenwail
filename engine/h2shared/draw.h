@@ -53,7 +53,7 @@ void Draw_Crosshair (void);
 
 #if defined(GLQUAKE) || defined(WEBQUAKE)
 void Draw_AlphaPic (int x, int y, qpic_t *pic, float alpha);
-#endif
+#endif	/*  GLQUAKE || WEBQUAKE */
 
 void Draw_TransPicTranslate (int x, int y, qpic_t *pic, byte *translation, int p_class);
 					/* Only used for the player color selection menu */
@@ -62,9 +62,9 @@ void Draw_TransPicTranslate (int x, int y, qpic_t *pic, byte *translation, int p
 # if defined(GLQUAKE) || defined(WEBQUAKE)
 qpic_t *Draw_CachePicNoTrans (const char *path);
 void Draw_IntermissionPic (qpic_t *pic);
-# else	/* !GLQUAKE */
+# else	/* !GLQUAKE && !WEBQUAKE */
 qpic_t *Draw_CachePicResize (const char *path, int targetWidth, int targetHeight);
-# endif	/*  GLQUAKE */
+# endif	/*  GLQUAKE || WEBQUAKE */
 #endif	/*  FULLSCREEN_INTERMISSIONS */
 
 #if defined(GLQUAKE) || defined(WEBQUAKE)
@@ -123,7 +123,7 @@ typedef enum {
 	CANVAS_INVALID = -1
 } canvastype;
 
-void Draw_SetCanvas (canvastype newcanvas);
+void GL_SetCanvas (canvastype newcanvas);
 
 extern cvar_t scr_sbarscale;
 extern cvar_t scr_menuscale;
@@ -132,6 +132,6 @@ extern cvar_t scr_conalpha;
 extern cvar_t scr_conbrightness;
 
 float SCR_CalcUIScale (cvar_t *user);
-#endif
+#endif	/* GLQUAKE || WEBQUAKE */
 
 #endif	/* __HX2_DRAW_H */

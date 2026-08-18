@@ -119,7 +119,7 @@ if(USE_SOUND)
         ${COMMONDIR}/snd_mp3tag.c
         ${COMMONDIR}/snd_codec.c
         ${COMMONDIR}/snd_web.c
-        ${COMMONDIR}/bgmnull.c
+        ${COMMONDIR}/bgmusic.c
     )
     add_compile_definitions(HAVE_WEB_SOUND=1)
 else()

@@ -271,11 +271,11 @@ void Draw_Init (void)
 		Sys_Error("Missing background tile");
 	SwapPic(pic);
 	backtile_texture = Draw_LoadTexture(pic->data, pic->width, pic->height, false, false);
-	Draw_SetCanvas(CANVAS_DEFAULT);
+	GL_SetCanvas(CANVAS_DEFAULT);
 }
 
 void Draw_ReInit (void) { draw_reinit = true; Draw_Init(); draw_reinit = false; }
-void Draw_SetCanvas (canvastype canvas) { (void)canvas; canvas_width = vid.width; canvas_height = vid.height; }
+void GL_SetCanvas (canvastype canvas) { (void)canvas; canvas_width = vid.width; canvas_height = vid.height; }
 void Draw_FlushCharBatch (void) {}
 float SCR_CalcUIScale (cvar_t *user) { return q_max(1.0f, user->value); }
 

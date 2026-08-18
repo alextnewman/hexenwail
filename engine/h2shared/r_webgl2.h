@@ -56,7 +56,6 @@ extern cvar_t r_lightmap_bicubic;
 extern cvar_t r_motionblur;
 extern cvar_t r_scale;
 extern cvar_t r_softemu;
-extern cvar_t r_watercolor;
 extern int gl_filter_idx;
 extern int gl_max_anisotropy;
 
@@ -81,7 +80,7 @@ void WebGL2_EndFrame (void);
 void WebGL2_DrawParticles (particle_t *first);
 void Fog_ParseServerMessage (void);
 
-void Draw_SetCanvas (canvastype canvas);
+void GL_SetCanvas (canvastype canvas);
 void D_EnableBackBufferAccess (void);
 void D_DisableBackBufferAccess (void);
 
