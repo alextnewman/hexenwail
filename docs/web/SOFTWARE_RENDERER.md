@@ -210,12 +210,31 @@ framebuffer:
 | `Draw_MenuBackdrop` | Full-screen conback. |
 | `Draw_IntermissionPic` | Nearest-neighbour stretch to the full framebuffer — point sampling on purpose, so intermission art matches everything else. |
 | `Draw_CachePicNoTrans` | Same as `Draw_CachePic`; 8bpp transparency is a palette index resolved at blit time, so there is nothing to suppress at load. |
-| `GL_SetCanvas`, `Draw_FlushCharBatch` | No-ops. There is one canvas and no glyph batching. |
+| `GL_SetCanvas` | Selects the 2D drawing origin. There is no projection matrix, so a canvas is a translation: every primitive in `draw.c` adds `draw_canvas_x/y`. |
+| `Draw_FlushCharBatch` | No-op. Characters go straight to the framebuffer, so there is nothing to batch. |
 | `SCR_CalcUIScale` | Always `1.0`. The framebuffer is already low-resolution and the presenter does the upscaling; returning anything else would move hit-testing away from where glyphs actually land. |
 | CSQC `drawsetcliparea` / `drawresetcliparea` | No-ops. The software 2D layer has no scissor. |
 
-`GL_SetCanvas` is a no-op in the WebGL2 backend too, so the two renderers
-agree on 2D coordinates.
+### UI canvases
+
+`sbar.c` and `menu.c` draw in *canvas* coordinates, not screen coordinates —
+that is the Ironwail-parity 2D model the shared client code was written
+against. The canvases are fixed-size logical rectangles (`UI_CANVAS_WIDTH`,
+`UI_SBAR_CANVAS_HEIGHT` in `draw.h`) that `GL_SetCanvas` places on the
+screen at scale 1:
+
+| Canvas | Placement |
+| --- | --- |
+| `CANVAS_SBAR` | 320 × 167 (23 top bumps + 46 main bar + 98 lower info bar), anchored to the **bottom** of the screen, horizontally centred. |
+| `CANVAS_MENU` | 320 wide, anchored to the **top** of the screen, horizontally centred. |
+| everything else | the framebuffer itself, origin (0, 0). |
+
+`screen.c` restores `CANVAS_DEFAULT` after `Sbar_Draw()` — the same place
+`gl_screen.c` does — so the console, plaques and menus that follow are not
+drawn inside the status bar canvas.
+
+`draw_webgl2.c` places the canvases identically (`Draw_Quad` translates by
+the canvas origin), so the two renderers agree on 2D coordinates.
 
 ## Renderer-owned server messages
 
