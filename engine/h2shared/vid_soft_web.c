@@ -265,6 +265,10 @@ static void VID_SetSoftMode (int mode)
 	D_InitCaches (vid_surfcache, vid_surfcachesize);
 	WebCanvas_SetSource (width, height);
 
+	/* Shared client code (menu.c) sizes its canvas from these. */
+	glwidth = width;
+	glheight = height;
+
 	vid_current_mode = mode;
 	vid_menu_mode = mode;
 	in_mode_set = false;
