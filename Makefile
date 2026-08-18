@@ -1,60 +1,46 @@
 # Hexenwail Build System - Convenience Makefile
-# This provides convenient targets for common build tasks
+#
+# This engine targets Emscripten only: engine/CMakeLists.txt fails the
+# configure step outright on any other toolchain. There is no native
+# Linux/Windows binary, so the former nix-linux/nix-win64/nix-release
+# targets have been removed. See docs/web/ARCHITECTURE.md.
 
-.PHONY: help build release clean nix-build nix-release nix-linux nix-win64
+.PHONY: help build build-webgl2 dist test clean
 
 help:
 	@echo "Hexenwail Build Targets"
 	@echo "======================"
 	@echo ""
-	@echo "Nix builds (recommended):"
-	@echo "  make nix-build      - Build Linux version with Nix"
-	@echo "  make nix-release    - Build all platforms (Linux, Win64)"
-	@echo "  make nix-linux      - Build Linux version only"
-	@echo "  make nix-win64      - Build Windows 64-bit only"
+	@echo "Requires emcmake/emmake on PATH:"
+	@echo "  source \"\$$EMSDK/emsdk_env.sh\""
 	@echo ""
-	@echo "CMake builds:"
-	@echo "  make build          - Build Linux version with CMake"
-	@echo ""
-	@echo "Utility:"
+	@echo "  make build          - Build the WebAssembly client (software renderer)"
+	@echo "  make build-webgl2   - Build the retained WebGL2 renderer"
+	@echo "  make dist           - Assemble and validate the static PWA artifact"
+	@echo "  make test           - Run the PWA shell tests"
 	@echo "  make clean          - Clean all build artifacts"
 	@echo ""
 
 # Default target
 all: help
 
-# Nix builds (recommended)
-nix-build:
-	nix build .#default --print-build-logs
-
-nix-release:
-	nix build .#release --print-build-logs
-
-nix-linux:
-	nix build .#default --print-build-logs
-
-nix-win64:
-	nix build .#win64 --print-build-logs
-
-# CMake build (Linux)
+# The shipping configuration: classic 8bpp software renderer presented on
+# an accelerated canvas.
 build:
-	mkdir -p engine/build
-	cd engine/build && cmake .. \
-		-DCMAKE_BUILD_TYPE=Release \
-		-DUSE_CODEC_MP3=ON \
-		-DUSE_CODEC_VORBIS=ON \
-		-DUSE_CODEC_FLAC=ON \
-		-DUSE_ALSA=ON
-	cd engine/build && make -j$$(nproc)
-	@echo ""
-	@echo "Build complete: engine/build/bin/glhexen2"
+	./scripts/wasm-build.sh software
 
-# Release (use ./release.sh for tagged releases)
-release:
-	@echo "Use ./release.sh <version-tag> to create a tagged release."
-	@echo "GitHub Actions will build and publish the release artifacts."
+# The WebGL2 renderer is retained and must keep compiling.
+build-webgl2:
+	./scripts/wasm-build.sh webgl2 engine/build-webgl2
 
-# Clean
+# Static PWA artifact, the same one CI validates and Pages deploys.
+dist: build
+	./scripts/wasm-assemble-artifact.sh dist
+	./scripts/wasm-validate-artifact.sh dist
+
+test:
+	npm test
+
 clean:
-	rm -rf engine/build engine/build-* release result
+	rm -rf engine/build engine/build-* dist result
 	@echo "Clean complete"

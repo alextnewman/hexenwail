@@ -36,11 +36,19 @@ jobs:
 
   # Dedicated PWA/WebAssembly validation, required on every pull request.
   # Runs the lightweight Node PWA tests, builds the *full* WebAssembly
-  # client with the same Emscripten configuration as the Pages deployment
-  # (via the shared .github/actions/wasm-build composite action + scripts/
-  # wasm-*.sh), and validates the assembled static artifact — without
-  # deploying it. This is what would have caught the host-header
-  # contamination (`bits/wordsize.h` not found) before merge.
+  # client in both renderer configurations (software — the shipping
+  # default — and webgl2, which is retained and must not silently rot),
+  # using the same Emscripten setup as the Pages deployment (via the
+  # shared .github/actions/wasm-build composite action + scripts/wasm-*.sh),
+  # then validates the assembled static artifact — without deploying it.
+  # This is what would have caught the host-header contamination
+  # (`bits/wordsize.h` not found) before merge.
+  #
+  # This is the only build job. The engine is an Emscripten-only iOS-PWA
+  # target: engine/CMakeLists.txt fails the configure step outright on any
+  # other toolchain, so the former nix Linux/Windows `build` job and the
+  # opt-in `flatpak` job could no longer do anything but fail. See
+  # docs/web/ARCHITECTURE.md for the settled scope.
   pwa:
     name: PWA / WebAssembly
     runs-on: ubuntu-latest
@@ -59,68 +67,3 @@ jobs:
 
       - name: Validate assembled PWA artifact
         run: ./scripts/wasm-validate-artifact.sh dist
-
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@v31
-        with:
-          extra_nix_config: |
-            accept-flake-config = true
-      - uses: cachix/cachix-action@v17
-        # Cachix outages (e.g. 502 from cachix.org) shouldn't fail the build —
-        # we just lose the cache for that run.
-        continue-on-error: true
-        with:
-          name: hexenwail
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-
-      - name: Build Linux
-        run: nix build .#nixos --print-build-logs
-
-      - name: Smoke test
-        run: SDL_VIDEODRIVER=offscreen SDL_AUDIODRIVER=dummy timeout 10 nix run .#nixos -- -help 2>&1 | head -20 || true
-
-      - name: Build Windows
-        run: nix build .#win64 --print-build-logs
-
-  flatpak:
-    # The Flatpak build is slow and unrelated to routine PWA/native PR
-    # validation (it doesn't catch WebAssembly regressions and previously
-    # ran on every PR just adding minutes without signal for this goal).
-    # Tagged releases already build+publish it via release.yml; here it's
-    # opt-in only: manual "Run workflow", or a PR explicitly labeled
-    # "flatpak" for when a change actually touches the Flatpak manifest.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'flatpak')
-    runs-on: ubuntu-latest
-    # flatpak + flatpak-builder are installed directly on the runner — the
-    # bilelmoussaoui/flatpak-github-actions container image worked until
-    # Docker Hub flaked (release run 27069188929, 2026-06-06) and tanked
-    # the whole release because the container couldn't be pulled.  Ubuntu
-    # 24.04 ships flatpak-builder in main, so no PPA is needed.  The 25.08
-    # runtime/SDK is still pulled from Flathub either way.
-    steps:
-      - uses: actions/checkout@v6
-      - name: Install flatpak-builder
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder
-          # The container image came with Flathub pre-configured and ran as
-          # root; a bare apt install on the runner has neither.  Add the
-          # system remote, then pre-install the runtime + SDK as root (root
-          # bypasses polkit, which the unprivileged runner user lacks for
-          # system flatpak operations).  Without this the action's own
-          # `flatpak --system install` fails with "operation Deploy not
-          # allowed for user"; once the deps are present that install is a
-          # no-op.
-          sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          sudo flatpak install -y --noninteractive flathub \
-            org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08
-      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
-        with:
-          bundle: hexenwail.flatpak
-          manifest-path: flatpak/io.github.hexenwail.hexenwail.yml
-          cache-key: flatpak-builder-${{ github.sha }}

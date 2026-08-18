@@ -1,5 +1,5 @@
 {
-  description = "Hexenwail - modernized Hexen II engine (fork of Hammer of Thyrion / uHexen2)";
+  description = "Hexenwail - uHexen2 (Hammer of Thyrion) as an installable iOS PWA";
 
   nixConfig = {
     extra-substituters = [ "https://hexenwail.cachix.org" ];
@@ -11,16 +11,21 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
+  # This engine targets Emscripten only.  engine/CMakeLists.txt fails the
+  # configure step outright on any other toolchain, so the former `nixos`,
+  # `linux-fhs`, `win64` and `release` outputs -- all of which built the
+  # native `glhexen2` binary -- cannot work and have been removed along
+  # with `apps.default`.
+  #
+  # CI, the Pages deployment and the release workflow do NOT use this
+  # flake: they build with a pinned emsdk via .github/actions/wasm-build
+  # and scripts/wasm-*.sh, which is the source of truth for a shipping
+  # build.  What follows is developer convenience only.
+  # See docs/web/ARCHITECTURE.md.
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        pkgsCross64 = import nixpkgs {
-          inherit system;
-          crossSystem = {
-            config = "x86_64-w64-mingw32";
-          };
-        };
 
         # Version: extracted from engine/hexen2/quakedef.h HW_BASE_VERSION
         version = let
@@ -54,229 +59,16 @@
 
       in
       {
-        packages = let
-          # Shared build configuration for Linux builds
-          linuxBuildAttrs = {
-            pname = "hexenwail";
-            inherit version;
-
-            src = filteredSrc;
-
-            nativeBuildInputs = with pkgs; [
-              cmake
-              pkg-config
-            ];
-
-            buildInputs = with pkgs; [
-              sdl3
-              libGL
-              libvorbis      # Vorbis support
-              libogg
-              alsa-lib       # ALSA audio support
-              fluidsynth     # MIDI synthesis
-              libsndfile     # transitive dep of fluidsynth pkg-config
-              flac           # transitive dep of libsndfile pkg-config
-              libxmp         # XMP tracker music codec
-              opusfile       # Opus codec support
-              soundfont-fluid # GM soundfont for FluidSynth
-            ];
-
-            # CMake is in engine subdirectory
-            preConfigure = ''
-              cd engine
-            '';
-
-            cmakeFlags = [
-              "-DUSE_CODEC_VORBIS=ON"
-              "-DUSE_ALSA=ON"
-              "-DSOUNDFONT_PATH=${pkgs.soundfont-fluid}/share/soundfonts/FluidR3_GM2-2.sf2"
-            ];
-
-            meta = with pkgs.lib; {
-              description = "Hexenwail - modernized Hexen II engine (OpenGL 4.3)";
-              longDescription = ''
-                Hexenwail is a modern GL 4.3 fork of Hammer of Thyrion / uHexen2,
-                the definitive Hexen II engine. SDL3, GLSL shaders, gamepad support,
-                and a clean codebase for Linux and Windows.
-
-                Note: This package only provides the game engine. You need the original
-                game data files (pak0.pak, pak1.pak) from the commercial game to play.
-              '';
-              homepage = "https://github.com/hexenwail/hexenwail";
-              license = licenses.gpl2Plus;
-              platforms = platforms.linux;
-              maintainers = [ ];
-              mainProgram = "glhexen2";
-            };
-          };
-        in {
-          # OpenGL version (glhexen2) - NixOS build with Nix store rpaths
-          # NOTE: Uses CMake build system
-          nixos = pkgs.stdenv.mkDerivation (linuxBuildAttrs // {
-            installPhase = ''
-              runHook preInstall
-
-              mkdir -p $out/bin
-              mkdir -p $out/share/hexenwail
-
-              # Install the OpenGL binary from CMake build directory
-              install -Dm755 bin/glhexen2 $out/bin/glhexen2
-
-
-              runHook postInstall
-            '';
-          });
-
-          default = self.packages.${system}.nixos;
-
-          # OpenGL version for standard FHS Linux systems (non-NixOS)
-          # Bundles shared libraries so it runs on any distro without nix
-          linux-fhs = let
-            nixosPkg = self.packages.${system}.nixos;
-            # TimGM6mb (Tim Brechbill, GPL-2, ~6 MB) — small enough to bundle in
-            # a downloadable release, unlike FluidR3 (~142 MB).  Same soundfont
-            # the Flatpak ships.  Debian upstream tarball; hash is the tarball's.
-            timgmTar = pkgs.fetchurl {
-              url = "https://deb.debian.org/debian/pool/main/t/timgm6mb-soundfont/timgm6mb-soundfont_1.3.orig.tar.gz";
-              sha256 = "af8f3a00e416dfb262bcaa904a1c84df04a51b72bbc1313aed012bc754bdf99b";
-            };
-            runtimeLibs = with pkgs; [
-              sdl3
-              libvorbis
-              libogg
-              fluidsynth
-              libsndfile
-              flac
-              libxmp
-              opusfile
-              libopus
-              alsa-lib
-            ];
-          in pkgs.runCommand "hexenwail-linux-fhs-${nixosPkg.version}" {
-            nativeBuildInputs = [ pkgs.patchelf ];
-          } ''
-            mkdir -p $out/bin $out/lib
-
-            cp ${nixosPkg}/bin/glhexen2 $out/bin/glhexen2
-            chmod +w $out/bin/glhexen2
-
-            # Bundle a GM soundfont next to the binary so MIDI music works on
-            # machines with no system soundfont (the compile-time SOUNDFONT_PATH
-            # points into /nix/store, which is absent off-NixOS).  find_soundfont
-            # probes <exe dir>/soundfont.sf2 first.
-            tar xzf ${timgmTar}
-            cp -L timgm6mb-soundfont_1.3/TimGM6mb.sf2 $out/bin/soundfont.sf2
-
-            # Bundle shared libraries
-            for lib in ${pkgs.lib.concatMapStringsSep " " (l: "${l}/lib") runtimeLibs}; do
-              for so in "$lib"/*.so "$lib"/*.so.*; do
-                [ -e "$so" ] && cp -nL "$so" $out/lib/ 2>/dev/null || true
-              done
-            done
-            chmod +w $out/lib/*
-
-            # Set FHS interpreter and relative rpaths
-            patchelf \
-              --set-interpreter /lib64/ld-linux-x86-64.so.2 \
-              --set-rpath "\$ORIGIN/../lib" \
-              $out/bin/glhexen2
-            for so in $out/lib/*.so $out/lib/*.so.*; do
-              [ -f "$so" ] && patchelf --set-rpath "\$ORIGIN" "$so" 2>/dev/null || true
-            done
-          '';
-
-          # Windows 64-bit build
-          win64 = pkgsCross64.stdenv.mkDerivation {
-            # nixpkgs auto-appends the host triple (-x86_64-w64-mingw32) for
-            # cross builds, so "win64" here would just duplicate that.
-            pname = "hexenwail";
-            inherit version;
-
-            src = filteredSrc;
-
-            nativeBuildInputs = with pkgs; [
-              cmake
-              pkg-config
-            ];
-
-            buildInputs = with pkgsCross64; [
-              windows.pthreads
-              libvorbis      # Ogg Vorbis codec
-              libogg         # Ogg container (shared by vorbis + opus)
-              libxmp         # XMP tracker music codec
-              opusfile       # Opus codec support
-            ];
-
-            # CMake is in engine subdirectory
-            preConfigure = ''
-              cd engine
-            '';
-
-            cmakeFlags = [
-              "-DUSE_CODEC_VORBIS=ON"
-              "-DUSE_CODEC_OPUS=ON"
-              "-DUSE_CODEC_XMP=ON"
-            ];
-
-            installPhase = ''
-              runHook preInstall
-
-              mkdir -p $out/bin
-
-              # Install the Windows executable
-              install -Dm755 bin/glh2.exe $out/bin/glh2.exe
-
-              # Install DLLs from build output (MinGW runtime)
-              for dll in bin/*.dll; do
-                [ -f "$dll" ] && install -Dm755 "$dll" $out/bin/
-              done
-
-              # Bundle SDL3
-              install -Dm755 ../../oslibs/windows/SDL3/lib64/SDL3.dll $out/bin/SDL3.dll
-
-              # Bundle codec DLLs from nix cross-compiled packages
-              # libogg exports as "ogg.dll" in nix meson builds
-              install -Dm755 ${pkgsCross64.libogg}/bin/libogg.dll $out/bin/ogg.dll
-              install -Dm755 ${pkgsCross64.libvorbis}/bin/libvorbis-0.dll $out/bin/
-              install -Dm755 ${pkgsCross64.libvorbis}/bin/libvorbisfile-3.dll $out/bin/
-              install -Dm755 ${pkgsCross64.opusfile}/bin/libopusfile-0.dll $out/bin/
-              install -Dm755 ${pkgsCross64.libopus}/bin/libopus-0.dll $out/bin/
-              install -Dm755 ${pkgsCross64.libxmp}/bin/libxmp.dll $out/bin/
-
-              # Bundle MinGW runtime DLLs if present
-              for dll in libgcc_s_seh-1.dll libwinpthread-1.dll libstdc++-6.dll; do
-                found=$(find ${pkgsCross64.stdenv.cc.cc} -name "$dll" 2>/dev/null | head -1)
-                if [ -n "$found" ]; then
-                  install -Dm755 "$found" $out/bin/"$dll"
-                fi
-              done
-
-              runHook postInstall
-            '';
-
-            dontStrip = true;
-            postFixup = ''
-              for f in $out/bin/*.dll; do
-                if [ -L "$f" ]; then
-                  cp -L "$f" "$f.tmp" && mv "$f.tmp" "$f"
-                fi
-              done
-              $STRIP -S -p $out/bin/*.exe $out/bin/*.dll 2>/dev/null || true
-            '';
-
-            meta = with pkgs.lib; {
-              description = "Hexenwail - modernized Hexen II engine (OpenGL 4.3, Windows 64-bit)";
-              homepage = "https://github.com/hexenwail/hexenwail";
-              license = licenses.gpl2Plus;
-              platforms = platforms.windows;
-              maintainers = [ ];
-            };
-          };
-
-          # WebAssembly / Emscripten build
-          # NOTE: WASM builds require network access for Emscripten SDL3 port
-          # Quick fix (temporary): Use shell-wasm.nix for interactive dev builds
-          # Long-term: See issue uhexen2-1z31 for reproducible solution
+        packages = {
+          # WebAssembly / Emscripten build.
+          #
+          # Best effort: nixpkgs' emscripten is not the pinned emsdk that
+          # CI uses, and a pure `nix build` has no network, so anything
+          # that needs an Emscripten port would fail here.  The engine no
+          # longer links any port (no SDL), which makes this far more
+          # likely to work than it used to -- but if it does not, use
+          # `nix develop` (below) or the emsdk directly and run
+          # scripts/wasm-build.sh, which is what CI does.
           wasm = pkgs.stdenv.mkDerivation {
             pname = "hexenwail-wasm";
             inherit version;
@@ -286,51 +78,62 @@
             nativeBuildInputs = with pkgs; [
               emscripten
               cmake
-              pkg-config
               nodejs
-              sdl3
             ];
 
-            # Emscripten-specific setup
             preConfigure = ''
-              export EM_CACHE="''${EM_CACHE:-.emcache}"
-              export EM_CONFIG="''${EM_CONFIG:-.emscripten}"
+              export EM_CACHE="''${EM_CACHE:-$TMPDIR/.emcache}"
+              export EM_CONFIG="''${EM_CONFIG:-$TMPDIR/.emscripten}"
             '';
 
-            # Use Emscripten's CMake toolchain
+            # Use Emscripten's CMake toolchain.  WEB_RENDERER defaults to
+            # "software"; pass -DWEB_RENDERER=webgl2 to build the retained
+            # GPU renderer instead.
             configurePhase = ''
+              runHook preConfigure
+
               mkdir -p build
               cd build
               emcmake cmake \
                 -DCMAKE_BUILD_TYPE=Release \
-                -DUSE_CODEC_VORBIS=OFF \
-                -DUSE_ALSA=OFF \
-                -DUSE_SDL3_STATIC=ON \
-                -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=TRUE \
+                -DWEB_RENDERER=software \
                 ../engine
+
+              runHook postConfigure
             '';
 
             buildPhase = ''
-              emmake make -j1 VERBOSE=1
+              runHook preBuild
+              emmake make -j''${NIX_BUILD_CORES:-1}
+              runHook postBuild
             '';
 
+            # Mirrors scripts/wasm-assemble-artifact.sh: the PWA shell from
+            # web/ plus the Emscripten runtime.  The emcc-generated HTML is
+            # debug-only; web/index.html is the real entry point.
             installPhase = ''
+              runHook preInstall
+
               mkdir -p $out
-              cp bin/hexenwail.html $out/index.html
+              cp -r ../web/. $out/
+              substituteInPlace $out/sw.js \
+                --replace-fail __HEXENWAIL_BUILD_VERSION__ "${version}"
+
               cp bin/hexenwail.js $out/
               cp bin/hexenwail.wasm $out/
-              cp bin/hexenwail.worker.js $out/ 2>/dev/null || true
+              cp bin/hexenwail.html $out/engine-shell-debug.html
+              if [ -f bin/hexenwail.data ]; then cp bin/hexenwail.data $out/; fi
+
+              runHook postInstall
             '';
 
             meta = with pkgs.lib; {
-              description = "Hexenwail - WebAssembly browser build (GL ES 3.0)";
+              description = "Hexenwail - installable WebAssembly PWA build";
               longDescription = ''
-                Hexenwail WebAssembly / Emscripten build for browser gameplay.
-                Requires users to provide game data files (pak0.pak, pak1.pak).
-
-                Note: Pure Nix flake builds cannot fetch Emscripten ports due to
-                sandbox restrictions. For WASM development, use:
-                  nix develop -f shell-wasm.nix
+                uHexen2 built for the browser as an installable PWA, using the
+                classic 8bpp software renderer presented on an accelerated
+                canvas. Requires users to provide their own game data files
+                (pak0.pak, pak1.pak), imported in-app.
               '';
               homepage = "https://github.com/hexenwail/hexenwail";
               license = licenses.gpl2Plus;
@@ -338,110 +141,37 @@
             };
           };
 
-          # Release package - builds all platforms together
-          release = pkgs.runCommand "hexenwail-release-${version}" {
-            meta = with pkgs.lib; {
-              description = "Hexenwail - Multi-platform release bundle";
-              homepage = "https://github.com/hexenwail/hexenwail";
-              license = licenses.gpl2Plus;
-              platforms = platforms.linux;
-            };
-          } ''
-            mkdir -p $out/release
-
-            # Linux portable (FHS binary, runs on any distro)
-            mkdir -p $out/release/linux-x86_64
-            cp -r ${self.packages.${system}.linux-fhs}/bin $out/release/linux-x86_64/
-
-            # Linux NixOS (nix store rpaths)
-            mkdir -p $out/release/linux-x86_64-nixos
-            cp -r ${self.packages.${system}.nixos}/bin $out/release/linux-x86_64-nixos/
-
-            # Windows 64-bit (dereference symlinks so DLLs are real files)
-            mkdir -p $out/release/windows-x86_64
-            cp -rL ${self.packages.${system}.win64}/bin $out/release/windows-x86_64/
-
-            # License files
-            mkdir -p $out/release/licenses
-            cp ${self}/COPYING $out/release/licenses/COPYING.GPL2 2>/dev/null || \
-              echo "GNU General Public License v2.0 or later — see https://www.gnu.org/licenses/gpl-2.0.html" > $out/release/licenses/COPYING.GPL2
-            cp ${self}/oslibs/windows/SDL3/LICENSE.txt $out/release/licenses/LICENSE.SDL3
-            cp ${self}/oslibs/windows/codecs/COPYING.ogg-vorbis $out/release/licenses/COPYING.ogg-vorbis
-
-            # Create a release info file
-            cat > $out/release/BUILD_INFO.txt <<EOF
-Hexenwail Release Build
-Version: ${version}
-Built: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-
-Included platforms:
-- linux-x86_64/          Linux 64-bit (portable, any distro)
-- linux-x86_64-nixos/    Linux 64-bit (NixOS)
-- windows-x86_64/        Windows 64-bit
-
-Licenses:
-- licenses/COPYING.GPL2          Engine (GPL-2.0+)
-- licenses/LICENSE.SDL3           SDL3 (Zlib)
-- licenses/COPYING.ogg-vorbis    libogg/libvorbis (BSD-3)
-- dr_mp3, dr_flac, dr_wav are public domain (dr_libs by David Reid)
-
-Built with Nix flakes
-EOF
-
-            echo "Release bundle created in $out/release"
-          '';
+          default = self.packages.${system}.wasm;
         };
 
-        # Development shell for building and testing
+        # Development shell for building and testing the web target.
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            sdl3
-            libGL
-
-            libvorbis
-            libogg
-
-            alsa-lib
-            fluidsynth
-            libsndfile
-            flac
-            libxmp
-            opusfile
-            soundfont-fluid
-            pkg-config
-            gcc
-            gnumake
+            emscripten
             cmake
+            nodejs
+            python3
           ];
 
           shellHook = ''
-            echo "Hexenwail development environment"
+            echo "Hexenwail web development environment"
             echo ""
-            echo "Quick commands (see: make help):"
-            echo "  make nix-build      - Build Linux with Nix"
-            echo "  make nix-release    - Build all platforms (Linux, Win64)"
-            echo "  make build          - Build Linux with CMake"
-            echo "  make release        - Build all platforms with CMake"
+            echo "Build (software renderer, the shipping default):"
+            echo "  ./scripts/wasm-build.sh software"
             echo ""
-            echo "Direct Nix commands:"
-            echo "  nix build .#nixos     - Linux build (NixOS)"
-            echo "  nix build .#linux-fhs - Linux build (standard FHS)"
-            echo "  nix build .#win64     - Windows 64-bit"
-            echo "  nix build .#release   - All platforms"
+            echo "Build the retained WebGL2 renderer:"
+            echo "  ./scripts/wasm-build.sh webgl2 engine/build-webgl2"
             echo ""
-            echo "Direct CMake commands:"
-            echo "  cd engine && mkdir -p build && cd build"
-            echo "  cmake .. && make"
+            echo "Assemble and validate the static PWA artifact:"
+            echo "  ./scripts/wasm-assemble-artifact.sh dist"
+            echo "  ./scripts/wasm-validate-artifact.sh dist"
             echo ""
-            echo "Release script:"
-            echo "  ./build-release.sh [nix|cmake]"
+            echo "PWA shell tests:"
+            echo "  npm test"
+            echo ""
+            echo "Note: CI pins emsdk (see .github/workflows/ci.yml); the"
+            echo "nixpkgs emscripten here may differ."
           '';
-        };
-
-        # App for easy running
-        apps.default = {
-          type = "app";
-          program = "${self.packages.${system}.nixos}/bin/glhexen2";
         };
       }
     );
