@@ -92,12 +92,12 @@
             configurePhase = ''
               runHook preConfigure
 
-              mkdir -p build
-              cd build
+              mkdir -p engine/build
+              cd engine/build
               emcmake cmake \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DWEB_RENDERER=software \
-                ../engine
+                ..
 
               runHook postConfigure
             '';
@@ -108,21 +108,14 @@
               runHook postBuild
             '';
 
-            # Mirrors scripts/wasm-assemble-artifact.sh: the PWA shell from
-            # web/ plus the Emscripten runtime.  The emcc-generated HTML is
-            # debug-only; web/index.html is the real entry point.
+            # Delegate to the same assembler CI and Pages use, so the flake
+            # cannot drift from the artifact that actually ships.  It expects
+            # to run from the repo root and reads engine/build/bin.
             installPhase = ''
               runHook preInstall
 
-              mkdir -p $out
-              cp -r ../web/. $out/
-              substituteInPlace $out/sw.js \
-                --replace-fail __HEXENWAIL_BUILD_VERSION__ "${version}"
-
-              cp bin/hexenwail.js $out/
-              cp bin/hexenwail.wasm $out/
-              cp bin/hexenwail.html $out/engine-shell-debug.html
-              if [ -f bin/hexenwail.data ]; then cp bin/hexenwail.data $out/; fi
+              cd ../..
+              bash scripts/wasm-assemble-artifact.sh "$out" "${version}"
 
               runHook postInstall
             '';
