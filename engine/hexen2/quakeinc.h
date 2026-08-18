@@ -80,7 +80,11 @@
 #include "q_sound.h"
 #include "client.h"
 
-#if defined(GLQUAKE)
+#if defined(WEBQUAKE)
+#include "model.h"
+#include "particle.h"
+#include "r_webgl2.h"
+#elif defined(GLQUAKE)
 #include "glheader.h"
 #include "gl_model.h"
 #include "glquake.h"
@@ -94,4 +98,3 @@
 #endif	/* !SERVERONLY */
 
 #endif	/* __QUAKEINC_H */
-

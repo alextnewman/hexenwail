@@ -287,15 +287,10 @@ void CL_ParseTEnt(void)
 		dl->radius = 250;
 		dl->die = cl.time + 0.5;
 		dl->decay = 300;
-		if (tent->model)
-		{
-			float *gs;
-			R_GetPimpFlags(tent, &gs);
-			dl->color[0] = gs[COLOR_R];
-			dl->color[1] = gs[COLOR_G];
-			dl->color[2] = gs[COLOR_B];
-			dl->color[3] = gs[COLOR_A];
-		}
+		dl->color[0] = 1;
+		dl->color[1] = 0.8f;
+		dl->color[2] = 0.5f;
+		dl->color[3] = 1;
 		break;
 	}
 
@@ -669,4 +664,3 @@ static entity_t *NewStreamEntity(void)
 
 	return ent;
 }
-

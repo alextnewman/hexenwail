@@ -21,24 +21,13 @@
  */
 
 #include "quakedef.h"
+#if defined(WEBQUAKE)
+#include <emscripten/emscripten.h>
+#endif
 #include "q_ctype.h"
 #include "bgmusic.h"
 #include "cdaudio.h"
-#include "gl_postprocess.h"
-#include "gl_vbo.h"
-#include "gl_shader.h"
 #include "sbar.h"
-#include "sdl_inc.h"
-
-/* ES 3.0 compatibility: GL_QUADS doesn't exist (used only as an
- * application-side primitive tag passed through to GL_ImmEnd, which
- * triangulates on the CPU — see gl_rmain.c / gl_vbo.c for the same
- * pattern). */
-#ifdef __EMSCRIPTEN__
-#ifndef GL_QUADS
-#define GL_QUADS 0
-#endif
-#endif
 
 void (*vid_menudrawfn)(void);
 
@@ -758,8 +747,12 @@ static void M_Main_Key (int key)
 			break;
 
 		case 5:
+#if defined(WEBQUAKE)
+			emscripten_run_script("open('https://www.youtube.com/watch?v=3bJcIeH5r38&t=141s','_blank')");
+#else
 			SDL_MinimizeWindow (VID_GetWindow());
 			SDL_OpenURL ("https://www.youtube.com/watch?v=3bJcIeH5r38&t=141s");
+#endif
 			break;
 
 		case 6:
@@ -6880,17 +6873,10 @@ void M_Draw (void)
 			{
 				const float bg_x0 = 32, bg_y0 = 80;
 				const float bg_x1 = 288, bg_y1 = 168;
-				GL_SetCanvas (CANVAS_MENU);
-				Draw_FlushCharBatch ();
-				glEnable_fp (GL_BLEND);
-				GL_ImmBegin ();
-				GL_ImmColor4f (0.0f, 0.0f, 0.0f, 0.5f);
-				GL_ImmVertex2f (bg_x0, bg_y0);
-				GL_ImmVertex2f (bg_x1, bg_y0);
-				GL_ImmVertex2f (bg_x1, bg_y1);
-				GL_ImmVertex2f (bg_x0, bg_y1);
-				GL_ImmEnd (GL_QUADS, &gl_shader_flat);
-				glDisable_fp (GL_BLEND);
+				Draw_SetCanvas (CANVAS_MENU);
+				Draw_FillAlpha ((int)bg_x0, (int)bg_y0,
+					(int)(bg_x1 - bg_x0), (int)(bg_y1 - bg_y0),
+					0, 0, 0, 0.5f);
 			}
 		}
 		if (scr_viewsize.integer < 110)
@@ -6904,7 +6890,7 @@ void M_Draw (void)
 	/* All menu draws happen inside the 320x200 CANVAS_MENU. Backgrounds
 	 * (fade, console) above this line stay in CANVAS_DEFAULT so they
 	 * fill the whole screen. */
-	GL_SetCanvas (CANVAS_MENU);
+	Draw_SetCanvas (CANVAS_MENU);
 	m_canvas_active = true;
 
 	switch (m_state)
@@ -6990,9 +6976,9 @@ void M_Draw (void)
 		 * then put the menu canvas back so the post-switch teardown
 		 * matches state. */
 		m_canvas_active = false;
-		GL_SetCanvas (CANVAS_DEFAULT);
+		Draw_SetCanvas (CANVAS_DEFAULT);
 		M_Help_Draw ();
-		GL_SetCanvas (CANVAS_MENU);
+		Draw_SetCanvas (CANVAS_MENU);
 		m_canvas_active = true;
 		break;
 
@@ -7018,7 +7004,7 @@ void M_Draw (void)
 	}
 
 	m_canvas_active = false;
-	GL_SetCanvas (CANVAS_DEFAULT);
+	Draw_SetCanvas (CANVAS_DEFAULT);
 
 	/* Restore default character alpha in case live preview reduced it. */
 	Draw_SetCharacterAlpha (1.0f);

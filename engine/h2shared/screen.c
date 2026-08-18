@@ -1162,8 +1162,13 @@ static void I_Print (int cx, int cy, const char *str, int flags)
 }
 
 #if FULLSCREEN_INTERMISSIONS
+# if defined(WEBQUAKE)
+#	define	Load_IntermissionPic_FN(X,Y,Z)	Draw_CachePicNoTrans((X))
+#	define	Draw_IntermissionPic_FN(X,Y,Z)	Draw_IntermissionPic((Z))
+# else
 #	define	Load_IntermissionPic_FN(X,Y,Z)	Draw_CachePicResize((X),(Y),(Z))
 #	define	Draw_IntermissionPic_FN(X,Y,Z)	Draw_Pic(0,0,(Z))
+# endif
 #else
 #	define	Load_IntermissionPic_FN(X,Y,Z)	Draw_CachePic((X))
 #	define	Draw_IntermissionPic_FN(X,Y,Z)	Draw_Pic((X),(Y),(Z))
@@ -1468,4 +1473,3 @@ void SCR_UpdateWholeScreen (void)
 	scr_fullupdate = 0;
 	SCR_UpdateScreen ();
 }
-

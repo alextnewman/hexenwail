@@ -25,6 +25,9 @@
 /* drivers' headers: */
 #include "snd_alsa.h"
 #include "snd_sdl.h"
+#if HAVE_WEB_SOUND
+extern snd_driver_t snddrv_web;
+#endif
 
 static qboolean	snd_sys_inited = false;
 
@@ -111,6 +114,9 @@ void S_DriversInit (void)
 	if (COM_CheckParm ("-sndsdl"))
 		snd_drivers->userpreferred = true;
 #endif
+#if HAVE_WEB_SOUND
+	S_RegisterDriver(&snddrv_web);
+#endif
 }
 
 void S_GetDriverList (snd_driver_t **p)
@@ -122,4 +128,3 @@ void S_GetNullDriver (snd_driver_t **p)
 {
 	*p = &snddrv_null;
 }
-

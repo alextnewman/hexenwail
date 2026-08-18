@@ -21,7 +21,11 @@
 
 #include "quakedef.h"
 #include "debuglog.h"
+#if defined(WEBQUAKE)
+#include <emscripten/emscripten.h>
+#else
 #include "sdl_inc.h"
+#endif
 
 
 console_t	*con;
@@ -879,7 +883,12 @@ void Con_UpdateMouseState (void)
 			// Check if clicking on a URL
 			if (url_index >= 0)
 			{
+#if defined(WEBQUAKE)
+				EM_ASM({ open(UTF8ToString($0), '_blank'); },
+					con_urls[url_index].url);
+#else
 				SDL_OpenURL(con_urls[url_index].url);
+#endif
 				con_mouse_state = CMS_PRESSED;
 			}
 			else
@@ -1069,7 +1078,14 @@ qboolean Con_CopySelectionToClipboard (void)
 	buf[buf_pos] = '\0';
 
 	// Copy to clipboard
+#if defined(WEBQUAKE)
+	EM_ASM({
+		if (navigator.clipboard)
+			navigator.clipboard.writeText(UTF8ToString($0));
+	}, buf);
+#else
 	SDL_SetClipboardText(buf);
+#endif
 
 	return true;
 }
@@ -1218,4 +1234,3 @@ void Con_NotifyBox (const char *text)
 	Key_SetDest (key_game);
 	realtime = 0;		// put the cursor back to invisible
 }
-

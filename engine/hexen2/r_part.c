@@ -1438,7 +1438,12 @@ R_DrawParticles
 */
 extern	cvar_t	sv_gravity;
 
-#if defined(GLQUAKE)
+#if defined(WEBQUAKE)
+void R_DrawParticles (void)
+{
+	WebGL2_DrawParticles(active_particles);
+}
+#elif defined(GLQUAKE)
 static const float ptex_coord[4][3][2] =
 {
 	{ {1.000, 0.000}, {1.000, 0.500}, {0.500, 0.000} },	// any, or snow count < 30

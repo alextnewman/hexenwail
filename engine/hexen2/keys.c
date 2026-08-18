@@ -20,7 +20,9 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#if !defined(WEBQUAKE)
 #include "sdl_inc.h"
+#endif
 #include "quakedef.h"
 #include "input.h"	/* IN_GetGamepadType for brand-aware glyphs */
 
@@ -1402,6 +1404,9 @@ changes to/from console or message mode.
 */
 void Key_SetTextInputMode (qboolean on)
 {
+#if defined(WEBQUAKE)
+	(void)on;
+#else
 	SDL_Window *w = VID_GetWindow();
 	if (!w)
 		return;
@@ -1415,6 +1420,7 @@ void Key_SetTextInputMode (qboolean on)
 	{
 		SDL_StopTextInput(w);
 	}
+#endif
 }
 
 /*
@@ -1459,4 +1465,3 @@ void Key_SetDest (keydest_t dest)
 		Key_ClearStates();
 	}
 }
-

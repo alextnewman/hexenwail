@@ -23,10 +23,6 @@
 #include "quakedef.h"
 #include "bgmusic.h"
 #include "cdaudio.h"
-#include "gl_postprocess.h"
-
-/* gl_fog.c */
-void Fog_ParseServerMessage (void);
 
 static const char *svc_strings[] =
 {
@@ -2097,4 +2093,3 @@ void CL_ParseServerMessage (void)
 		}
 	}
 }
-

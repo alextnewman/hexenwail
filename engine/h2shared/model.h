@@ -26,6 +26,14 @@
 #include "genmodel.h"
 #include "spritegn.h"
 
+#define ALIAS_VERSION_H2	8
+#define ALIAS_BASE_SIZE_RATIO	(1.0 / 11.0)
+#define MAX_SKIN_HEIGHT		2048
+#define MAXALIASVERTS		2000
+#define MAXALIASFRAMES		256
+#define MAXALIASTRIS		2048
+#define MD3_IDENT		(('3'<<24)+('D'<<16)+('M'<<8)+'M')
+
 /*
 
 d*_t structures are on-disk representations
@@ -482,6 +490,7 @@ typedef struct qmodel_s
 
 void	Mod_Init (void);
 void	Mod_ClearAll (void);
+void	Mod_RestoreAliasModelDefaults (void);
 qmodel_t *Mod_ForName (const char *name, qboolean crash);
 qmodel_t *Mod_FindName (const char *name);
 void	*Mod_Extradata (qmodel_t *mod);	// handles caching
@@ -491,4 +500,3 @@ mleaf_t *Mod_PointInLeaf (vec3_t p, qmodel_t *model);
 byte	*Mod_LeafPVS (mleaf_t *leaf, qmodel_t *model);
 
 #endif	/* H2_MODEL_H */
-
