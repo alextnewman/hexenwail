@@ -217,6 +217,15 @@ framebuffer:
 `GL_SetCanvas` is a no-op in the WebGL2 backend too, so the two renderers
 agree on 2D coordinates.
 
+## Renderer-owned server messages
+
+`cl_parse.c` dispatches `svc_fog` unconditionally, so every renderer has to
+publish a `Fog_ParseServerMessage()`. The software rasteriser has no fog;
+`r_soft_web.c` supplies a handler that drains the payload ([byte] density,
+[byte] × 3 colour, [short] fade time) and discards it. Draining is not
+optional — skipping the read would leave the rest of the server message
+being parsed at the wrong offset.
+
 ## Deviations from upstream
 
 The restored rasteriser is verbatim uHexen2 with one exception:
