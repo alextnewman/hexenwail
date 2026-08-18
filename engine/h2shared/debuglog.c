@@ -32,6 +32,7 @@
 #include <io.h>		/* write() */
 #endif
 #if defined(PLATFORM_UNIX) ||	\
+    defined(PLATFORM_WEB) ||	\
     defined(__DJGPP__) ||	\
     defined(PLATFORM_RISCOS)
 #include <unistd.h>	/* write() */

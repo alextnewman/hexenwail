@@ -25,7 +25,6 @@
 #include "quakedef.h"
 #include "hashindex.h"
 #include "hwal.h"
-#include "r_local.h"
 
 static qmodel_t*	loadmodel;
 static char	loadname[MAX_QPATH];	/* for hunk tags */
@@ -35,7 +34,6 @@ static void Mod_LoadSpriteModel (qmodel_t *mod, void *buffer);
 static void Mod_LoadBrushModel (qmodel_t *mod, void *buffer);
 static void Mod_LoadAliasModel (qmodel_t *mod, void *buffer);
 static void Mod_LoadAliasModelNew (qmodel_t *mod, void *buffer);
-static void Mod_LoadMD3Model (qmodel_t *mod, void *buffer);
 
 static void Mod_Print (void);
 
@@ -194,6 +192,53 @@ void Mod_ClearAll (void)
 }
 
 /*
+=================
+Mod_SaveAliasModelDefaults
+
+Snapshot the model's load-time flags / ex_flags / glow_settings.  The
+pimpmodel() builtin writes through to the shared model so a map's
+misc_modelpimp affects every entity using that model; the snapshot is
+what Mod_RestoreAliasModelDefaults rolls back to on map change.
+
+uhexen2-oq0a.
+=================
+*/
+void Mod_SaveAliasModelDefaults (qmodel_t *mod)
+{
+	mod->orig_flags = mod->flags;
+	mod->orig_ex_flags = mod->ex_flags;
+	memcpy(mod->orig_glow_settings, mod->glow_settings, sizeof(mod->orig_glow_settings));
+	mod->orig_state_saved = true;
+}
+
+/*
+=================
+Mod_RestoreAliasModelDefaults
+
+Walk every loaded alias model and restore the snapshot taken at load
+time.  Called on map change, before the renderer's per-entity override
+table is cleared, so a map's misc_modelpimp mutations don't bleed into
+the next map.
+
+uhexen2-oq0a.
+=================
+*/
+void Mod_RestoreAliasModelDefaults (void)
+{
+	int		i;
+
+	for (i = 0; i < mod_numknown; i++)
+	{
+		qmodel_t *mod = &mod_known[i];
+		if (mod->type != mod_alias || !mod->orig_state_saved)
+			continue;
+		mod->flags = mod->orig_flags;
+		mod->ex_flags = mod->orig_ex_flags;
+		memcpy(mod->glow_settings, mod->orig_glow_settings, sizeof(mod->glow_settings));
+	}
+}
+
+/*
 ==================
 Mod_FindName
 
@@ -336,8 +381,7 @@ static qmodel_t *Mod_LoadModel (qmodel_t *mod, qboolean crash)
 		Mod_LoadAliasModel (mod, buf);
 		break;
 	case MD3_IDENT:
-		Mod_LoadMD3Model (mod, buf);
-		break;
+		Sys_Error ("%s: MD3 models are not supported by the classic web port", mod->name);
 	case IDSPRITEHEADER:
 		Mod_LoadSpriteModel (mod, buf);
 		break;
@@ -2039,8 +2083,6 @@ static void Mod_LoadAliasModelNew (qmodel_t *mod, void *buffer)
 	pmodel = (newmdl_t *) ((byte *)&pheader[1] +
 			(LittleLong (pinmodel->numframes) - 1) * sizeof (pheader->frames[0]));
 
-	pheader->poseverttype = PV_QUAKE1;	/* Hexen II native format */
-
 //	mod->cache.data = pheader;
 	mod->flags = LittleLong (pinmodel->flags);
 
@@ -2208,6 +2250,7 @@ static void Mod_LoadAliasModelNew (qmodel_t *mod, void *buffer)
 	}
 
 	mod->type = mod_alias;
+	Mod_SaveAliasModelDefaults (mod);
 
 // FIXME: do this right
 //	mod->mins[0] = mod->mins[1] = mod->mins[2] = -16;
@@ -2305,8 +2348,6 @@ static void Mod_LoadAliasModel (qmodel_t *mod, void *buffer)
 	pheader = (aliashdr_t *) Hunk_AllocName (size, loadname);
 	pmodel = (newmdl_t *) ((byte *)&pheader[1] +
 			(LittleLong (pinmodel->numframes) - 1) * sizeof (pheader->frames[0]));
-
-	pheader->poseverttype = PV_QUAKE1;	/* Hexen II native format */
 
 //	mod->cache.data = pheader;
 	mod->flags = LittleLong (pinmodel->flags);
@@ -2476,6 +2517,7 @@ static void Mod_LoadAliasModel (qmodel_t *mod, void *buffer)
 	}
 
 	mod->type = mod_alias;
+	Mod_SaveAliasModelDefaults (mod);
 
 // FIXME: do this right
 //	mod->mins[0] = mod->mins[1] = mod->mins[2] = -16;
@@ -2504,144 +2546,6 @@ static void Mod_LoadAliasModel (qmodel_t *mod, void *buffer)
 
 /*
 =================
-Mod_LoadMD3Model
-
-MD3 model loader (Ironwail parity, Phase 2 stub)
-=================
-*/
-static void Mod_LoadMD3Model (qmodel_t *mod, void *buffer)
-{
-	md3Header_t		*header;
-	md3Frame_t		*frames;
-	md3Surface_t		*surface;
-	md3Vertex_t		*src_verts, *dst_verts;
-	md3Triangle_t		*src_tris;
-	aliashdr_t		*pheader;
-	newmdl_t		*pmodel;
-	maliasframedesc_t	*framedesc;
-	int			i, j, k, size, start;
-	int			numframes, numsurfaces, numverts_total, numtris_total;
-	byte			*posedata_ptr;
-	vec3_t			mins, maxs;
-
-	start = Hunk_LowMark();
-
-	header = (md3Header_t *)buffer;
-
-	/* Validate header */
-	if (header->ident != MD3_IDENT || header->version != MD3_VERSION)
-		Sys_Error("Invalid MD3 file: %s (ident=%d, version=%d)",
-				  mod->name, header->ident, header->version);
-
-	numframes = header->numFrames;
-	numsurfaces = header->numSurfaces;
-
-	if (numframes <= 0 || numframes > MAXALIASFRAMES)
-		Sys_Error("MD3 model %s has invalid frame count: %d", mod->name, numframes);
-	if (numsurfaces <= 0)
-		Sys_Error("MD3 model %s has no surfaces", mod->name);
-
-	/* Count total vertices across all surfaces */
-	numverts_total = 0;
-	numtris_total = 0;
-	surface = (md3Surface_t *)((byte *)header + header->offsetSurfaces);
-	for (i = 0; i < numsurfaces; i++)
-	{
-		numverts_total += surface->numVerts;
-		numtris_total += surface->numTriangles;
-		surface = (md3Surface_t *)((byte *)surface + surface->ofsEnd);
-	}
-
-	if (numverts_total <= 0 || numverts_total > MAXALIASVERTS)
-		Sys_Error("MD3 model %s has invalid vertex count: %d", mod->name, numverts_total);
-	if (numtris_total <= 0 || numtris_total > MAXALIASTRIS)
-		Sys_Error("MD3 model %s has invalid triangle count: %d", mod->name, numtris_total);
-
-	/* Allocate aliashdr_t + frame descriptors + pose vertex data */
-	size = sizeof(aliashdr_t) +
-		   (numframes - 1) * sizeof(pheader->frames[0]) +
-		   numframes * numverts_total * sizeof(md3Vertex_t);
-
-	pheader = (aliashdr_t *) Hunk_AllocName(size, loadname);
-	framedesc = pheader->frames;
-	posedata_ptr = (byte *)pheader + sizeof(aliashdr_t) + (numframes - 1) * sizeof(pheader->frames[0]);
-
-	/* Set up header fields */
-	pheader->poseverttype = PV_MD3;
-	pheader->numframes = numframes;
-	pheader->numverts = numverts_total;
-	pheader->numtris = numtris_total;
-	pheader->numposes = numframes;
-	pheader->poseverts = numverts_total;
-	pheader->posedata = posedata_ptr - (byte *)pheader;
-
-	/* Initialize bounding box */
-	VectorCopy(vec3_origin, mins);
-	VectorCopy(vec3_origin, maxs);
-
-	/* Load frame data */
-	frames = (md3Frame_t *)((byte *)header + header->offsetFrames);
-	for (i = 0; i < numframes; i++)
-	{
-		framedesc[i].bboxmin.x = LittleFloat(frames[i].mins[0]);
-		framedesc[i].bboxmin.y = LittleFloat(frames[i].mins[1]);
-		framedesc[i].bboxmin.z = LittleFloat(frames[i].mins[2]);
-
-		framedesc[i].bboxmax.x = LittleFloat(frames[i].maxs[0]);
-		framedesc[i].bboxmax.y = LittleFloat(frames[i].maxs[1]);
-		framedesc[i].bboxmax.z = LittleFloat(frames[i].maxs[2]);
-
-		framedesc[i].name[0] = '\0'; /* No frame names in MD3 */
-
-		/* Update global bounds */
-		if (framedesc[i].bboxmin.x < mins[0]) mins[0] = framedesc[i].bboxmin.x;
-		if (framedesc[i].bboxmin.y < mins[1]) mins[1] = framedesc[i].bboxmin.y;
-		if (framedesc[i].bboxmin.z < mins[2]) mins[2] = framedesc[i].bboxmin.z;
-		if (framedesc[i].bboxmax.x > maxs[0]) maxs[0] = framedesc[i].bboxmax.x;
-		if (framedesc[i].bboxmax.y > maxs[1]) maxs[1] = framedesc[i].bboxmax.y;
-		if (framedesc[i].bboxmax.z > maxs[2]) maxs[2] = framedesc[i].bboxmax.z;
-	}
-
-	/* Copy pose vertex data (MD3 surfaces are stored frame-by-frame) */
-	dst_verts = (md3Vertex_t *)posedata_ptr;
-	surface = (md3Surface_t *)((byte *)header + header->offsetSurfaces);
-	for (i = 0; i < numsurfaces; i++)
-	{
-		src_verts = (md3Vertex_t *)((byte *)surface + surface->ofsVerts);
-		for (j = 0; j < numframes; j++)
-		{
-			/* Copy all vertices for this frame from this surface */
-			q_memcpy(dst_verts, src_verts, surface->numVerts * sizeof(md3Vertex_t));
-			dst_verts += surface->numVerts;
-			src_verts += surface->numVerts;
-		}
-		surface = (md3Surface_t *)((byte *)surface + surface->ofsEnd);
-	}
-
-	/* Set up scale (MD3 uses radius-based bounding) */
-	for (i = 0; i < 3; i++)
-	{
-		pheader->scale[i] = 1.0f;
-		pheader->scale_origin[i] = 0.0f;
-	}
-	pheader->boundingradius = (maxs[0] - mins[0]) * 0.5f;
-	VectorCopy(vec3_origin, pheader->eyeposition);
-
-	/* Basic skin setup (MD3 doesn't have traditional skins, use shader references) */
-	pheader->numskins = 1;
-	pheader->skinwidth = 1;
-	pheader->skinheight = 1;
-
-	/* Model sync type: always synchronized for MD3 */
-	mod->synctype = ST_SYNC;
-	mod->numframes = numframes;
-	mod->flags = 0;
-}
-
-//=============================================================================
-
-/*
-=================
 Mod_LoadSpriteFrame
 =================
 */
@@ -2649,9 +2553,7 @@ static void *Mod_LoadSpriteFrame (void *pin, mspriteframe_t **ppframe)
 {
 	dspriteframe_t		*pinframe;
 	mspriteframe_t		*pspriteframe;
-	int			i, width, height, size, origin[2];
-	unsigned short		*ppixout;
-	byte			*ppixin;
+	int			width, height, size, origin[2];
 
 	pinframe = (dspriteframe_t *)pin;
 
@@ -2659,7 +2561,7 @@ static void *Mod_LoadSpriteFrame (void *pin, mspriteframe_t **ppframe)
 	height = LittleLong (pinframe->height);
 	size = width * height;
 
-	pspriteframe = (mspriteframe_t *) Hunk_AllocName (sizeof(mspriteframe_t) + size*r_pixbytes, loadname);
+	pspriteframe = (mspriteframe_t *) Hunk_AllocName (sizeof(mspriteframe_t) + size, loadname);
 	*ppframe = pspriteframe;
 
 	pspriteframe->width = width;
@@ -2672,22 +2574,7 @@ static void *Mod_LoadSpriteFrame (void *pin, mspriteframe_t **ppframe)
 	pspriteframe->left = origin[0];
 	pspriteframe->right = width + origin[0];
 
-	if (r_pixbytes == 1)
-	{
-		memcpy (&pspriteframe->pixels[0], (byte *)(pinframe + 1), size);
-	}
-	else if (r_pixbytes == 2)
-	{
-		ppixin = (byte *)(pinframe + 1);
-		ppixout = (unsigned short *)&pspriteframe->pixels[0];
-
-		for (i = 0; i < size; i++)
-			ppixout[i] = d_8to16table[ppixin[i]];
-	}
-	else
-	{
-		Sys_Error ("%s: driver set invalid r_pixbytes: %d", __thisfunc__, r_pixbytes);
-	}
+	memcpy (&pspriteframe->pixels[0], (byte *)(pinframe + 1), size);
 
 	return (void *)((byte *)pinframe + sizeof (dspriteframe_t) + size);
 }
@@ -2874,4 +2761,3 @@ static void Mod_Print (void)
 		Con_Printf ("Wrote to mcache.txt\n");
 	}
 }
-

@@ -1,8 +1,9 @@
 name: 'Build hexenwail WebAssembly + PWA artifact'
 description: >-
   Installs a pinned Emscripten SDK (with caching), runs the lightweight
-  Node PWA tests, builds the full WebAssembly client, and assembles the
-  static Pages/PWA artifact. Single source of truth shared by the PR
+  Node PWA tests, builds the full WebAssembly client with both renderer
+  configurations, and assembles the static Pages/PWA artifact from the
+  shipping (software) build. Single source of truth shared by the PR
   "PWA / WebAssembly" check and the GitHub Pages deployment workflow so
   the two build recipes cannot drift apart.
 
@@ -55,11 +56,19 @@ runs:
         ./emsdk install "${{ inputs.emsdk-version }}"
         ./emsdk activate "${{ inputs.emsdk-version }}"
 
-    - name: Build WebAssembly client
+    - name: Build WebAssembly client (software renderer, shipping default)
       shell: bash
       run: |
         source "$PWD/emsdk/emsdk_env.sh"
-        ./scripts/wasm-build.sh
+        ./scripts/wasm-build.sh software
+
+    # The WebGL2 renderer is retained but not shipped by default; build it so
+    # it cannot silently rot. See docs/web/ARCHITECTURE.md.
+    - name: Build WebAssembly client (webgl2 renderer, regression guard)
+      shell: bash
+      run: |
+        source "$PWD/emsdk/emsdk_env.sh"
+        ./scripts/wasm-build.sh webgl2 engine/build-webgl2
 
     - name: Assemble PWA artifact
       shell: bash

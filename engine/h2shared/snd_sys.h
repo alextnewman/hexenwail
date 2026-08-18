@@ -86,6 +86,7 @@ enum snddrv_id_t
 	SNDDRV_ID_NULL	= 0,
 	SNDDRV_ID_ALSA,
 	SNDDRV_ID_SDL,
+	SNDDRV_ID_WEB,
 	SNDDRV_ID_MAX
 };
 
@@ -111,4 +112,3 @@ extern void S_GetDriverList (snd_driver_t **);
 extern void S_GetNullDriver (snd_driver_t **);
 
 #endif	/* __HX2_SND_SYS__ */
-

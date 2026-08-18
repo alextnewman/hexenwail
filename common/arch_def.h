@@ -28,7 +28,13 @@
 #define ARCHDEFS_H
 
 
-#if defined(__OS2__) || defined(__EMX__)
+#if defined(__EMSCRIPTEN__)
+
+#   if !defined(PLATFORM_WEB)
+#	define	PLATFORM_WEB		1
+#   endif
+
+#elif defined(__OS2__) || defined(__EMX__)
 
 #   if !defined(PLATFORM_OS2)
 #	define	PLATFORM_OS2		1
@@ -100,7 +106,9 @@
 #endif	/* PLATFORM_BSD (for convenience) */
 
 
-#if defined(_WIN64)
+#if defined(PLATFORM_WEB)
+#	define	PLATFORM_STRING	"iOS PWA"
+#elif defined(_WIN64)
 #	define	PLATFORM_STRING	"Win64"
 #elif defined(PLATFORM_WINDOWS)
 #	define	PLATFORM_STRING	"Windows"

@@ -112,35 +112,61 @@ Two ways to attach music to a custom map:
    ```
 
 ### Platform
-- SDL3 on Linux and Windows
-- CMake build, Nix flake (reproducible builds + Windows cross-compilation), Flatpak
-- GitHub Actions CI with smoke tests, shellcheck, and Nix caching
-- One-command releases
-- HiDPI, GL_KHR_debug diagnostics, console log to disk
+- Emscripten/WebAssembly, deployed as an installable iOS PWA
+- CMake build with a build-time renderer selector (`WEB_RENDERER`)
+- GitHub Actions CI builds both renderer configurations and validates the PWA artifact
+- Continuous GitHub Pages deployment; tagged releases publish the PWA bundle
+- Console log to disk (OPFS), HiDPI-aware canvas presentation
 
 ## Building
 
-See [BUILD.md](BUILD.md) for full instructions.
+Hexenwail targets **Emscripten only** — `engine/CMakeLists.txt` fails the configure
+step on any other toolchain, and there is no native Linux or Windows binary. The
+deployment target is an installed iOS PWA; see
+[docs/web/ARCHITECTURE.md](docs/web/ARCHITECTURE.md) for the settled scope and
+[docs/PWA.md](docs/PWA.md) for the shell, asset import, and deployment notes.
 
-### Web / iPadOS PWA
+The web build renders with uHexen2's **classic 8bpp software rasteriser**, presented
+through an accelerated canvas (a WebGL2 palette-lookup blit). The WebGL2 renderer is
+retained and selectable at build time.
 
-A GitHub-Pages-deployable WebAssembly/PWA shell now lives under [`web/`](web/) with setup notes in [docs/PWA.md](docs/PWA.md). It targets installable, offline-capable play after the user imports their own legal Hexen II assets.
+**Requirements:** the [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html)
+(CI pins `4.0.23`) and Node.js 22+ for the PWA shell tests.
 
-**Quick start (any Linux):**
 ```bash
-cd engine && mkdir build && cd build
-cmake .. && make -j$(nproc)
+source "$EMSDK/emsdk_env.sh"
+
+make build          # software renderer (the shipping default)
+make build-webgl2   # the retained WebGL2 renderer
+make dist           # assemble + validate the static PWA artifact in dist/
+make test           # PWA shell tests
 ```
 
-**Requirements:** OpenGL 4.3 (2012+), SDL3, libvorbis, libogg, libopus, opusfile, libxmp, ALSA (optional), FluidSynth (optional)
+Those targets wrap the scripts CI uses, so local and CI builds cannot drift:
 
-**Nix:**
 ```bash
-nix build              # NixOS
-nix build .#linux-fhs  # Portable Linux binary
-nix build .#win64      # Windows 64-bit (cross-compiled)
-nix build .#release    # All platforms
+./scripts/wasm-build.sh software
+./scripts/wasm-build.sh webgl2 engine/build-webgl2
+./scripts/wasm-assemble-artifact.sh dist
+./scripts/wasm-validate-artifact.sh dist
 ```
+
+To configure CMake directly:
+
+```bash
+emcmake cmake -S engine -B build                       # software (default)
+emcmake cmake -S engine -B build -DWEB_RENDERER=webgl2 # WebGL2
+```
+
+**Nix** (developer convenience; CI uses the pinned emsdk, not the flake):
+
+```bash
+nix develop     # web toolchain shell
+nix build       # best-effort WASM build -> installable PWA tree
+```
+
+Design documents: [docs/web/ARCHITECTURE.md](docs/web/ARCHITECTURE.md) and
+[docs/web/SOFTWARE_RENDERER.md](docs/web/SOFTWARE_RENDERER.md).
 
 ## Contributing
 

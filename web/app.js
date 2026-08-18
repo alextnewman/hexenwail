@@ -669,7 +669,7 @@ function callEngine(name, returnType, args = []) {
 
 function engineKey(key, down) {
   if (state.runtimeReady && !state.runtimeExited) {
-    const ok = callEngine('Hexenwail_TouchKey', 'number', [['number', key], ['number', down ? 1 : 0]]);
+    const ok = callEngine('Web_TouchKey', 'number', [['number', key], ['number', down ? 1 : 0]]);
     if (ok) return;
   }
   const type = down ? 'keydown' : 'keyup';
@@ -679,7 +679,7 @@ function engineKey(key, down) {
 
 function engineLook(dx, dy) {
   if (!state.runtimeReady || state.runtimeExited) return;
-  callEngine('Hexenwail_TouchLook', null, [['number', dx], ['number', dy]]);
+  callEngine('Web_TouchLook', null, [['number', dx], ['number', dy]]);
 }
 
 function releasePhoneInputs() {
@@ -743,7 +743,7 @@ function resizeCanvasToViewport() {
   ui.canvas.style.width = `${cssWidth}px`;
   ui.canvas.style.height = `${cssHeight}px`;
   if (state.runtimeReady && !state.runtimeExited) {
-    callEngine('Hexenwail_ResizeCanvas', null, [['number', cssWidth], ['number', cssHeight]]);
+    callEngine('Web_ResizeCanvas', null, [['number', cssWidth], ['number', cssHeight]]);
   }
 }
 

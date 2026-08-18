@@ -1,5 +1,11 @@
 # WebGL2 renderer
 
+> **Not the default.** The web build ships the classic software rasteriser on
+> an accelerated canvas — see
+> [`web/SOFTWARE_RENDERER.md`](web/SOFTWARE_RENDERER.md). This renderer is
+> retained and buildable via `-DWEB_RENDERER=webgl2`; the document below
+> describes that configuration.
+
 The browser build uses an explicit **WebGL2 / OpenGL ES 3.0** renderer profile.
 Startup prints the selected profile, drawable dimensions, supported extensions,
 fallbacks, shader status, and the result of an RGBA8 texture/FBO self-test to the

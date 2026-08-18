@@ -23,9 +23,12 @@
 #include "quakedef.h"
 #include "bgmusic.h"
 #include "cdaudio.h"
+#if defined(GLQUAKE)
 #include "gl_postprocess.h"
+#endif
 
-/* gl_fog.c */
+/* svc_fog handler, supplied by the active renderer: r_webgl2.c under the
+ * WebGL2 build, r_soft_web.c under the software build, gl_fog.c on GL. */
 void Fog_ParseServerMessage (void);
 
 static const char *svc_strings[] =

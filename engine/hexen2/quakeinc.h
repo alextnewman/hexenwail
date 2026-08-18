@@ -80,7 +80,18 @@
 #include "q_sound.h"
 #include "client.h"
 
-#if defined(GLQUAKE)
+#if defined(WEBGL2QUAKE)
+#include "model.h"
+#include "particle.h"
+#include "r_webgl2.h"
+#elif defined(WEBQUAKE)
+/* Web software renderer: classic 8bpp rasterizer on an accelerated canvas.
+ * See docs/web/SOFTWARE_RENDERER.md */
+#include "model.h"
+#include "particle.h"
+#include "d_iface.h"
+#include "soft_web.h"
+#elif defined(GLQUAKE)
 #include "glheader.h"
 #include "gl_model.h"
 #include "glquake.h"
@@ -94,4 +105,3 @@
 #endif	/* !SERVERONLY */
 
 #endif	/* __QUAKEINC_H */
-

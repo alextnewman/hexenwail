@@ -48,6 +48,22 @@
 #define	SA_FAM_OFFSET	0
 #endif	/* BSD, sockaddr */
 
+/* web (Emscripten) compatibility macros.
+ * The browser client has no LAN driver at all -- net_web.c registers the
+ * loopback driver only -- but net_defs.h still needs the socket typedefs
+ * for the structures it shares with the (unbuilt) datagram code. */
+#if defined(PLATFORM_WEB)
+
+#include <unistd.h>
+#include <sys/time.h>
+
+typedef int	sys_socket_t;
+#define	INVALID_SOCKET	(-1)
+#define	SOCKET_ERROR	(-1)
+
+#endif	/* end of web stuff */
+
+
 /* unix includes and compatibility macros */
 #if defined(PLATFORM_UNIX) || defined(PLATFORM_RISCOS) || defined(PLATFORM_HAIKU)
 

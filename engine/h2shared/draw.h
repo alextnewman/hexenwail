@@ -51,23 +51,23 @@ void Draw_TransPicCropped (int x, int y, qpic_t *pic);
 void Draw_ConsoleBackground (int lines);
 void Draw_Crosshair (void);
 
-#if defined(GLQUAKE)
+#if defined(GLQUAKE) || defined(WEBQUAKE)
 void Draw_AlphaPic (int x, int y, qpic_t *pic, float alpha);
-#endif	/*  GLQUAKE */
+#endif	/*  GLQUAKE || WEBQUAKE */
 
 void Draw_TransPicTranslate (int x, int y, qpic_t *pic, byte *translation, int p_class);
 					/* Only used for the player color selection menu */
 
 #if FULLSCREEN_INTERMISSIONS
-# if defined(GLQUAKE)
+# if defined(GLQUAKE) || defined(WEBQUAKE)
 qpic_t *Draw_CachePicNoTrans (const char *path);
 void Draw_IntermissionPic (qpic_t *pic);
-# else	/* !GLQUAKE */
+# else	/* !GLQUAKE && !WEBQUAKE */
 qpic_t *Draw_CachePicResize (const char *path, int targetWidth, int targetHeight);
-# endif	/*  GLQUAKE */
+# endif	/*  GLQUAKE || WEBQUAKE */
 #endif	/*  FULLSCREEN_INTERMISSIONS */
 
-#if defined(GLQUAKE)
+#if defined(GLQUAKE) || defined(WEBQUAKE)
 #undef DRAW_LOADINGSKULL
 #endif
 
@@ -82,7 +82,7 @@ void Draw_EndDisc (void);
 void Draw_TileClear (int x, int y, int w, int h);
 void Draw_Fill (int x, int y, int w, int h, int c);
 void Draw_FadeScreen (void);
-#if defined(GLQUAKE)
+#if defined(GLQUAKE) || defined(WEBQUAKE)
 void Draw_FillAlpha (int x, int y, int w, int h, float r, float g, float b, float a);
 void Draw_MenuBackdrop (void);	/* full-screen conback for main-menu backdrop */
 #else
@@ -97,7 +97,7 @@ void Draw_SmallString (int x, int y, const char *str);
 void Draw_RedString (int x, int y, const char *str);
 void Draw_BigCharacter (int x, int y, int num);
 
-#if defined(GLQUAKE)
+#if defined(GLQUAKE) || defined(WEBQUAKE)
 /* Flush any pending batched glyph quads. Called automatically by every
  * other Draw_* function and at the 2D-phase boundary; rarely needed
  * directly. */
@@ -110,7 +110,7 @@ void Draw_FlushCharBatch (void);
 #define GAME_MOD_NAME		ENGINE_NAME
 #define ENGINE_WATERMARK	GAME_MOD_NAME " " HW_VERSION " (" PLATFORM_STRING ")"
 
-#if defined(GLQUAKE)
+#if defined(GLQUAKE) || defined(WEBQUAKE)
 /* Multi-canvas 2D scaling (Ironwail-parity).
    Each canvas has its own ortho projection and viewport so HUD,
    menu and crosshair can be scaled independently for high-DPI. */
@@ -132,7 +132,6 @@ extern cvar_t scr_conalpha;
 extern cvar_t scr_conbrightness;
 
 float SCR_CalcUIScale (cvar_t *user);
-#endif	/* GLQUAKE */
+#endif	/* GLQUAKE || WEBQUAKE */
 
 #endif	/* __HX2_DRAW_H */
-

@@ -56,6 +56,11 @@
    =================================================================== */
 #define	DO_USERDIRS			1
 
+#if defined(PLATFORM_WEB)
+#undef	DO_USERDIRS
+#define	DO_USERDIRS			0
+#endif
+
 
 /* ====================================================================
    DISALLOW_DEMONESS_IN_OLD_GAME
@@ -227,4 +232,3 @@
 
 
 #endif	/* __HEXEN2_OPTIONS_H		*/
-
