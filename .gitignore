@@ -3,6 +3,10 @@ result
 .flatpak-builder/
 audit.md
 engine/build/
+# Out-of-tree CMake build directories (engine/build-web, engine/build-win64, ...)
+engine/build-*/
+# Assembled static PWA artifact (scripts/wasm-assemble-artifact.sh)
+/dist/
 *.o
 *.d
 
