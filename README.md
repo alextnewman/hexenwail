@@ -126,6 +126,15 @@ See [BUILD.md](BUILD.md) for full instructions.
 
 A GitHub-Pages-deployable WebAssembly/PWA shell now lives under [`web/`](web/) with setup notes in [docs/PWA.md](docs/PWA.md). It targets installable, offline-capable play after the user imports their own legal Hexen II assets.
 
+The web build renders with uHexen2's **classic 8bpp software rasteriser**, presented through an accelerated canvas (a WebGL2 palette-lookup blit). The experimental WebGL2 renderer is retained and can be selected at build time:
+
+```bash
+emcmake cmake -S engine -B build                       # software (default)
+emcmake cmake -S engine -B build -DWEB_RENDERER=webgl2 # WebGL2
+```
+
+Design documents: [docs/web/ARCHITECTURE.md](docs/web/ARCHITECTURE.md) and [docs/web/SOFTWARE_RENDERER.md](docs/web/SOFTWARE_RENDERER.md).
+
 **Quick start (any Linux):**
 ```bash
 cd engine && mkdir build && cd build
