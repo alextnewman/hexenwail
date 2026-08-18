@@ -71,6 +71,10 @@ void R_SoftWebInitCvars (void);
 void GL_PostProcess_ResetWaterwarpPreview (void);
 void GL_PostProcess_RequestWaterwarpPreview (float duration);
 
+/* svc_fog handler. The software renderer has no fog, so this only drains
+ * the message payload; r_webgl2.h declares the WebGL2 counterpart. */
+void Fog_ParseServerMessage (void);
+
 /* Implemented by draw_soft_web.c; called once from Draw_Init(). */
 void Draw_SoftWebInit (void);
 

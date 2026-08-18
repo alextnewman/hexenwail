@@ -152,6 +152,27 @@ int R_GetPimpFlags (entity_t *e, float **gsettings_out)
 
 /*
 ================
+Fog_ParseServerMessage
+
+svc_fog is a renderer-owned message: cl_parse.c dispatches it
+unconditionally and each renderer supplies the handler (the WebGL2 build
+does so from r_webgl2.c). The software rasteriser has no fog, but the
+payload -- [byte] density, [byte] red, [byte] green, [byte] blue,
+[short] fade time -- still has to be drained or the rest of the server
+message is parsed at the wrong offset.
+================
+*/
+void Fog_ParseServerMessage (void)
+{
+	MSG_ReadByte();
+	MSG_ReadByte();
+	MSG_ReadByte();
+	MSG_ReadByte();
+	MSG_ReadShort();
+}
+
+/*
+================
 GL_PostProcess_ResetWaterwarpPreview
 
 The software renderer's water warp is applied by d_scan.c during
