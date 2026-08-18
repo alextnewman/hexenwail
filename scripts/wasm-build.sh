@@ -24,9 +24,6 @@ cd "$build_dir"
 emcmake cmake \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DWEB_RENDERER="$renderer" \
-	-DUSE_CODEC_VORBIS=OFF \
-	-DUSE_ALSA=OFF \
-	-DUSE_SDL3_STATIC=ON \
 	"$repo_root/engine"
 
 emmake make -j"$(nproc)"

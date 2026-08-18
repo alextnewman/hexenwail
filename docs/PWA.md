@@ -21,35 +21,34 @@ User-imported assets are mirrored into the runtime filesystem before `main()` is
 
 ## Local build
 
-A working dev-shell path already exists in `WASM_BUILD_STATUS.md`. Outside Nix, a plain emsdk install is also fine.
+The build requires the Emscripten SDK. CI pins `4.0.23` — see
+`.github/workflows/ci.yml`; do not use `latest`, since the pin is what keeps
+local and CI builds comparable.
 
-### Option A: existing Nix dev shell
+### Option A: Nix dev shell
 
 ```bash
-nix develop . -f shell-wasm.nix
-cd engine
-mkdir -p build
-cd build
-emcmake cmake -DCMAKE_BUILD_TYPE=Release -DUSE_CODEC_VORBIS=OFF -DUSE_ALSA=OFF -DUSE_SDL3_STATIC=ON ..
-emmake make
+nix develop          # web toolchain: emscripten, cmake, node
+./scripts/wasm-build.sh software
 ```
 
-### Option B: direct emsdk install
+Note that the nixpkgs Emscripten is not the pinned emsdk CI uses.
+
+### Option B: direct emsdk install (what CI does)
 
 ```bash
 git clone https://github.com/emscripten-core/emsdk.git
 cd emsdk
-./emsdk install latest
-./emsdk activate latest
+./emsdk install 4.0.23
+./emsdk activate 4.0.23
 source ./emsdk_env.sh
 
-cd /path/to/hexenwail/engine
-mkdir -p build
-cd build
-emcmake cmake -DCMAKE_BUILD_TYPE=Release -DUSE_CODEC_VORBIS=OFF -DUSE_ALSA=OFF -DUSE_SDL3_STATIC=ON ..
-emmake make
+cd /path/to/hexenwail
+./scripts/wasm-build.sh software                    # shipping default
+./scripts/wasm-build.sh webgl2 engine/build-webgl2  # retained GPU renderer
 ```
 
+`scripts/wasm-build.sh` is the same script CI runs, so the two cannot drift.
 Build output lands in `engine/build/bin/`.
 
 ## Assemble a local PWA site
