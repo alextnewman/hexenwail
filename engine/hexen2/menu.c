@@ -2799,7 +2799,7 @@ static qboolean M_Rendering_IsSkip (int i)
 {
 	if (i < 0 || i >= REND_ITEMS)
 		return true;
-#if defined(WEBQUAKE) && !defined(WEBGL2QUAKE)
+#if defined(WEBSOFT)
 	/* GPU-only rows have no counterpart in the software rasteriser. */
 	switch (i)
 	{

@@ -105,7 +105,13 @@ Rules of thumb when adding a guard:
 
 * Guarding *browser vs. native* behaviour → `WEBQUAKE` / `PLATFORM_WEB`.
 * Guarding *GPU-specific* behaviour → `WEBGL2QUAKE`.
-* Never add a new `#if defined(WEBQUAKE)` that really means "GPU".
+* Guarding *software-rasteriser-specific* behaviour → `WEBSOFT`.
+* Never add a new `#if defined(WEBQUAKE)` that really means "GPU", and never
+  spell the software case as `defined(WEBQUAKE) && !defined(WEBGL2QUAKE)` —
+  `WEBSOFT` exists precisely so that renderer guards stay positive and
+  self-describing. The only exception is the renderer include ladder in
+  `engine/hexen2/quakeinc.h`, which is an `#if`/`#elif` chain over renderers and
+  is correct by construction.
 
 ## Ownership boundaries
 

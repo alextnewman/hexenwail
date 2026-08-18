@@ -20,7 +20,7 @@
  */
 
 #include "quakedef.h"
-#if defined(WEBQUAKE) && !defined(WEBGL2QUAKE)
+#if defined(WEBSOFT)
 #include "r_local.h"
 #endif
 #ifdef GLQUAKE
