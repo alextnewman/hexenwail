@@ -23,3 +23,24 @@ test('hasRequiredBaseAssets detects the mandatory retail pak set', () => {
   assert.equal(hasRequiredBaseAssets(['data1/pak0.pak']), false);
   assert.equal(hasRequiredBaseAssets(['data1/pak0.pak', 'data1/pak1.pak']), true);
 });
+
+test('mapImportedPath routes every decodable loose music format to data1/music', () => {
+  assert.equal(mapImportedPath('casa1.ogg'), 'data1/music/casa1.ogg');
+  assert.equal(mapImportedPath('casa1.mp3'), 'data1/music/casa1.mp3');
+  assert.equal(mapImportedPath('casa1.flac'), 'data1/music/casa1.flac');
+  assert.equal(mapImportedPath('casa1.wav'), 'data1/music/casa1.wav');
+  assert.equal(mapImportedPath('CASA1.MP3'), 'data1/music/CASA1.MP3');
+  // Opus and the tracker formats have no Emscripten port, so the engine
+  // cannot decode them; do not pretend to accept them.
+  assert.equal(mapImportedPath('casa1.opus'), null);
+  assert.equal(mapImportedPath('casa1.xm'), null);
+});
+
+test('mapImportedPath honours a music directory instead of flattening to the fallback', () => {
+  // Already rooted at a known game directory, so it is preserved verbatim
+  // rather than being redirected to data1 by the loose-file rule.
+  assert.equal(mapImportedPath('portals/music/tulku1.mp3'), 'portals/music/tulku1.mp3');
+  // A bare music/ directory has no game root, so it is anchored under data1 --
+  // but the subpath is kept, unlike the loose-file rule which uses the basename.
+  assert.equal(mapImportedPath('music/kult/tulku1.flac'), 'data1/music/kult/tulku1.flac');
+});

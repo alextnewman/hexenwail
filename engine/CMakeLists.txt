@@ -14,6 +14,11 @@ set(UHEXEN2_SHARED ${UHEXEN2_TOP}/common)
 
 option(USE_DEBUG "Debug build" OFF)
 option(USE_SOUND "Enable the browser audio backend" ON)
+# Ogg Vorbis music. This is the one codec that needs an Emscripten port
+# (zlib-licensed libogg + libvorbis), which emcc fetches over the network the
+# first time it is built. Turn it OFF for a network-less build with a cold
+# EM_CACHE; the engine then still plays wav/mp3/flac music.
+option(USE_CODEC_VORBIS "Decode Ogg Vorbis music via the Emscripten vorbis port" ON)
 set(GAME_DATA_DIR "" CACHE PATH "Optional game data directory to preload")
 
 # Renderer selection. "software" is the shipping configuration: the classic
@@ -159,18 +164,36 @@ set(COMMON_SOURCES
 )
 
 if(USE_SOUND)
+    # Music codecs. bgmusic.c only offers a format whose codec registered
+    # itself in S_CodecInit, so a codec that is not listed here is silently
+    # unavailable at runtime ("BGM: stream codecs: ..." reports the live set).
+    #
+    # wav/mp3/flac decode through the vendored public-domain dr_libs headers
+    # in h2shared, so they cost nothing but compile time. Vorbis needs the
+    # Emscripten port (see USE_CODEC_VORBIS above). Opus (opusfile) and the
+    # tracker formats (libxmp) have no Emscripten port and stay out.
     set(SOUND_SOURCES
         ${COMMONDIR}/snd_sys.c
         ${COMMONDIR}/snd_dma.c
         ${COMMONDIR}/snd_mix.c
         ${COMMONDIR}/snd_mem.c
         ${COMMONDIR}/snd_wave.c
+        ${COMMONDIR}/snd_flac.c
+        ${COMMONDIR}/snd_mp3.c
         ${COMMONDIR}/snd_mp3tag.c
         ${COMMONDIR}/snd_codec.c
         ${COMMONDIR}/snd_web.c
         ${COMMONDIR}/bgmusic.c
     )
-    add_compile_definitions(HAVE_WEB_SOUND=1)
+    add_compile_definitions(HAVE_WEB_SOUND=1 USE_CODEC_MP3 USE_CODEC_FLAC)
+    if(USE_CODEC_VORBIS)
+        list(APPEND SOUND_SOURCES ${COMMONDIR}/snd_vorbis.c)
+        add_compile_definitions(USE_CODEC_VORBIS)
+        set(VORBIS_STATUS " ogg")
+    else()
+        set(VORBIS_STATUS " (ogg disabled: USE_CODEC_VORBIS=OFF)")
+    endif()
+    message(STATUS "Music codecs: wav mp3 flac${VORBIS_STATUS}")
 else()
     set(SOUND_SOURCES ${COMMONDIR}/snd_null.c ${COMMONDIR}/bgmnull.c)
     add_compile_definitions(_NO_SOUND)
@@ -214,6 +237,16 @@ target_link_options(uhexen2_web PRIVATE
     -sEXPORTED_RUNTIME_METHODS=['FS','callMain','ccall']
     --shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html
 )
+
+if(USE_SOUND AND USE_CODEC_VORBIS)
+    # The Emscripten vorbis port pulls in ogg automatically, but naming both
+    # keeps the dependency explicit and lets `embuilder build ogg vorbis`
+    # prefetch exactly what this build needs. The flags must appear on the
+    # compile line too, not just the link line: that is what puts the port's
+    # <vorbis/vorbisfile.h> and <ogg/ogg.h> on the include path.
+    target_compile_options(uhexen2_web PRIVATE -sUSE_OGG=1 -sUSE_VORBIS=1)
+    target_link_options(uhexen2_web PRIVATE -sUSE_OGG=1 -sUSE_VORBIS=1)
+endif()
 
 if(GAME_DATA_DIR)
     target_link_options(uhexen2_web PRIVATE --preload-file=${GAME_DATA_DIR}@/data1)

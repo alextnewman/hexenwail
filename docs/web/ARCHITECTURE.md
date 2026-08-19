@@ -134,9 +134,57 @@ as everything else — the shell owns the page, the engine owns the game:
 | PWA shell, asset import, save sync, touch UI | `web/` | Plain JS + `node --test`; no engine knowledge beyond the exported C entry points. |
 | Engine ↔ JS entry points | `engine/CMakeLists.txt` `EXPORTED_FUNCTIONS` | Names are `Web_*`. `web/app.js` must match exactly; a mismatch fails **silently** at runtime. |
 | Platform backends | `engine/hexen2/sys_web.c`, `engine/h2shared/in_web.c`, `snd_web.c` | |
+| Music codec set | `engine/CMakeLists.txt` | `bgmusic.c` only offers a format whose codec registered itself in `S_CodecInit`, so the build file is what decides which formats exist at runtime — see below. |
 | VID / presentation | `vid_soft_web.c` + `web_canvas*.c` (software), `vid_webgl2.c` (WebGL2) | |
 | Renderer | restored `d_*.c` / `r_*.c` (software), `r_webgl2.c` (WebGL2) | |
 | Shared client (menu, sbar, console, screen) | `engine/hexen2`, `engine/h2shared` | Written against one API; renderer-specific gaps are filled by shim files, not by `#ifdef` sprinkling. |
+
+## Audio and music
+
+Sound output is a single first-party backend, `engine/h2shared/snd_web.c`: one
+WebAudio node fed from the engine's own mixer. Everything audible — sound
+effects and music alike — goes through that mixer, so the browser never gets to
+own playback state. Music in particular is decoded in WebAssembly and pushed
+through `S_RawSamples`; it is deliberately *not* handed to an
+`HTMLAudioElement`, which would fork volume, pause/resume and looping away from
+the engine and make behaviour depend on the Safari version.
+
+**This is settled.** Native browser playback was tested on the target and does
+not work: Ogg Vorbis will not play in the installed iOS PWA (MP3 will), and
+Vorbis-in-Ogg only reached Safari at all in 18.4. Decoding in-engine costs a few
+percent of a core in `BGM_UpdateStream` and works on every device. Audio
+glitching during long frames is a *separate* problem — the mixer runs in a
+main-thread `ScriptProcessorNode` — and needs the AudioWorklet work, not a
+different music path.
+
+Which music formats exist is a build-time decision, because `bgmusic.c` only
+offers a format whose codec registered itself in `S_CodecInit`. A codec that is
+not in `engine/CMakeLists.txt` is not "unsupported" — it is silently absent, and
+the symptom is a track that quietly does nothing.
+
+| Format | Decoder | Cost |
+| --- | --- | --- |
+| WAV, MP3, FLAC | vendored `dr_wav.h` / `dr_mp3.h` / `dr_flac.h` in `h2shared` | none — public-domain single headers already in-tree |
+| Ogg Vorbis | Emscripten `vorbis` port (`-sUSE_OGG -sUSE_VORBIS`) | one port, fetched over the network on a cold `EM_CACHE` |
+| Opus, MOD/S3M/XM/IT, UMX | — | excluded: `opusfile` and `libxmp` have no Emscripten port |
+| MIDI | — | excluded: no synthesiser in the web build (`_NO_MIDIDRV`) |
+
+The Vorbis port is the only third-party dependency the client links, so it is
+also the only thing in the build that needs the network. Two consequences worth
+keeping in mind when touching this:
+
+* CI pins `EM_CACHE` outside the emsdk checkout and caches it separately, then
+  prefetches the ports in their own step (`.github/actions/wasm-build`). Folding
+  that cache back inside the emsdk cache would make it a hostage of a key that
+  never changes, and the ports would be refetched on every run.
+* `-DUSE_CODEC_VORBIS=OFF` drops the port for network-less builds (this is what
+  the flake's `wasm` package does). The result still plays wav/mp3/flac music,
+  so it is a legitimate build-health check but not a shipping artifact.
+
+Because there is no MIDI synthesiser, a PAK-only install has **no music at all**
+until external music files are imported. See [`../PWA.md`](../PWA.md#music) for
+the user-facing side, including the filename rule that makes imported tracks
+actually play.
 
 ## Working agreements
 

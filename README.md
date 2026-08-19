@@ -90,6 +90,12 @@ Planned:
 - Underwater audio low-pass (`snd_waterfx`)
 - 2048 sound channels, 44.1 kHz default
 
+> The web/PWA build ships a subset: OGG Vorbis, MP3, FLAC and WAV only. Opus,
+> the tracker formats and MIDI need libraries with no Emscripten port, so a
+> PAK-only install has no music there until external music files are imported.
+> See [`docs/web/ARCHITECTURE.md`](docs/web/ARCHITECTURE.md) and
+> [`docs/PWA.md`](docs/PWA.md).
+
 ### Custom music for mappers
 Two ways to attach music to a custom map:
 
