@@ -337,6 +337,10 @@ static void GL2_BuildFullbrightMask (gl2texture_t *texture, const byte *data)
 
 	if (!texture->fullbright)
 		glGenTextures (1, &texture->fullbright);
+	/* Uploaded over unit 0, as GL2_LoadTexture does, and for the same
+	 * reason: a fresh GL name can repeat one the bind cache still holds,
+	 * so the bind has to be unconditional.  Updating gl2_bound keeps the
+	 * cache honest about what unit 0 now holds. */
 	glActiveTexture (GL_TEXTURE0);
 	gl2_bound[0] = texture->fullbright;
 	glBindTexture (GL_TEXTURE_2D, texture->fullbright);
