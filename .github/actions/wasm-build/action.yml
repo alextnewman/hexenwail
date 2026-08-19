@@ -24,11 +24,43 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Install native build dependencies
+    # DO NOT reintroduce `apt-get` here. This step used to run
+    # `apt-get update && apt-get install build-essential cmake pkg-config
+    # python3`, which bought this build precisely nothing:
+    #
+    #   * pkg-config and python3 were reported "already the newest version";
+    #   * build-essential is a metapackage whose contents (gcc, make, libc6-dev)
+    #     were already on the image — only the metapackage itself was "new";
+    #   * apt's cmake (3.28.3, /usr/bin) was then shadowed on PATH by the
+    #     image's own newer cmake (3.31.6, /usr/local/bin), which is the one
+    #     emcmake actually invoked.
+    #
+    # Meanwhile it cost ~90s on every run and was by far the biggest hang risk
+    # in the pipeline: `apt-get update` wedged on `archive.ubuntu.com
+    # noble-security InRelease` for the full 360-minute job default in CI run
+    # 41, and again for 22 minutes across four attempts of Pages run 12.
+    #
+    # A native toolchain was never really a dependency anyway — the Emscripten
+    # toolchain file makes emcc the compiler, so CMake never probes for a host
+    # one (see engine/CMakeLists.txt, which hard-errors off Emscripten).
+    #
+    # Verify instead of install: should a future runner image ever drop one of
+    # these, this fails in seconds with an obvious message rather than deep
+    # inside the CMake configure or build step.
+    - name: Verify build toolchain
       shell: bash
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake pkg-config python3
+        set -eu
+        missing=
+        for tool in cmake make python3 git; do
+          command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+        done
+        if [ -n "$missing" ]; then
+          echo "::error::Runner image is missing required tools:$missing"
+          exit 1
+        fi
+        cmake --version
+        python3 --version
 
     - name: Run lightweight PWA tests
       shell: bash

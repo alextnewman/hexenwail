@@ -22,12 +22,14 @@ permissions:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    # Nothing here should take more than a few seconds; anything longer is a
+    # stall, not work. See the `timeout-minutes` rationale on the pwa job.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install shellcheck
-        run: sudo apt-get install -y shellcheck
-
+      # shellcheck is preinstalled on the Ubuntu runner images — do not add an
+      # `apt-get install` step back here. See .github/actions/wasm-build.
       - name: Shellcheck
         run: |
           shellcheck scripts/mkrelease.sh flatpak/hexenwail.sh \
@@ -52,6 +54,14 @@ jobs:
   pwa:
     name: PWA / WebAssembly
     runs-on: ubuntu-latest
+    # A warm-cache run finishes in ~1 minute and a cold emsdk install in a few
+    # more, so 30 minutes is generous headroom. The point is the ceiling: with
+    # no `timeout-minutes` a job inherits the 360-minute Actions default, and a
+    # single stalled network call then occupies a runner for six hours (that is
+    # exactly what CI run 41 did). Composite-action steps cannot carry their own
+    # `timeout-minutes`, so this job-level bound is what backstops the emsdk
+    # download inside .github/actions/wasm-build.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
 
