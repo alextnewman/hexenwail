@@ -47,13 +47,21 @@
     /* Immersive play: the launcher chrome steps aside and the game surface
      * owns the whole window. Entered on launch, and always on in phone mode.
      * Native fullscreen, where the browser offers it, is layered on top of
-     * this and is not required for the layout to be correct. */
+     * this and is not required for the layout to be correct.
+     *
+     * Deliberately *not* safe-area padded: an installed PWA cannot hide the
+     * iOS status bar, so padding around it only trades game pixels for black
+     * bars. Hexen II was authored for a 320x200-ish screen with a border, so
+     * system glyphs sitting over the edges of the picture are acceptable
+     * where losing screen space is not. The overlays inside .viewport keep
+     * their own safe-area insets, so nothing interactive hides under the
+     * status bar or the home indicator. */
     body[data-engine-state="running"][data-immersive="true"] {
       width: 100vw;
       height: 100dvh;
       min-height: 100dvh;
       overflow: hidden;
-      padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+      padding: 0;
       grid-template-rows: 1fr;
       touch-action: none;
     }
@@ -227,6 +235,10 @@
       display: none;
     }
     body[data-engine-state="running"][data-immersive="true"] .phone-top-button { display: block; }
+    /* A controller is its own menu button: in_web.c binds Start to the engine
+     * menu, so the launcher's ☰ would just be engine chrome painted over the
+     * game. Hide it while a gamepad is connected. */
+    body[data-gamepad="true"] .phone-top-button { display: none; }
     .phone-controls {
       --stick-x: 0px;
       --stick-y: 0px;
@@ -480,7 +492,7 @@
             <button id="exit-button" disabled>Exit to launcher</button>
             <button id="fullscreen-button" disabled>Fullscreen play</button>
           </div>
-          <small id="pointer-lock-hint" class="muted">Starting the game hides the launcher chrome and asks the browser for fullscreen. Press <code>☰</code> in-game to leave fullscreen or return to the launcher.</small>
+          <small id="pointer-lock-hint" class="muted">Starting the game hides the launcher chrome and asks the browser for fullscreen. Press <code>☰</code> in-game to leave fullscreen or return to the launcher; with a controller connected the <code>☰</code> button steps aside and <code>Start</code> opens the menu.</small>
         </section>
         <section class="card">
           <h2>Phone controls</h2>

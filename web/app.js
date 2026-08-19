@@ -50,6 +50,7 @@ const state = {
     phoneHintSeen: false,
   },
   touchOnlyEnvironment: false,
+  gamepadConnected: false,
   phoneMode: false,
   immersive: false,
   canvasResizePending: false,
@@ -661,6 +662,10 @@ function applyPreferences() {
   document.body.dataset.touchControls = state.preferences.touchControls;
   document.body.dataset.handedness = state.preferences.handedness;
   document.body.dataset.touchOnly = state.touchOnlyEnvironment ? 'true' : 'false';
+  /* A connected controller replaces the launcher's on-screen chrome: the
+   * engine binds Start to its own menu, so the ☰ button is hidden rather than
+   * painted over the game. */
+  document.body.dataset.gamepad = state.gamepadConnected ? 'true' : 'false';
   document.body.dataset.phoneMode = state.phoneMode ? 'true' : 'false';
   /* A panel this small cannot usefully share space with the launcher chrome,
    * whatever is plugged into it, so phone mode pins the immersive layout. */
@@ -734,6 +739,11 @@ function isPhoneModeEnvironment() {
 function updateTouchOnlyEnvironment(forceOff = false) {
   const wasPhoneMode = state.phoneMode;
   state.phoneMode = isPhoneModeEnvironment();
+  /* Sticky until an explicit disconnect: Safari only lists a pad through
+   * navigator.getGamepads() once it has sent input, so the connect event is
+   * the authoritative signal and the poll is the fallback for a page that
+   * loads with one already attached. */
+  state.gamepadConnected = state.gamepadConnected || hasConnectedGamepad();
   state.touchOnlyEnvironment = !forceOff && isLikelyTouchOnlyEnvironment();
   if (!state.touchOnlyEnvironment) {
     releasePhoneInputs();
@@ -1346,8 +1356,14 @@ function bindUi() {
     matchMedia(query).addEventListener('change', () => updateTouchOnlyEnvironment());
   }
 
-  addEventListener('gamepadconnected', () => updateTouchOnlyEnvironment(true));
-  addEventListener('gamepaddisconnected', () => updateTouchOnlyEnvironment());
+  addEventListener('gamepadconnected', () => {
+    state.gamepadConnected = true;
+    updateTouchOnlyEnvironment(true);
+  });
+  addEventListener('gamepaddisconnected', () => {
+    state.gamepadConnected = false;
+    updateTouchOnlyEnvironment();
+  });
   addEventListener('keydown', (event) => {
     if (event.isTrusted !== false) updateTouchOnlyEnvironment(true);
   });
