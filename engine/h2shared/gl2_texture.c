@@ -90,7 +90,10 @@ static void GL2_ProbeCaps (void)
 	{
 		const char	*name = (const char *) glGetStringi (GL_EXTENSIONS, (GLuint)i);
 
-		if (!name || !strstr (name, "texture_filter_anisotropic"))
+		/* Both spellings define GL_TEXTURE_MAX_ANISOTROPY at the same
+		 * value; anything else that merely reads alike does not. */
+		if (!name || (!strstr (name, "EXT_texture_filter_anisotropic") &&
+			      !strstr (name, "ARB_texture_filter_anisotropic")))
 			continue;
 		glGetFloatv (GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &max_aniso);
 		if (max_aniso >= 2.0f)
