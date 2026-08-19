@@ -1197,7 +1197,11 @@ void Key_Event (int key, qboolean down)
 	    (key_dest == key_game || key_dest == key_console))
 	{
 		if (down)
+		{
+			if (key_dest == key_console)
+				Key_SetDest (key_game);
 			M_ToggleMenu_f ();
+		}
 		return;
 	}
 
