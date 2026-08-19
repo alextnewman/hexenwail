@@ -690,9 +690,10 @@ void IN_Commands (void)
 	Web_PollGamepad();
 }
 void IN_SendKeyEvents (void) {}
-/* The engine has already dropped every key by the time this runs, so the
- * gamepad tracking is dropped silently rather than re-sending key-ups. */
-void IN_ClearStates (void) { look_x = look_y = 0; Web_GPForget(); }
+/* Releases whatever the pad was holding rather than forgetting it: the only
+ * in-tree caller (ClearAllStates) drops the engine's keys first, but a silent
+ * forget would leave a key stuck down for any caller that does not. */
+void IN_ClearStates (void) { look_x = look_y = 0; Web_GPReleaseAll(); }
 void IN_ActivateMouse (void) { mouse_active = true; }
 void IN_DeactivateMouse (void) { mouse_active = false; }
 void IN_ShowMouse (void) { Web_SetCursorHidden(0); }
