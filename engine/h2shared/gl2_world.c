@@ -91,9 +91,6 @@ static int		gl2_lightmap_overbright;
 static gl2texture_t	*gl2_solidsky;
 static gl2texture_t	*gl2_alphasky;
 
-int			gl2_frame_polys;
-int			gl2_frame_batches;
-
 /*
 =============================================================================
 
