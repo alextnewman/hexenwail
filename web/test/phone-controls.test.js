@@ -126,7 +126,7 @@ test('phone mode DOM includes playing layout, touch visibility rules, and quit h
   assert.match(html, /id="phone-exit-button"/);
   assert.match(html, /data-touch-only="true"/);
   assert.match(html, /data-phone-mode="true"/);
-  assert.match(html, /@media \(pointer: coarse\) and \(hover: none\) and \(max-width: 820px\), \(pointer: coarse\) and \(hover: none\) and \(max-height: 820px\)/);
+  assert.match(html, /@media \(pointer: coarse\) and \(hover: none\) \{/);
   assert.match(app, /isLikelyTouchOnlyEnvironment/);
   assert.match(app, /isPhoneModeEnvironment/);
   assert.match(app, /PHONE_VIEWPORT_QUERY/);
@@ -137,4 +137,63 @@ test('phone mode DOM includes playing layout, touch visibility rules, and quit h
   assert.match(app, /addEventListener\('pageshow', checkForServiceWorkerUpdate\)/);
   assert.equal([...app.matchAll(/startEngineFromUserAction\(/g)].length, 2,
     'engine startup should only be defined and invoked by the launch-button handler');
+});
+
+test('phone mode keys off the panel short side so iPads are never trapped in it', () => {
+  const repoRoot = process.cwd();
+  const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
+  const query = app.match(/const PHONE_VIEWPORT_QUERY = '([^']+)'/)?.[1];
+  assert.ok(query, 'PHONE_VIEWPORT_QUERY is declared as a string literal');
+
+  const limits = [...query.matchAll(/max-(?:width|height): (\d+)px/g)].map((match) => Number(match[1]));
+  assert.equal(limits.length, 2, 'both orientations are covered');
+  for (const limit of limits) {
+    // Phone short side <= ~450 CSS px; smallest iPad short side ~740 CSS px.
+    assert.ok(limit >= 450 && limit < 700, `phone short-side limit ${limit} must exclude iPads`);
+  }
+  assert.doesNotMatch(query, /pointer|hover/,
+    'phone mode is a panel-size question; an attached mouse does not make a phone panel bigger');
+});
+
+test('phone mode drives the immersive layout consistently in all three places', () => {
+  const repoRoot = process.cwd();
+  const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
+  const html = readFileSync(join(repoRoot, 'web/index.html'), 'utf8');
+  // Forcing immersive, hiding Show launcher, and keeping immersive on
+  // fullscreen exit must share one condition, or the button becomes a no-op.
+  assert.match(app, /document\.body\.dataset\.immersive = \(state\.immersive \|\| state\.phoneMode\)/);
+  assert.match(app, /\} else if \(!state\.phoneMode\) \{/);
+  assert.match(html, /body\[data-phone-mode="true"\] #windowed-button \{ display: none; \}/);
+});
+
+test('coarse pointer changes are subscribed to now that phone mode ignores them', () => {
+  const repoRoot = process.cwd();
+  const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
+  const queries = app.match(/for \(const query of \[([\s\S]*?)\]\) \{/)?.[1];
+  assert.ok(queries, 'the watched media query list is defined');
+  assert.match(queries, /'\(any-pointer: coarse\)'/);
+  assert.match(queries, /'\(any-pointer: fine\)'/);
+  assert.match(queries, /'\(any-hover: hover\)'/);
+});
+
+test('canvas resizes coalesce so a burst of transitions schedules one pass', () => {
+  const repoRoot = process.cwd();
+  const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
+  const body = app.match(/function scheduleCanvasResize\(\) \{([\s\S]*?)\n\}/)?.[1];
+  assert.ok(body, 'scheduleCanvasResize is defined');
+  assert.match(body, /if \(state\.canvasResizePending\) return;/,
+    'each caller must not queue its own rAF chain into the engine');
+  assert.match(body, /state\.canvasResizePending = true;/);
+  assert.match(body, /state\.canvasResizePending = false;/);
+});
+
+test('touch-control auto detection depends on pointer capability, not viewport size', () => {
+  const repoRoot = process.cwd();
+  const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
+  const body = app.match(/function isLikelyTouchOnlyEnvironment\(\) \{([\s\S]*?)\n\}/)?.[1];
+  assert.ok(body, 'isLikelyTouchOnlyEnvironment is defined');
+  assert.doesNotMatch(body, /isPhoneModeEnvironment|PHONE_VIEWPORT_QUERY/,
+    'a bare iPad is as touch-only as a phone, so screen size must not gate touch controls');
+  assert.match(body, /any-pointer: coarse/);
+  assert.match(body, /hasConnectedGamepad\(\)/);
 });

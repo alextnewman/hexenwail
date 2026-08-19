@@ -13,7 +13,16 @@ const PREFERENCES_KEY = 'hexenwail-pwa-preferences-v1';
 const SAVE_SYNC_INTERVAL_MS = 10000;
 const MAX_IMPORT_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_RUNTIME_LOG_ENTRIES = 200;
-const PHONE_VIEWPORT_QUERY = '(pointer: coarse) and (hover: none) and (max-width: 820px), (pointer: coarse) and (hover: none) and (max-height: 820px)';
+/* Phone mode is about the short side of the panel, not the long one: every
+ * phone has a short side well under 500 CSS px in either orientation, while
+ * the smallest iPad short side is ~740. The old 820px rule matched iPad
+ * landscape and permanently trapped iPads in phone mode.
+ *
+ * Size only, deliberately: a phone-sized panel is a phone-sized panel whether
+ * or not a mouse, trackpad or pen happens to be attached, and an iPad in a
+ * narrow Split View column is one too. Pointer capability is a separate
+ * question, answered by isLikelyTouchOnlyEnvironment(). */
+const PHONE_VIEWPORT_QUERY = '(max-width: 500px), (max-height: 500px)';
 
 const state = {
   storage: null,
@@ -42,6 +51,8 @@ const state = {
   },
   touchOnlyEnvironment: false,
   phoneMode: false,
+  immersive: false,
+  canvasResizePending: false,
 };
 
 const ui = {};
@@ -85,6 +96,7 @@ function setEngineState(engineState) {
   document.body.dataset.engineState = engineState;
   if (engineState !== 'running') {
     releasePhoneInputs();
+    setImmersive(false);
   }
 }
 
@@ -133,6 +145,11 @@ function updateLaunchState() {
   }
   if (ui.exitButton) {
     ui.exitButton.disabled = !state.engineStarted || state.runtimeExited;
+  }
+  if (ui.fullscreenButton) {
+    const playing = state.engineStarted && !state.runtimeExited;
+    ui.fullscreenButton.disabled = !playing;
+    ui.fullscreenButton.textContent = state.immersive ? 'Show launcher' : 'Fullscreen play';
   }
   if (ui.requirementsText) {
     ui.requirementsText.textContent = !state.rendererReady
@@ -645,11 +662,14 @@ function applyPreferences() {
   document.body.dataset.handedness = state.preferences.handedness;
   document.body.dataset.touchOnly = state.touchOnlyEnvironment ? 'true' : 'false';
   document.body.dataset.phoneMode = state.phoneMode ? 'true' : 'false';
+  /* A panel this small cannot usefully share space with the launcher chrome,
+   * whatever is plugged into it, so phone mode pins the immersive layout. */
+  document.body.dataset.immersive = (state.immersive || state.phoneMode) ? 'true' : 'false';
   if (ui.touchControlsSetting) ui.touchControlsSetting.value = state.preferences.touchControls;
   if (ui.handednessSetting) ui.handednessSetting.value = state.preferences.handedness;
   if (ui.lookSensitivitySetting) ui.lookSensitivitySetting.value = String(state.preferences.lookSensitivity);
   if (ui.phoneHint && state.preferences.phoneHintSeen) {
-    ui.phoneHint.textContent = 'Phone controls are available during play. Landscape remains recommended.';
+    ui.phoneHint.textContent = 'Touch controls are available during play. Landscape remains recommended.';
   }
   state.phoneControls?.setLookSensitivity(state.preferences.lookSensitivity);
 }
@@ -694,23 +714,35 @@ function hasConnectedGamepad() {
   }
 }
 
+/* Touch controls follow pointer capability only. Screen size says nothing
+ * useful here: a bare iPad is exactly as touch-only as a phone, and an iPad
+ * on a Magic Keyboard is not touch-only at all. */
 function isLikelyTouchOnlyEnvironment() {
-  const phoneSizedTouch = isPhoneModeEnvironment();
+  const hasCoarsePointer = matchMedia('(any-pointer: coarse)').matches || matchMedia('(pointer: coarse)').matches;
   const hasFinePointer = matchMedia('(any-pointer: fine)').matches || matchMedia('(any-hover: hover)').matches;
-  return phoneSizedTouch && !hasFinePointer && !hasConnectedGamepad();
+  return hasCoarsePointer && !hasFinePointer && !hasConnectedGamepad();
 }
 
+/* Phone mode only means "small panel": it forces the immersive layout and
+ * keeps the launcher chrome out of a viewport too small to share. It is a
+ * pure function of size, so it is self-healing — rotate or resize back above
+ * the breakpoint and the chrome returns on its own. */
 function isPhoneModeEnvironment() {
   return matchMedia(PHONE_VIEWPORT_QUERY).matches;
 }
 
 function updateTouchOnlyEnvironment(forceOff = false) {
+  const wasPhoneMode = state.phoneMode;
   state.phoneMode = isPhoneModeEnvironment();
   state.touchOnlyEnvironment = !forceOff && isLikelyTouchOnlyEnvironment();
   if (!state.touchOnlyEnvironment) {
     releasePhoneInputs();
   }
   applyPreferences();
+  if (wasPhoneMode !== state.phoneMode) {
+    updateLaunchState();
+    scheduleCanvasResize();
+  }
 }
 
 function openPhoneOverlay() {
@@ -725,6 +757,7 @@ function closePhoneOverlay() {
 
 async function returnToLauncher() {
   releasePhoneInputs();
+  await exitNativeFullscreen();
   setStatus('Syncing saves before returning to the launcher…');
   await syncRuntimeToStorage();
   location.reload();
@@ -747,8 +780,16 @@ function resizeCanvasToViewport() {
   }
 }
 
+/* Coalesced: fullscreen, orientation and visualViewport changes arrive in
+ * bursts, and several callers legitimately ask for a resize in the same turn
+ * (setImmersive plus its caller, for one). Each pass measures layout and calls
+ * into the engine, so one scheduled pair of frames per turn is enough — the
+ * trailing frame catches the post-transition layout. */
 function scheduleCanvasResize() {
+  if (state.canvasResizePending) return;
+  state.canvasResizePending = true;
   requestAnimationFrame(() => {
+    state.canvasResizePending = false;
     resizeCanvasToViewport();
     requestAnimationFrame(resizeCanvasToViewport);
   });
@@ -768,6 +809,7 @@ async function handleEngineQuit(kind = 'quit', message = '') {
     state.engineStarted = false;
     state.runtimeExited = true;
     setEngineState(intentional ? 'stopped' : 'fatal');
+    exitNativeFullscreen().catch((error) => console.warn('Leaving fullscreen failed', error));
     closePhoneOverlay();
     setStatus(intentional
       ? 'Hexenwail stopped. Use Restart game to start a fresh WASM runtime.'
@@ -786,6 +828,10 @@ async function startEngineFromUserAction() {
   state.preferences.phoneHintSeen = true;
   savePreferences();
   applyPreferences();
+  /* Started from a click, so this is a valid user gesture: take fullscreen
+   * now, while the activation is still fresh, and let the layout settle
+   * before the first frame is drawn. */
+  enterFullscreenPlay().catch((error) => appendRuntimeLog('[launcher]', `Fullscreen on launch failed: ${error.message}`));
   scheduleCanvasResize();
   setStatus('Starting Hexenwail…');
   try {
@@ -799,7 +845,7 @@ async function startEngineFromUserAction() {
       throw new Error(`Engine exited during startup with status ${exitStatus}.`);
     }
     scheduleCanvasResize();
-    setStatus('Hexenwail running. Tap the canvas to focus input.');
+    setStatus('Hexenwail running. Press ☰ to leave fullscreen or return to the launcher.');
   } catch (error) {
     if (state.quitInProgress) return;
     state.engineStarted = false;
@@ -843,42 +889,119 @@ async function clearImportedData() {
   updateStorageIndicator();
 }
 
-async function requestFullscreenForCanvas() {
-  const canvas = ui.canvas;
-  if (!canvas) return;
+/*
+ * Fullscreen play.
+ *
+ * Two independent layers, deliberately: `state.immersive` is the launcher
+ * layout (chrome hidden, game surface owns the window) and always works,
+ * including in an installed iOS PWA where the Fullscreen API is missing or
+ * refused. Native fullscreen is a best-effort extra on top of it, requested
+ * from the same user gesture that starts the game. The game surface, not the
+ * bare canvas, is the fullscreen element so the touch controls and the
+ * in-game overlay stay on screen.
+ */
+function getFullscreenElement() {
+  return document.fullscreenElement ?? document.webkitFullscreenElement ?? null;
+}
 
-  let target = null;
-  let method = null;
-  if (typeof canvas.requestFullscreen === 'function') {
-    target = canvas;
-    method = canvas.requestFullscreen;
-  } else if (typeof canvas.webkitRequestFullscreen === 'function') {
-    target = canvas;
-    method = canvas.webkitRequestFullscreen;
-  } else if (typeof document.documentElement.requestFullscreen === 'function') {
-    target = document.documentElement;
-    method = document.documentElement.requestFullscreen;
-  }
+function isFullscreen() {
+  return Boolean(getFullscreenElement());
+}
 
-  if (!method) {
-    setImportMessage('Fullscreen is not supported by this browser. Installed iPadOS PWAs already run nearly edge-to-edge.', 'info');
-    return;
-  }
+function setImmersive(immersive) {
+  if (state.immersive === immersive) return;
+  state.immersive = immersive;
+  applyPreferences();
+  updateLaunchState();
+  scheduleCanvasResize();
+}
+
+async function enterNativeFullscreen() {
+  const target = ui.viewport ?? ui.canvas;
+  if (!target || isFullscreen()) return false;
+  const request = target.requestFullscreen ?? target.webkitRequestFullscreen;
+  if (typeof request !== 'function') return false;
   try {
-    await method.call(target);
+    await request.call(target, { navigationUI: 'hide' });
+    return true;
   } catch (error) {
-    setImportMessage(`Fullscreen request failed: ${error.message}`, 'error');
+    appendRuntimeLog('[launcher]', `Fullscreen request refused: ${error.message}`);
+    return false;
+  }
+}
+
+async function exitNativeFullscreen() {
+  if (!isFullscreen()) return;
+  const release = document.exitFullscreen ?? document.webkitExitFullscreen;
+  if (typeof release !== 'function') return;
+  try {
+    await release.call(document);
+  } catch (error) {
+    appendRuntimeLog('[launcher]', `Leaving fullscreen failed: ${error.message}`);
+  }
+}
+
+/* Enter immersive play and, where the browser allows it, real fullscreen.
+ * Must be called from a user gesture for the fullscreen half to succeed. */
+async function enterFullscreenPlay() {
+  setImmersive(true);
+  const native = await enterNativeFullscreen();
+  if (!native && !isFullscreen()) {
+    setPointerLockHint('Fullscreen was unavailable, so the launcher hid its chrome instead. An installed PWA already runs edge-to-edge.');
+  }
+  tryCaptureInput();
+}
+
+async function leaveFullscreenPlay() {
+  await exitNativeFullscreen();
+  setImmersive(false);
+}
+
+function toggleFullscreenPlay() {
+  const leaving = state.immersive || isFullscreen();
+  const action = leaving ? leaveFullscreenPlay() : enterFullscreenPlay();
+  action.catch((error) => appendRuntimeLog('[launcher]', `Fullscreen toggle failed: ${error.message}`));
+}
+
+function handleFullscreenChange() {
+  /* Leaving fullscreen through the browser (Esc on desktop, the system
+   * gesture on iPad) must also drop the immersive layout, or the launcher
+   * would stay hidden with no way back. Phone mode has no launcher chrome
+   * to restore, so it keeps its layout. */
+  if (isFullscreen()) {
+    if (state.engineStarted && !state.runtimeExited) {
+      setImmersive(true);
+    }
+  } else if (!state.phoneMode) {
+    setImmersive(false);
+  }
+  scheduleCanvasResize();
+}
+
+function setPointerLockHint(message) {
+  if (ui.pointerLockHint) {
+    ui.pointerLockHint.textContent = message;
   }
 }
 
 function tryCaptureInput() {
-  if (ui.canvas) {
-    ui.canvas.focus();
-    if (typeof ui.canvas.requestPointerLock === 'function') {
-      ui.canvas.requestPointerLock();
-    } else if (ui.pointerLockHint) {
-      ui.pointerLockHint.textContent = 'Pointer Lock is unavailable here (expected on iPadOS Safari). External keyboard/mouse still work without it.';
-    }
+  if (!ui.canvas) return;
+  ui.canvas.focus();
+  /* Pointer Lock is only meaningful once the engine is drawing, and asking
+   * for it from the launcher just logs a browser error. */
+  if (!state.engineStarted || state.runtimeExited) return;
+  if (typeof ui.canvas.requestPointerLock !== 'function') {
+    setPointerLockHint('Pointer Lock is unavailable here (expected on iPadOS Safari). External keyboard/mouse still work without it.');
+    return;
+  }
+  try {
+    const result = ui.canvas.requestPointerLock();
+    /* Chrome returns a promise; Safari/WebKit does not. */
+    result?.catch?.(() => {
+      setPointerLockHint('Pointer Lock was refused by the browser. External keyboard/mouse still work without it.');
+    });
+  } catch {
+    setPointerLockHint('Pointer Lock is unavailable here (expected on iPadOS Safari). External keyboard/mouse still work without it.');
   }
 }
 
@@ -1141,6 +1264,7 @@ function bindUi() {
     phoneResumeButton: document.getElementById('phone-resume-button'),
     phoneEscapeButton: document.getElementById('phone-escape-button'),
     phoneExitButton: document.getElementById('phone-exit-button'),
+    windowedButton: document.getElementById('windowed-button'),
   });
   appendRuntimeLog('[launcher]', state.lastStatus);
 
@@ -1178,7 +1302,7 @@ function bindUi() {
     if (file) await importSaveBundle(file);
     event.target.value = '';
   });
-  ui.fullscreenButton?.addEventListener('click', () => requestFullscreenForCanvas());
+  ui.fullscreenButton?.addEventListener('click', () => toggleFullscreenPlay());
   ui.canvas?.addEventListener('click', tryCaptureInput);
   ui.phoneMenuButton?.addEventListener('click', openPhoneOverlay);
   ui.phoneResumeButton?.addEventListener('click', closePhoneOverlay);
@@ -1189,6 +1313,10 @@ function bindUi() {
   });
   ui.phoneExitButton?.addEventListener('click', () => {
     returnToLauncher().catch((error) => setStatus(`Exit failed: ${error.message}`, 'error'));
+  });
+  ui.windowedButton?.addEventListener('click', () => {
+    closePhoneOverlay();
+    leaveFullscreenPlay().catch((error) => appendRuntimeLog('[launcher]', `Leaving fullscreen failed: ${error.message}`));
   });
   ui.touchControlsSetting?.addEventListener('change', () => {
     state.preferences.touchControls = ui.touchControlsSetting.value;
@@ -1208,11 +1336,16 @@ function bindUi() {
 
   for (const query of [
     PHONE_VIEWPORT_QUERY,
+    /* Listened to explicitly: pointer capability is no longer part of
+     * PHONE_VIEWPORT_QUERY, so it needs its own subscription to keep the
+     * touch-control decision live. */
+    '(any-pointer: coarse)',
     '(any-pointer: fine)',
     '(any-hover: hover)',
   ]) {
     matchMedia(query).addEventListener('change', () => updateTouchOnlyEnvironment());
   }
+
   addEventListener('gamepadconnected', () => updateTouchOnlyEnvironment(true));
   addEventListener('gamepaddisconnected', () => updateTouchOnlyEnvironment());
   addEventListener('keydown', (event) => {
@@ -1345,6 +1478,17 @@ async function init() {
     scheduleCanvasResize();
   });
   addEventListener('resize', scheduleCanvasResize);
+  /* The canvas backing store is sized from the game surface, so every
+   * fullscreen transition (including the browser's own Esc/edge gesture)
+   * has to re-measure or the engine keeps rendering at the old size into a
+   * black screen. */
+  document.addEventListener('fullscreenchange', handleFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+  document.addEventListener('pointerlockchange', () => {
+    setPointerLockHint(document.pointerLockElement
+      ? 'Mouse captured. Press Esc (or ` on an iPad keyboard) to release it through the game menu.'
+      : 'Starting the game hides the launcher chrome and asks the browser for fullscreen. Press ☰ in-game to leave fullscreen or return to the launcher.');
+  });
   globalThis.visualViewport?.addEventListener('resize', scheduleCanvasResize);
   globalThis.visualViewport?.addEventListener('scroll', scheduleCanvasResize);
   addEventListener('hexenwailquit', (event) => {

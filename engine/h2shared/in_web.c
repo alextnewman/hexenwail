@@ -17,6 +17,11 @@ cvar_t joy_swapmovelook = {"joy_swapmovelook", "0", CVAR_ARCHIVE};
 cvar_t joy_rumble = {"joy_rumble", "1", CVAR_ARCHIVE};
 cvar_t m_filter = {"m_filter", "1", CVAR_ARCHIVE};
 cvar_t _enable_mouse = {"_enable_mouse", "1", CVAR_ARCHIVE};
+/* iPad keyboards (Magic Keyboard, Smart Keyboard Folio) have no Escape key,
+ * and Hexen II's whole menu system is built around Escape.  With this set,
+ * the unshifted backquote acts as Escape and the console moves to Shift+`
+ * (i.e. '~'), which is still reachable on every keyboard we care about. */
+cvar_t in_key_backquote_escape = {"in_key_backquote_escape", "1", CVAR_ARCHIVE};
 
 /* Menu mouse cursor position, in menu canvas coordinates.  Fed by the
  * pointer callbacks below; consumed by the menu hit-testing code. */
@@ -28,6 +33,29 @@ qboolean joy_altmodifier_pressed = false;
 
 static double look_x, look_y;
 static qboolean mouse_active;
+static int cursor_hidden = -1;	/* tri-state: -1 = unknown, 0 = shown, 1 = hidden */
+
+/*
+================
+Web_SetCursorHidden
+
+The browser cursor is ours to manage: there is no window manager to do it
+and no pointer lock on iPadOS Safari.  Hidden during gameplay, shown while
+the menu or console owns the keyboard so the launcher chrome and the
+overlay buttons stay usable.
+================
+*/
+static void Web_SetCursorHidden (int hidden)
+{
+	if (cursor_hidden == hidden)
+		return;
+	cursor_hidden = hidden;
+	EM_ASM({
+		var canvas = document.getElementById('canvas');
+		if (canvas)
+			canvas.style.cursor = $0 ? 'none' : 'default';
+	}, hidden);
+}
 
 static int Web_KeyCode (const EmscriptenKeyboardEvent *event)
 {
@@ -64,11 +92,16 @@ static EM_BOOL Web_KeyboardCallback (int event_type,
 	const EmscriptenKeyboardEvent *event, void *user_data)
 {
 	int key = Web_KeyCode(event);
+	qboolean escaped;
 	(void)user_data;
 	if (!key)
 		return EM_FALSE;
+	/* '`' becomes Escape; Shift+'`' ('~') keeps toggling the console. */
+	escaped = (key == '`' && in_key_backquote_escape.integer) ? true : false;
+	if (escaped)
+		key = K_ESCAPE;
 	Key_Event(key, event_type == EMSCRIPTEN_EVENT_KEYDOWN);
-	if (event_type == EMSCRIPTEN_EVENT_KEYDOWN && event->key[0] && !event->key[1] &&
+	if (!escaped && event_type == EMSCRIPTEN_EVENT_KEYDOWN && event->key[0] && !event->key[1] &&
 		event->key[0] >= 32 && event->key[0] < 127)
 		Key_CharEvent(event->key);
 	return EM_TRUE;
@@ -132,6 +165,7 @@ void IN_Init (void)
 	Cvar_RegisterVariable(&joy_rumble);
 	Cvar_RegisterVariable(&m_filter);
 	Cvar_RegisterVariable(&_enable_mouse);
+	Cvar_RegisterVariable(&in_key_backquote_escape);
 	emscripten_set_keydown_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, NULL, true,
 		Web_KeyboardCallback);
 	emscripten_set_keyup_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, NULL, true,
@@ -146,14 +180,16 @@ void IN_Init (void)
 }
 
 void IN_ReInit (void) {}
-void IN_Shutdown (void) { mouse_active = false; }
-void IN_Commands (void) {}
+void IN_Shutdown (void) { mouse_active = false; Web_SetCursorHidden(0); }
+/* Called once per host frame: the only reliable place to keep the browser
+ * cursor in step with what the engine is doing. */
+void IN_Commands (void) { Web_SetCursorHidden(Key_GetDest() == key_game ? 1 : 0); }
 void IN_SendKeyEvents (void) {}
 void IN_ClearStates (void) { look_x = look_y = 0; }
 void IN_ActivateMouse (void) { mouse_active = true; }
 void IN_DeactivateMouse (void) { mouse_active = false; }
-void IN_ShowMouse (void) {}
-void IN_HideMouse (void) {}
+void IN_ShowMouse (void) { Web_SetCursorHidden(0); }
+void IN_HideMouse (void) { Web_SetCursorHidden(1); }
 void IN_UpdateViewAngles (void) {}
 qboolean IN_HasGamepad (void) { return false; }
 gamepad_type_t IN_GetGamepadType (void) { return GAMEPAD_TYPE_UNKNOWN; }
