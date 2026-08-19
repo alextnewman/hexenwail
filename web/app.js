@@ -16,8 +16,13 @@ const MAX_RUNTIME_LOG_ENTRIES = 200;
 /* Phone mode is about the short side of the panel, not the long one: every
  * phone has a short side well under 500 CSS px in either orientation, while
  * the smallest iPad short side is ~740. The old 820px rule matched iPad
- * landscape and permanently trapped iPads in phone mode. */
-const PHONE_VIEWPORT_QUERY = '(pointer: coarse) and (hover: none) and (max-width: 500px), (pointer: coarse) and (hover: none) and (max-height: 500px)';
+ * landscape and permanently trapped iPads in phone mode.
+ *
+ * Size only, deliberately: a phone-sized panel is a phone-sized panel whether
+ * or not a mouse, trackpad or pen happens to be attached, and an iPad in a
+ * narrow Split View column is one too. Pointer capability is a separate
+ * question, answered by isLikelyTouchOnlyEnvironment(). */
+const PHONE_VIEWPORT_QUERY = '(max-width: 500px), (max-height: 500px)';
 
 const state = {
   storage: null,
@@ -47,6 +52,7 @@ const state = {
   touchOnlyEnvironment: false,
   phoneMode: false,
   immersive: false,
+  canvasResizePending: false,
 };
 
 const ui = {};
@@ -656,6 +662,8 @@ function applyPreferences() {
   document.body.dataset.handedness = state.preferences.handedness;
   document.body.dataset.touchOnly = state.touchOnlyEnvironment ? 'true' : 'false';
   document.body.dataset.phoneMode = state.phoneMode ? 'true' : 'false';
+  /* A panel this small cannot usefully share space with the launcher chrome,
+   * whatever is plugged into it, so phone mode pins the immersive layout. */
   document.body.dataset.immersive = (state.immersive || state.phoneMode) ? 'true' : 'false';
   if (ui.touchControlsSetting) ui.touchControlsSetting.value = state.preferences.touchControls;
   if (ui.handednessSetting) ui.handednessSetting.value = state.preferences.handedness;
@@ -716,7 +724,9 @@ function isLikelyTouchOnlyEnvironment() {
 }
 
 /* Phone mode only means "small panel": it forces the immersive layout and
- * keeps the launcher chrome out of a viewport too small to share. */
+ * keeps the launcher chrome out of a viewport too small to share. It is a
+ * pure function of size, so it is self-healing — rotate or resize back above
+ * the breakpoint and the chrome returns on its own. */
 function isPhoneModeEnvironment() {
   return matchMedia(PHONE_VIEWPORT_QUERY).matches;
 }
@@ -770,8 +780,16 @@ function resizeCanvasToViewport() {
   }
 }
 
+/* Coalesced: fullscreen, orientation and visualViewport changes arrive in
+ * bursts, and several callers legitimately ask for a resize in the same turn
+ * (setImmersive plus its caller, for one). Each pass measures layout and calls
+ * into the engine, so one scheduled pair of frames per turn is enough — the
+ * trailing frame catches the post-transition layout. */
 function scheduleCanvasResize() {
+  if (state.canvasResizePending) return;
+  state.canvasResizePending = true;
   requestAnimationFrame(() => {
+    state.canvasResizePending = false;
     resizeCanvasToViewport();
     requestAnimationFrame(resizeCanvasToViewport);
   });
@@ -1318,11 +1336,16 @@ function bindUi() {
 
   for (const query of [
     PHONE_VIEWPORT_QUERY,
+    /* Listened to explicitly: pointer capability is no longer part of
+     * PHONE_VIEWPORT_QUERY, so it needs its own subscription to keep the
+     * touch-control decision live. */
+    '(any-pointer: coarse)',
     '(any-pointer: fine)',
     '(any-hover: hover)',
   ]) {
     matchMedia(query).addEventListener('change', () => updateTouchOnlyEnvironment());
   }
+
   addEventListener('gamepadconnected', () => updateTouchOnlyEnvironment(true));
   addEventListener('gamepaddisconnected', () => updateTouchOnlyEnvironment());
   addEventListener('keydown', (event) => {

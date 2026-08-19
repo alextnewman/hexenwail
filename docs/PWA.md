@@ -147,17 +147,26 @@ end up fullscreen without a game (the old **Request fullscreen** button did
 exactly that: an empty black fullscreen canvas). The **Fullscreen play** button
 is enabled only while the engine is running and toggles both layers together;
 leaving fullscreen through the browser (desktop Esc, iPad system gesture) drops
-the immersive layout too, so the launcher chrome always comes back.
+the immersive layout too, so the launcher chrome comes back (except in phone
+mode, below, where there is no room for it).
 
 The in-game **☰** button opens a small overlay. It can resume play, send Escape
 to the engine menu, **Show launcher** (leave fullscreen but keep playing), or
 **Sync & exit to launcher**. The last one first syncs the runtime filesystem to
 browser storage and then reloads the page to get a fresh WebAssembly runtime.
 
-Phone mode is now only about panel size: it is detected from the viewport's
-*short* side (500 CSS px in either orientation), so a phone is in phone mode in
-both orientations and an iPad never is. The previous 820px rule matched iPad
-landscape and left iPads permanently in phone mode.
+Phone mode is only about panel size: it is detected from the viewport's *short*
+side (500 CSS px in either orientation), so a phone is in phone mode in both
+orientations and an iPad never is. The previous 820px rule matched iPad
+landscape and left iPads permanently in phone mode. Pointer capability is
+deliberately not part of this test — an attached mouse does not make a phone
+panel any bigger, and a narrow iPad Split View column is as cramped as a phone
+whether or not a trackpad is present.
+
+Phone mode pins the immersive layout and hides **Show launcher**, because a
+panel that small has no chrome worth returning to; ☰ → **Sync & exit to
+launcher** still works. Being a pure function of size, this is self-healing:
+rotate or resize back above the breakpoint and the chrome returns on its own.
 
 ## Keyboard
 

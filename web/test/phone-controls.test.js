@@ -151,7 +151,40 @@ test('phone mode keys off the panel short side so iPads are never trapped in it'
     // Phone short side <= ~450 CSS px; smallest iPad short side ~740 CSS px.
     assert.ok(limit >= 450 && limit < 700, `phone short-side limit ${limit} must exclude iPads`);
   }
-  assert.match(query, /\(pointer: coarse\) and \(hover: none\)/);
+  assert.doesNotMatch(query, /pointer|hover/,
+    'phone mode is a panel-size question; an attached mouse does not make a phone panel bigger');
+});
+
+test('phone mode drives the immersive layout consistently in all three places', () => {
+  const repoRoot = process.cwd();
+  const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
+  const html = readFileSync(join(repoRoot, 'web/index.html'), 'utf8');
+  // Forcing immersive, hiding Show launcher, and keeping immersive on
+  // fullscreen exit must share one condition, or the button becomes a no-op.
+  assert.match(app, /document\.body\.dataset\.immersive = \(state\.immersive \|\| state\.phoneMode\)/);
+  assert.match(app, /\} else if \(!state\.phoneMode\) \{/);
+  assert.match(html, /body\[data-phone-mode="true"\] #windowed-button \{ display: none; \}/);
+});
+
+test('coarse pointer changes are subscribed to now that phone mode ignores them', () => {
+  const repoRoot = process.cwd();
+  const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
+  const queries = app.match(/for \(const query of \[([\s\S]*?)\]\) \{/)?.[1];
+  assert.ok(queries, 'the watched media query list is defined');
+  assert.match(queries, /'\(any-pointer: coarse\)'/);
+  assert.match(queries, /'\(any-pointer: fine\)'/);
+  assert.match(queries, /'\(any-hover: hover\)'/);
+});
+
+test('canvas resizes coalesce so a burst of transitions schedules one pass', () => {
+  const repoRoot = process.cwd();
+  const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
+  const body = app.match(/function scheduleCanvasResize\(\) \{([\s\S]*?)\n\}/)?.[1];
+  assert.ok(body, 'scheduleCanvasResize is defined');
+  assert.match(body, /if \(state\.canvasResizePending\) return;/,
+    'each caller must not queue its own rAF chain into the engine');
+  assert.match(body, /state\.canvasResizePending = true;/);
+  assert.match(body, /state\.canvasResizePending = false;/);
 });
 
 test('touch-control auto detection depends on pointer capability, not viewport size', () => {

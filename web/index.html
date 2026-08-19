@@ -370,7 +370,8 @@
     }
     .phone-overlay-card h2 { margin-top: 0; }
     .phone-overlay-card ul { margin-bottom: 1rem; }
-    /* A phone has no launcher chrome to go back to while playing. */
+    /* Phone mode pins the immersive layout, so Show launcher would be a
+     * no-op there: the panel has no chrome to go back to while playing. */
     body[data-phone-mode="true"] #windowed-button { display: none; }
     input[type="file"] { display: none; }
     select, input[type="range"] {
