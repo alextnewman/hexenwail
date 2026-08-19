@@ -118,7 +118,7 @@ All launcher URLs are relative (`./...`) so the site works under project Pages p
 3. Use **Share → Add to Home Screen**.
 4. Launch the installed app.
 5. Import your legally acquired Hexen II assets:
-   - loose `.pak` / `.ogg` files
+   - loose `.pak` files and loose music (`.ogg`, `.mp3`, `.flac`, `.wav`)
    - a directory selected with the folder picker (where supported)
    - or a `.zip` archive
 
@@ -282,7 +282,7 @@ Recognized inputs include:
 - `pak0.pak`, `pak1.pak`, `pak2.pak`
 - `pak3.pak` (mapped to `portals/`)
 - files already inside `data1/`, `portals/`, `hw/`, or `music/`
-- `.ogg` music files (loose files default to `data1/music/`)
+- music files the engine can decode — `.ogg`, `.mp3`, `.flac`, `.wav` (loose files default to `data1/music/`)
 
 ZIP imports are extracted entirely client-side in the browser. The importer rejects:
 
@@ -291,6 +291,41 @@ ZIP imports are extracted entirely client-side in the browser. The importer reje
 - oversized archives / entries beyond the configured safety limits
 
 Re-importing a file with the same logical path overwrites the previous local copy.
+
+## Music
+
+Hexen II has no CD audio and no MIDI synthesiser in the browser, so *all* music
+in the PWA comes from external music files you import. The client decodes Ogg
+Vorbis, MP3, FLAC and WAV.
+
+The filename is what selects the track, and it must match the name the map asks
+for — which is the **MIDI name**, not the CD track number. `casa1.ogg` plays;
+`track02.ogg` does not, even though it is the same recording. `docs/README.music`
+lists the full track-number → MIDI-name mapping for both Hexen II and Portal of
+Praevus, so rename the files before (or after) importing them. This is the single
+most common reason imported music appears to do nothing, and it looks exactly
+like a codec bug.
+
+`bgm_remap` does **not** rescue ripped `track%02d` filenames: it works the other
+way round, pointing a *numeric* track request at a named file, for the mods and
+custom maps that set a `CD` worldspawn key instead of a `MIDI` one.
+
+```
+bgm_remap 18 myambient
+bgm_remap list
+```
+
+To confirm what the engine actually has, open the console (`Shift`+`` ` ``) and
+look at the startup lines:
+
+```
+BGM: MIDI driver: none (midi-named music will not play)
+BGM: stream codecs: ogg mp3 flac wav
+```
+
+Then `music casa1` plays a track directly. If the codec list is missing a format
+you expected, that is a build problem; if the codecs are listed but a track stays
+silent, it is almost always the filename.
 
 ## Save game persistence
 
@@ -382,7 +417,8 @@ Practical ways to confirm readiness:
 - **Storage persistence:** `navigator.storage.persist()` is requested, but Safari can still evict data under storage pressure
 - **Renderer feature gap vs desktop:** WebGL2 / ES 3.0 has no SSBOs, so `r_alias_gpu` remains disabled in WASM builds
 - **Import size limits:** large ZIP archives can still hit memory/storage constraints on tablets
-- **Audio feature parity:** the documented WASM build path currently disables Vorbis and ALSA-specific paths; browser audio parity still needs broader runtime validation
+- **Music codec set:** Ogg Vorbis, MP3, FLAC and WAV decode in the client; Opus (`opusfile`) and the tracker formats (`libxmp`) are absent because neither has an Emscripten port
+- **MIDI:** there is no MIDI synthesiser in the web build, so a PAK-only install has no music until external music files are imported
 
 ## Troubleshooting
 

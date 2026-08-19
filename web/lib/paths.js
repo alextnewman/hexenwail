@@ -1,4 +1,8 @@
 export const KNOWN_GAME_ROOTS = ['data1', 'portals', 'hw'];
+// Loose audio files have nowhere sensible to go but the music directory, so
+// accept every format the engine's BGM streamer can actually decode. Keep this
+// in sync with the codec set built in engine/CMakeLists.txt.
+export const MUSIC_EXTENSIONS = ['.ogg', '.mp3', '.flac', '.wav'];
 const WINDOWS_DRIVE_RE = /^[a-zA-Z]:/;
 
 function normalizeSlashes(input) {
@@ -60,7 +64,7 @@ export function mapImportedPath(inputPath) {
   if (lowerBase === 'pak3.pak') {
     return `portals/${basename}`;
   }
-  if (lowerBase.endsWith('.ogg')) {
+  if (MUSIC_EXTENSIONS.some((extension) => lowerBase.endsWith(extension))) {
     return `data1/music/${basename}`;
   }
   if (lowerBase.endsWith('.pak')) {
