@@ -7,6 +7,7 @@ const repoRoot = process.cwd();
 const html = readFileSync(join(repoRoot, 'web/index.html'), 'utf8');
 const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
 const vid = readFileSync(join(repoRoot, 'engine/h2shared/vid_soft_web.c'), 'utf8');
+const draw = readFileSync(join(repoRoot, 'engine/h2shared/draw.c'), 'utf8');
 
 test('immersive play spends no screen space on safe-area padding', () => {
   const immersiveBody = html.match(
@@ -56,4 +57,20 @@ test('auto mode budgets the widened size and only calls exact upscales exact', (
     'the frame budget must be spent on the resolution actually rendered');
   assert.match(autoMode, /if \(dh % h == 0 && dw % w == 0\)/,
     'a 6.95x upscale is not an integer upscale');
+});
+
+test('whatever the refresh window misses is black, not Hexen II backdrop tile', () => {
+  // R_SetVrect rounds the 3D view down to a multiple of 8 pixels wide, so a
+  // widescreen framebuffer keeps a couple of columns down each side that only
+  // Draw_TileClear ever paints. Scaled up to the panel, the lit brown backtile
+  // read as an orange frame around the picture.
+  const tileClear = draw.match(/#if defined\(WEBQUAKE\)\nvoid Draw_TileClear \(int x, int y, int w, int h\)\n\{([\s\S]*?)\n\}/)?.[1];
+  assert.ok(tileClear, 'the web build has its own Draw_TileClear');
+  assert.match(tileClear, /Draw_FillAlpha \(x, y, w, h, 0\.0f, 0\.0f, 0\.0f, 1\.0f\);/);
+  assert.doesNotMatch(tileClear, /r_rectdesc|R_DrawRect/, 'the backdrop tile is what we are getting rid of');
+  // Draw_Fill honours the global translucency, which the tile never did.
+  assert.match(tileClear, /trans_level = 0;[\s\S]*?trans_level = saved;/);
+  // The rect is passed in canvas coordinates: Draw_FillAlpha clamps against
+  // draw_canvas_x/y and Draw_Fill applies the translation itself.
+  assert.doesNotMatch(tileClear, /draw_canvas_/);
 });

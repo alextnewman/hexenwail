@@ -1082,6 +1082,7 @@ void Key_Init (void)
 	Key_SetBinding (K_GP_LTHUMB, "impulse 13");	/* lift object */
 	Key_SetBinding (K_GP_RTHUMB, "+altmodifier");	/* hold for second layer */
 	Key_SetBinding (K_GP_START, "togglemenu");
+	keyreserved[K_GP_START] = true;		// Key_Event always routes it to the menu
 	Key_SetBinding (K_GP_BACK, "toggleconsole");
 	Key_SetBinding (K_GP_DPAD_LEFT, "invleft");	/* prev inventory item */
 	Key_SetBinding (K_GP_DPAD_RIGHT, "invright");	/* next inventory item */
@@ -1117,8 +1118,10 @@ void Key_Event (int key, qboolean down)
 	keydown[key] = down;
 
 	/* Gamepad alt-modifier: remap to _ALT variant when held.
-	 * Fallback to base binding if ALT slot is unbound. */
-	if (joy_altmodifier_pressed && key >= K_GP_A && key <= K_GP_START)
+	 * Fallback to base binding if ALT slot is unbound.
+	 * Start is excluded: it always reaches the menu (see below), so it has
+	 * no second layer to remap to. */
+	if (joy_altmodifier_pressed && key >= K_GP_A && key < K_GP_START)
 	{
 		if (!Key_IsGamepadAltModifier(key))
 		{
@@ -1187,20 +1190,38 @@ void Key_Event (int key, qboolean down)
 		return;
 	}
 
-// The gamepad Start button is the pad's Escape.  It is a normal bindable key
-// (Key_Init binds it to "togglemenu"), but when it has no binding at all it
-// still reaches the menu: a config.cfg written before that default existed
-// starts with "unbindall", which would otherwise leave a controller-only
-// player with no way into the menu.  Menu screens handle it themselves, so
-// only gameplay and the console need the fallback here.
-	if (key == K_GP_START && !keybindings[key] &&
-	    (key_dest == key_game || key_dest == key_console))
+// The gamepad Start button is the pad's Escape, so it is handled here rather
+// than through the binding table: a controller has no Escape key and `~` needs
+// a keyboard, so if Start ever fails to reach the menu a controller-only player
+// is stuck.  It is reserved (Key_Init) so neither a rebind nor the "unbindall"
+// that heads every config.cfg can take that away.
+	if (key == K_GP_START)
 	{
-		if (down)
+		if (!down)
+			return;
+		switch (key_dest)
 		{
+		case key_message:
+			Key_Message (K_ESCAPE);		// cancel, like Escape
+			break;
+		case key_menu:
+			M_Keydown (key, key_repeats[key] > 1);	// closes the menu outright
+			break;
+		case key_menubind:
+			M_Keybind (key);		// cancel; never record a dead bind
+			break;
+		case key_game:
+		case key_console:
+			// From gameplay this opens the menu.  From the console it
+			// has to leave the console first: M_ToggleMenu_f would
+			// otherwise just close the console again, which is a dead
+			// end on a pad.
 			if (key_dest == key_console)
 				Key_SetDest (key_game);
 			M_ToggleMenu_f ();
+			break;
+		default:
+			Sys_Error ("Bad key_dest");
 		}
 		return;
 	}

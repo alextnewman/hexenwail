@@ -7073,7 +7073,10 @@ void M_Keybind (int key)
 	char	cmd[80];
 	const char *command = bindnames[keys_cursor][0];
 	S_LocalSound ("raven/menu1.wav");
-	if (key != K_ESCAPE && key != '`')
+	/* Start cancels the bind prompt the way Escape does: Key_Event always
+	 * routes it to the menu, so recording it here would only create a
+	 * binding that never fires. */
+	if (key != K_ESCAPE && key != '`' && key != K_GP_START)
 	{
 		/* Gamepad alt-modifier second layer (Ironwail 7a2038a):
 		 * unless we're binding the modifier command itself, ignore a press
@@ -7085,7 +7088,7 @@ void M_Keybind (int key)
 			if (Key_IsGamepadAltModifier (key))
 				return;		/* stay in bind mode, wait for the real button */
 			if (Key_GetGamepadAltModifierState () &&
-			    key >= K_GP_A && key <= K_GP_START)
+			    key >= K_GP_A && key < K_GP_START)
 				key += K_GP_ALT_OFFSET;
 		}
 		q_snprintf (cmd, sizeof(cmd), "%s \"%s\" \"%s\"\n",
@@ -7099,10 +7102,10 @@ void M_Keybind (int key)
 
 void M_Keydown (int key, qboolean repeat)
 {
-	/* Console convention: Start is a menu toggle, not a "back" key. It
-	 * opens the menu from gameplay through its "togglemenu" bind, and here
-	 * it closes the menu outright from whatever screen the player is on,
-	 * rather than unwinding to the main menu the way Escape/B do. */
+	/* Console convention: Start is a menu toggle, not a "back" key. Key_Event
+	 * opens the menu with it from gameplay and from the console, and here it
+	 * closes the menu outright from whatever screen the player is on, rather
+	 * than unwinding to the main menu the way Escape/B do. */
 	if (key == K_GP_START)
 	{
 		if (!repeat)

@@ -236,6 +236,7 @@ framebuffer:
 | --- | --- |
 | `Draw_AlphaPic` | 4 × 4 ordered stipple — the classic software translucency. Fully opaque delegates to `Draw_TransPic`. |
 | `Draw_FillAlpha` | Nearest palette index for the requested RGB (memoised in a small direct-mapped cache), then stipple. Rects are clamped, not asserted, because callers derive them from cvars. |
+| `Draw_TileClear` | Solid black rather than Hexen II's `backtile` stone pattern. `R_SetVrect` rounds the refresh window down to a multiple of 8 pixels wide, so a widescreen framebuffer leaves a couple of uncovered columns down each side; scaled up to the panel the lit brown tile reads as an orange frame around the picture instead of as the border of a sized-down view. |
 | `Draw_MenuBackdrop` | Full-screen conback. |
 | `Draw_IntermissionPic` | Nearest-neighbour stretch to the full framebuffer — point sampling on purpose, so intermission art matches everything else. |
 | `Draw_CachePicNoTrans` | Same as `Draw_CachePic`; 8bpp transparency is a palette index resolved at blit time, so there is nothing to suppress at load. |

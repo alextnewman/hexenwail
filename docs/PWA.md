@@ -169,7 +169,7 @@ to the engine menu, **Show launcher** (leave fullscreen but keep playing), or
 browser storage and then reloads the page to get a fresh WebAssembly runtime.
 
 **☰ hides while a controller is connected.** A gamepad already has a menu
-button — `in_web.c` binds Start to the engine menu — so leaving a launcher
+button — Start always reaches the engine menu — so leaving a launcher
 glyph floating over the game would be pure clutter. It comes back on
 disconnect. The button is driven by `<body data-gamepad>`, which is set from
 the `gamepadconnected` / `gamepaddisconnected` events (Safari only lists a pad
@@ -273,7 +273,7 @@ the **Controller Options** menu apply unchanged:
 | L1 / R1 | `K_GP_LSHOULDER` / `K_GP_RSHOULDER` | previous / next weapon |
 | L2 / R2 (analog) | `K_GP_LTRIGGER` / `K_GP_RTRIGGER` | jump / attack |
 | L3 / R3 | `K_GP_LTHUMB` / `K_GP_RTHUMB` | lift object / `+altmodifier` |
-| Start / Back | `K_GP_START` / `K_GP_BACK` | menu / console |
+| Start / Back | `K_GP_START` / `K_GP_BACK` | menu (reserved) / console |
 | D-pad ◀ ▶ | `K_GP_DPAD_LEFT` / `K_GP_DPAD_RIGHT` | inventory left / right |
 
 Triggers are analog buttons in the standard mapping; they fire once they pass
@@ -294,7 +294,7 @@ The pad drives the menus the way a console pause menu behaves:
 
 | Button | In the menu |
 | --- | --- |
-| Start | closes the menu outright, from any screen, and reopens it from gameplay |
+| Start | closes the menu outright, from any screen, and reopens it from gameplay or the console |
 | A / L2 / R2 | confirm (Enter) |
 | B | back one screen (Escape) |
 | D-pad / move stick | move the cursor, with auto-repeat when held |
@@ -302,11 +302,18 @@ The pad drives the menus the way a console pause menu behaves:
 
 Start is deliberately not a "back" key: Escape and B unwind one screen at a
 time, while Start toggles the whole menu, so a second press resumes play no
-matter how deep the player is. It is still a normal bindable key — `Key_Init`
-binds it to `togglemenu` — but when it has no binding at all it falls back to
-toggling the menu, so a `config.cfg` written before that default existed (the
-file starts with `unbindall`) cannot leave a controller-only player stranded.
-Rebind it from **Options → Customize controls** and the bind wins as usual.
+matter how deep the player is.
+
+It is also the one gamepad button that is *not* dispatched through the binding
+table. `Key_Event` handles it the way it handles Escape, and it is a reserved
+key, so neither a rebind nor the `unbindall` that heads every `config.cfg` can
+take it away. That matters because a controller has no Escape key and `~` needs
+a keyboard: if Start ever failed to reach the menu — most obviously with the
+console up, where a plain `togglemenu` merely closes the console again — a
+controller-only player would have no way out. Pressing Start in the console
+therefore leaves the console and opens the menu, and pressing it on the
+**Customize controls** bind prompt cancels the prompt instead of recording a
+binding that could never fire.
 
 Rumble uses `vibrationActuator.playEffect` when the browser has it, scaled by
 `joy_rumble`. Safari does not implement it today, so it is best-effort and silent
