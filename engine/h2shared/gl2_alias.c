@@ -323,13 +323,34 @@ player entity with its own colormap gets a translated copy of its own,
 because a GL texture cannot be recoloured at draw time.
 ================
 */
+/*
+================
+GL2_ColormapTag
+
+A cheap FNV-1a over the 256-entry translation table, used to tell whether a
+cached player skin is still the right colours.  Never returns 0, so it can
+never match the zero-initialised tag of a texture nobody has tagged.
+================
+*/
+static unsigned int GL2_ColormapTag (const byte *colormap)
+{
+	unsigned int	hash = 2166136261u;
+	int		i;
+
+	for (i = 0; i < 256; i++)
+	{
+		hash ^= colormap[i];
+		hash *= 16777619u;
+	}
+	return hash | 1u;
+}
+
 static gl2texture_t *GL2_AliasSkin (entity_t *entity, const aliashdr_t *paliashdr,
 					const newmdl_t *pmdl)
 {
 	char			name[MAX_QPATH];
 	const maliasskindesc_t	*pskindesc;
 	const byte		*pixels;
-	byte			*translated = NULL;
 	gl2texture_t		*texture;
 	unsigned int		flags = GL2TEX_MIPMAP;
 	int			skinnum, size, entnum;
@@ -350,7 +371,22 @@ static gl2texture_t *GL2_AliasSkin (entity_t *entity, const aliashdr_t *paliashd
 	    entnum >= 0 && entnum < cl.maxclients)
 	{
 		/* Player colours are a 256-entry translation of the skin. */
-		int	i;
+		unsigned int	tag = GL2_ColormapTag (entity->colormap);
+		byte		*translated;
+		int		i;
+
+		q_snprintf (name, sizeof(name), "%s:player%d:%d",
+				entity->model->name, entnum, skinnum);
+
+		/* The name is stable across colour changes, so the cached
+		 * copy is only good while the translation table behind it is
+		 * unchanged.  Checking the 256-byte table first keeps the
+		 * common case free of both the translate and the upload. */
+		texture = GL2_FindTexture (name);
+		if (texture && texture->content_tag == tag &&
+		    texture->width == pmdl->skinwidth &&
+		    texture->height == pmdl->skinheight)
+			return texture;
 
 		translated = (byte *) malloc ((size_t)size);
 		if (translated)
@@ -358,21 +394,21 @@ static gl2texture_t *GL2_AliasSkin (entity_t *entity, const aliashdr_t *paliashd
 			for (i = 0; i < size; i++)
 				translated[i] = entity->colormap[pixels[i]];
 			pixels = translated;
-			/* Player skins change when a client changes colour, so
-			 * the cache has to re-upload rather than hand back the
-			 * pixels it saw first. */
+			/* Tell the cache to re-specify over the existing GL
+			 * object instead of handing back the old pixels. */
 			flags |= GL2TEX_DYNAMIC;
-			q_snprintf (name, sizeof(name), "%s:player%d:%d",
-					entity->model->name, entnum, skinnum);
+
+			texture = GL2_LoadTexture (name, pmdl->skinwidth,
+						pmdl->skinheight, pixels, flags);
+			free (translated);
+			if (texture)
+				texture->content_tag = tag;
+			return texture;
 		}
 	}
-	if (!translated)
-		q_snprintf (name, sizeof(name), "%s:%d", entity->model->name, skinnum);
 
-	texture = GL2_LoadTexture (name, pmdl->skinwidth, pmdl->skinheight, pixels, flags);
-
-	free (translated);
-	return texture;
+	q_snprintf (name, sizeof(name), "%s:%d", entity->model->name, skinnum);
+	return GL2_LoadTexture (name, pmdl->skinwidth, pmdl->skinheight, pixels, flags);
 }
 
 /*

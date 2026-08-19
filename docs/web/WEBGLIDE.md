@@ -42,7 +42,8 @@ toggle, the console messages and the shipped bundle basename
 
 | File | Role |
 | --- | --- |
-| `engine/hexen2/r_webgl2.c` | Renderer entry points, cvars, the per-entity PimpModel override table, `Fog_ParseServerMessage`. |
+| `engine/hexen2/r_webgl2.c` | Renderer entry points, cvars, the per-entity PimpModel override table. |
+| `common/gl_fog.c` | Shared fog state and `Fog_ParseServerMessage`; WebGlide drives it from `Fog_SetupFrame`. |
 | `engine/h2shared/gl2_glide.c` | Matrices, the offscreen scene buffer, T-buffer accumulation and scan-out. |
 | `engine/h2shared/gl2_world.c` | World geometry, lightmap atlases (128 × 128 RGBA), `.lit` colour, sky. |
 | `engine/h2shared/gl2_alias.c` | Alias models, sprites and particles — CPU transformed and lit. |

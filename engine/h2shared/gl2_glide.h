@@ -123,6 +123,7 @@ typedef struct gl2texture_s
 	GLuint			id;
 	int			width, height;
 	unsigned int		flags;
+	unsigned int		content_tag;	/* GL2TEX_DYNAMIC: identifies the uploaded content */
 	char			name[MAX_QPATH];
 	struct gl2texture_s	*next;
 } gl2texture_t;
