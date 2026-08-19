@@ -115,6 +115,15 @@ Shared client cvars that WebGlide actually honours include `gl_overbright`,
 policy cvars (`gl_missile_glows`, `gl_torch_dlight`, `gl_flashintensity`,
 `gl_extra_dynamic_lights`).
 
+Which of the liquid alphas a turbulent surface gets is decided per texture,
+as in the desktop GL renderer. The model loader this configuration builds
+against carries no per-texture content class, so the classification uses the
+vanilla `SURF_TRANSLUCENT` flag (`*lowlight`, `*rtex078`) plus the texture
+name; anything unrecognised stays opaque under `r_turbalpha`, which is what
+vanilla Hexen II did. Opaque liquids are drawn with depth writes on before
+the blended ones, and the world's liquid pass is deferred until after the
+opaque entities so that entities behind water are not drawn over it.
+
 A second set is registered only so the shared client links and the menus have
 something to bind to; they currently do nothing here: `r_scale`, `r_softemu`,
 `r_dither`, `r_hdr`, `r_hdr_exposure`, `gl_fxaa`, `r_motionblur`,

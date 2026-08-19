@@ -1462,26 +1462,14 @@ void GL2_DrawBrushEntity (entity_t *entity)
 	if (gl2_waterchain >= 0)
 	{
 		/* Entity liquids are transformed by the entity's own matrix,
-		 * and the water pass owns the blend state it needs. */
-		if (alpha < 1.0f)
-		{
-			glDisable (GL_BLEND);
-			glDepthMask (GL_TRUE);
-		}
-		GL2_DrawWaterChain (&mvp, model->surfaces);
-		if (alpha < 1.0f)
-		{
-			glEnable (GL_BLEND);
-			glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-			glDepthMask (GL_FALSE);
-		}
-	}
-
-	if (alpha < 1.0f)
-	{
+		 * and the water pass wants an opaque baseline of its own. */
 		glDisable (GL_BLEND);
 		glDepthMask (GL_TRUE);
+		GL2_DrawWaterChain (&mvp, model->surfaces);
 	}
+
+	glDisable (GL_BLEND);
+	glDepthMask (GL_TRUE);
 
 	glBindVertexArray (0);
 }
