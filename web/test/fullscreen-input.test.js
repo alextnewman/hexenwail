@@ -7,6 +7,8 @@ const repoRoot = process.cwd();
 const html = readFileSync(join(repoRoot, 'web/index.html'), 'utf8');
 const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
 const inputBackend = readFileSync(join(repoRoot, 'engine/h2shared/in_web.c'), 'utf8');
+const keys = readFileSync(join(repoRoot, 'engine/hexen2/keys.c'), 'utf8');
+const menu = readFileSync(join(repoRoot, 'engine/hexen2/menu.c'), 'utf8');
 
 test('immersive layout is driven by its own attribute, not by phone mode', () => {
   assert.match(html, /body\[data-engine-state="running"\]\[data-immersive="true"\] \.topbar/);
@@ -101,4 +103,30 @@ test('the gamepad driver uses the W3C standard mapping and reaches the menus', (
 
   // The Controller Options menu toggles the cvar by name.
   assert.match(inputBackend, /cvar_t in_gamepad = \{"gamepad",/);
+});
+
+test('the gamepad Start button always reaches the menu', () => {
+  // A controller has no Escape key, and `~` needs a keyboard, so Start is the
+  // only way out of the console on a pad. Dispatching it through the binding
+  // table left a dead end: "togglemenu" from the console only closes the
+  // console again, and "unbindall" at the head of config.cfg could remove the
+  // default outright.
+  const start = keys.match(/\tif \(key == K_GP_START\)\n\t\{([\s\S]*?)\n\t\}/)?.[1];
+  assert.ok(start, 'Key_Event handles K_GP_START itself');
+  assert.doesNotMatch(start, /keybindings/, 'Start must not depend on what it is bound to');
+  for (const dest of ['key_message', 'key_menu', 'key_menubind', 'key_game', 'key_console']) {
+    assert.match(start, new RegExp(`case ${dest}:`), `Start is handled from ${dest}`);
+  }
+  assert.match(start, /if \(key_dest == key_console\)\n\t{4}Key_SetDest \(key_game\);\n\t{3}M_ToggleMenu_f \(\);/,
+    'from the console, Start leaves the console and opens the menu');
+  assert.match(keys, /keyreserved\[K_GP_START\] = true;/,
+    'reserved, so neither a rebind nor "unbindall" can take the menu away');
+
+  // The bind prompt must not record a binding that can never fire.
+  const keybind = menu.match(/void M_Keybind \(int key\)\n\{([\s\S]*?)\n\}/)?.[1];
+  assert.ok(keybind, 'M_Keybind is defined');
+  assert.match(keybind, /key != K_ESCAPE && key != '`' && key != K_GP_START/);
+
+  // ...and the alt-modifier layer must not divert it either.
+  assert.match(keys, /joy_altmodifier_pressed && key >= K_GP_A && key < K_GP_START/);
 });

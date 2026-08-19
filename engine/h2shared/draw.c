@@ -1695,8 +1695,27 @@ Draw_TileClear
 
 This repeats a 64*64 tile graphic to fill the screen around a sized down
 refresh window.
+
+The web port fills those areas with black instead.  Hexen II's backdrop tile
+is a lit brown stone pattern, and on a panel that the game otherwise fills
+edge to edge it reads as an orange frame rather than as the border of a
+sized-down view: R_SetVrect aligns the refresh window to 8 pixels wide and 2
+tall, so a widescreen framebuffer almost always leaves a couple of columns
+down each side that nothing but this function ever paints.
 =============
 */
+#if defined(WEBQUAKE)
+void Draw_TileClear (int x, int y, int w, int h)
+{
+	int	saved = trans_level;
+
+	/* the tile this replaces was always opaque, whatever the status bar
+	 * or console translucency happens to be set to right now */
+	trans_level = 0;
+	Draw_FillAlpha (x, y, w, h, 0.0f, 0.0f, 0.0f, 1.0f);
+	trans_level = saved;
+}
+#else
 void Draw_TileClear (int x, int y, int w, int h)
 {
 	int	width, height, tileoffsetx, tileoffsety;
@@ -1763,6 +1782,7 @@ void Draw_TileClear (int x, int y, int w, int h)
 		tileoffsety = 0;		// only the top tile can be top-clipped
 	}
 }
+#endif	/* WEBQUAKE */
 
 
 /*
