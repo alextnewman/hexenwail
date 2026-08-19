@@ -192,7 +192,8 @@ int  D_SurfaceCacheForRes (int width, int height);
 void D_FlushCaches (void);
 void D_DeleteSurfaceCache (void);
 void D_InitCaches (void *buffer, int size);
-void R_SetVrect (vrect_t *pvrect, vrect_t *pvrectin, int lineadj);
+/* pvrectin is the input (full screen) rect, pvrect receives the 3D view rect */
+void R_SetVrect (vrect_t *pvrectin, vrect_t *pvrect, int lineadj);
 
 #endif	/* RENDER_H_ */
 
