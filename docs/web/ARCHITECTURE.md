@@ -149,18 +149,13 @@ through `S_RawSamples`; it is deliberately *not* handed to an
 `HTMLAudioElement`, which would fork volume, pause/resume and looping away from
 the engine and make behaviour depend on the Safari version.
 
-**This is settled.** Handing music to the browser's native decoder — the
-"treat it like out-of-band CD audio" idea — looks like free hardware decode, but
-it was tested on the target and does not deliver: Ogg Vorbis does not play
-natively in the installed iOS PWA, while MP3 does. Vorbis in an Ogg container
-only reached Safari 18.4 / iOS 18.4 at all, so the native path is a per-OS-version
-capability cliff on exactly the codec the game's own rip scripts
-(`scripts/cdrip_*.sh`) produce. Decoding in-engine costs little — a few percent
-of a core, amortised across frames in `BGM_UpdateStream` — and it plays
-everywhere. Note also what native playback would *not* fix: audio glitching
-during long frames comes from the mixer running in a main-thread
-`ScriptProcessorNode`, so it needs the AudioWorklet work, not a different music
-path.
+**This is settled.** Native browser playback was tested on the target and does
+not work: Ogg Vorbis will not play in the installed iOS PWA (MP3 will), and
+Vorbis-in-Ogg only reached Safari at all in 18.4. Decoding in-engine costs a few
+percent of a core in `BGM_UpdateStream` and works on every device. Audio
+glitching during long frames is a *separate* problem — the mixer runs in a
+main-thread `ScriptProcessorNode` — and needs the AudioWorklet work, not a
+different music path.
 
 Which music formats exist is a build-time decision, because `bgmusic.c` only
 offers a format whose codec registered itself in `S_CodecInit`. A codec that is
