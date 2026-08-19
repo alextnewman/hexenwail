@@ -80,6 +80,12 @@ void WebGL2_EndFrame (void);
 void WebGL2_DrawParticles (particle_t *first);
 void Fog_ParseServerMessage (void);
 
+/* efrags -- r_efrag.c is software-only, so WebGlide has its own copy in
+ * r_webgl2.c and these are its entry points. */
+void R_AddEfrags (entity_t *ent);
+void R_RemoveEfrags (entity_t *ent);
+void R_StoreEfrags (efrag_t **ppefrag);
+
 void GL_SetCanvas (canvastype canvas);
 void D_EnableBackBufferAccess (void);
 void D_DisableBackBufferAccess (void);

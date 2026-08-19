@@ -202,20 +202,28 @@ qboolean GL2_ShadersReady (void);
 /*
 =============================================================================
 
-	fog (gl2_glide.c)
+	fog (gl_fog.c, shared with the desktop GL renderer)
 
 	Hexen II's svc_fog, realised as a Glide fog table: the Voodoo faded
 	to a constant colour over a table indexed by 1/w, which is an
-	exponential curve in eye-space distance.
+	exponential-squared curve in eye distance.  gl_fog.c already owns
+	the protocol, the worldspawn key and the fade, and is renderer
+	agnostic, so WebGlide compiles it as-is and reads the two globals
+	it publishes.
 
 =============================================================================
 */
 
+extern float	r_fog_density;
+extern float	r_fog_color[3];
+
 void Fog_Init (void);
 void Fog_NewMap (void);
-void Fog_FrameSetup (void);
-void Fog_GetColor (float *rgb);
+void Fog_SetupFrame (void);
+float *Fog_GetColor (void);
 float Fog_GetDensity (void);
+void Fog_StartAdditive (void);
+void Fog_StopAdditive (void);
 
 /*
 =============================================================================
@@ -226,11 +234,12 @@ float Fog_GetDensity (void);
 */
 
 void GL2_GlideInit (void);
-void GL2_GlideResize (int width, int height);
-void GL2_GlideBeginScene (void);
+void GL2_GlideBeginScene (int x, int y, int width, int height);
 void GL2_GlideEndScene (void);
 void GL2_GlideShutdown (void);
 void GL2_SetupProgramFog (const gl2program_t *program);
+/* Fog plus the dither, LOD bias and mip dither every scene program shares. */
+void GL2_SetupSceneUniforms (const gl2program_t *program);
 
 /*
 =============================================================================
@@ -240,16 +249,18 @@ void GL2_SetupProgramFog (const gl2program_t *program);
 =============================================================================
 */
 
-void GL2_WorldInit (void);
 void GL2_WorldNewMap (void);
+void GL2_WorldShutdown (void);
 void GL2_BuildLightmaps (void);
 void GL2_DrawWorld (void);
 void GL2_DrawBrushEntity (entity_t *entity);
-void GL2_DrawWaterSurfaces (void);
-void GL2_DrawSkyChain (void);
 void GL2_SkyNewMap (texture_t *texture);
-int GL2_LightPoint (vec3_t point);
-void GL2_MarkLights (dlight_t *light, int bit, mnode_t *node);
+qboolean GL2_WorldHasColoredLight (void);
+
+/* Returns the average intensity at a point and fills colour with what the
+ * lightmap -- or the map's .lit file -- says the light there looks like. */
+int GL2_LightPoint (const vec3_t point, vec3_t color);
+void GL2_PushDlights (void);
 void GL2_AnimateLight (void);
 
 /*
@@ -299,6 +310,8 @@ extern entity_t		*gl2_currententity;
 extern vec3_t		gl2_modelorg;
 extern float		gl2_frametime;
 extern int		gl2_scene_width, gl2_scene_height;
+extern int		gl2_frame_polys;
+extern int		gl2_frame_batches;
 
 qboolean GL2_CullBox (const vec3_t mins, const vec3_t maxs);
 void GL2_RotateForEntity (gl2matrix_t *out, const vec3_t origin, const vec3_t angles);
