@@ -1187,6 +1187,20 @@ void Key_Event (int key, qboolean down)
 		return;
 	}
 
+// The gamepad Start button is the pad's Escape.  It is a normal bindable key
+// (Key_Init binds it to "togglemenu"), but when it has no binding at all it
+// still reaches the menu: a config.cfg written before that default existed
+// starts with "unbindall", which would otherwise leave a controller-only
+// player with no way into the menu.  Menu screens handle it themselves, so
+// only gameplay and the console need the fallback here.
+	if (key == K_GP_START && !keybindings[key] &&
+	    (key_dest == key_game || key_dest == key_console))
+	{
+		if (down)
+			M_ToggleMenu_f ();
+		return;
+	}
+
 // key up events only generate commands if the game key binding is
 // a button command (leading + sign).  These will occur even in console mode,
 // to keep the character from continuing an action started before a console

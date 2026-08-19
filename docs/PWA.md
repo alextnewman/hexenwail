@@ -266,6 +266,26 @@ arrow keys with auto-repeat, the triggers act as Enter, and (via the shared menu
 code) A confirms while B backs out. Held buttons remember which key they emitted,
 so nothing sticks down across a menu transition, a disconnect, or `gamepad 0`.
 
+### Console-style menu navigation
+
+The pad drives the menus the way a console pause menu behaves:
+
+| Button | In the menu |
+| --- | --- |
+| Start | closes the menu outright, from any screen, and reopens it from gameplay |
+| A / L2 / R2 | confirm (Enter) |
+| B | back one screen (Escape) |
+| D-pad / move stick | move the cursor, with auto-repeat when held |
+| L1 / R1 | page up / page down on the scrolling screens (the mods list) |
+
+Start is deliberately not a "back" key: Escape and B unwind one screen at a
+time, while Start toggles the whole menu, so a second press resumes play no
+matter how deep the player is. It is still a normal bindable key — `Key_Init`
+binds it to `togglemenu` — but when it has no binding at all it falls back to
+toggling the menu, so a `config.cfg` written before that default existed (the
+file starts with `unbindall`) cannot leave a controller-only player stranded.
+Rebind it from **Options → Customize controls** and the bind wins as usual.
+
 Rumble uses `vibrationActuator.playEffect` when the browser has it, scaled by
 `joy_rumble`. Safari does not implement it today, so it is best-effort and silent
 when missing.
