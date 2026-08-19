@@ -124,6 +124,7 @@ as everything else — the shell owns the page, the engine owns the game:
 | Canvas size | `web/` → `Web_ResizeCanvas` | Every resize, rotation and fullscreen transition re-measures the game surface and hands CSS pixels to the engine. |
 | Cursor visibility | `engine/h2shared/in_web.c` | There is no window manager and no Pointer Lock on iPadOS Safari, so `IN_Commands` hides the cursor while `key_dest == key_game`. |
 | Key mapping | `engine/h2shared/in_web.c` | Web-specific: `` ` `` is Escape (iPad keyboards have none) and `Shift`+`` ` `` toggles the console. `in_key_backquote_escape 0` restores classic behaviour. |
+| Gamepad | `engine/h2shared/in_web.c` | First-party driver over the browser Gamepad API — the web port has no SDL joystick layer to translate. Poll-only, so `IN_Commands` samples it once per host frame and synthesises the engine's edge-triggered key events. |
 | Touch controls | `web/lib/phone-controls.js` | Shown when the device is touch-only (pointer capability, not screen size). Phone mode is a size-only signal that forces the immersive layout. |
 
 ## Ownership boundaries
