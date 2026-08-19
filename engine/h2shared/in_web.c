@@ -632,8 +632,8 @@ void IN_GPRumble (float low_freq, float high_freq, unsigned int duration_ms)
 		return;
 	if (duration_ms > 5000)
 		duration_ms = 5000;
-	strong = low_freq * joy_rumble.value;
-	weak = high_freq * joy_rumble.value;
+	strong = (double)low_freq * (double)joy_rumble.value;
+	weak = (double)high_freq * (double)joy_rumble.value;
 	strong = q_max(0.0, q_min(1.0, strong));
 	weak = q_max(0.0, q_min(1.0, weak));
 
