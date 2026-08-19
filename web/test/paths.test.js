@@ -36,7 +36,11 @@ test('mapImportedPath routes every decodable loose music format to data1/music',
   assert.equal(mapImportedPath('casa1.xm'), null);
 });
 
-test('mapImportedPath keeps an explicit music directory over the loose-file fallback', () => {
+test('mapImportedPath honours a music directory instead of flattening to the fallback', () => {
+  // Already rooted at a known game directory, so it is preserved verbatim
+  // rather than being redirected to data1 by the loose-file rule.
   assert.equal(mapImportedPath('portals/music/tulku1.mp3'), 'portals/music/tulku1.mp3');
-  assert.equal(mapImportedPath('music/tulku1.flac'), 'data1/music/tulku1.flac');
+  // A bare music/ directory has no game root, so it is anchored under data1 --
+  // but the subpath is kept, unlike the loose-file rule which uses the basename.
+  assert.equal(mapImportedPath('music/kult/tulku1.flac'), 'data1/music/kult/tulku1.flac');
 });
