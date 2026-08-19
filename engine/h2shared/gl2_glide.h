@@ -21,9 +21,12 @@
  *   - Everything expensive that only depends on the assets -- mip chains,
  *     alpha fringe repair, fullbright masks, lightmap atlases, .lit
  *     colour -- is done once at load time, never per frame.
- *   - The scene is rendered into an offscreen buffer that may be larger
- *     than the display (gl_glide_supersample) and resolved on scan-out.
- *     Free antialiasing is not period-correct; it is, however, what the
+ *   - The scene is rendered into an offscreen buffer whose size is a
+ *     fraction of the view (gl_glide_scenescale), resolved on scan-out.
+ *     The default is a quarter of the view's pixels -- half on each axis --
+ *     because a retina panel asks for four to nine times the fill of the
+ *     picture this renderer is actually drawing.  Values above 1
+ *     supersample instead, which is not period-correct but is what the
  *     brochure promised.
  *   - The period look is a set of scan-out choices, not a limitation: the
  *     16bpp ordered dither, the 2x2 "22-bit" postfilter, the T-buffer
@@ -70,7 +73,7 @@ extern cvar_t	gl_glide_motionblur;	/* T-buffer temporal blend, 0..0.9 */
 extern cvar_t	gl_glide_fogtable;	/* GR_FOG_WITH_TABLE emulation */
 extern cvar_t	gl_glide_colordepth;	/* 16 = dithered, 32 = straight RGBA8 */
 extern cvar_t	gl_glide_mipmapdither;	/* Voodoo Graphics mip dithering */
-extern cvar_t	gl_glide_supersample;	/* scene buffer scale, 1..2 */
+extern cvar_t	gl_glide_scenescale;	/* scene buffer scale, 0.25..2 (0.5 = quarter resolution) */
 extern cvar_t	gl_glide_anisotropy;	/* max anisotropy, 1 = off */
 extern cvar_t	gl_glide_crt;		/* scanline strength, 0 = off */
 extern cvar_t	gl_glide_crt_mask;	/* aperture grille strength */
@@ -179,7 +182,7 @@ typedef struct
 	GLint	u_tint;
 	GLint	u_lodbias;
 	GLint	u_mipdither;
-	GLint	u_outputsize;
+	GLint	u_sourcesize;
 	GLint	u_crt;
 } gl2program_t;
 

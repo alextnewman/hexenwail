@@ -46,7 +46,7 @@ cvar_t gl_overbright_models = {"gl_overbright_models", "1", CVAR_ARCHIVE};
 cvar_t gl_coloredlight = {"gl_coloredlight", "0", CVAR_ARCHIVE};
 cvar_t gl_flashblend = {"gl_flashblend", "0", CVAR_ARCHIVE};
 cvar_t gl_texture_anisotropy = {"gl_texture_anisotropy", "1", CVAR_ARCHIVE};
-cvar_t gl_texturemode = {"gl_texturemode", "GL_NEAREST", CVAR_ARCHIVE};
+cvar_t gl_texturemode = {"gl_texturemode", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE};
 cvar_t r_dither = {"r_dither", "0", CVAR_ARCHIVE};
 cvar_t r_hdr = {"r_hdr", "0", CVAR_ARCHIVE};
 cvar_t r_hdr_exposure = {"r_hdr_exposure", "1", CVAR_ARCHIVE};
@@ -117,24 +117,25 @@ int R_GetPimpFlags (entity_t *e, float **gsettings_out)
 	WebGlide cvars
 
 	The Glide-era knobs.  Everything here defaults to the look the
-	brochure promised, not to the hardware's limits: full colour, a
-	supersampled scene, no scanlines.  The period effects are one
-	`gl_glide_*` command away and are documented in
-	docs/web/WEBGLIDE.md.
+	brochure promised, not to the hardware's limits: full colour,
+	filtered and mipmapped textures, no scanlines.  The scene itself is
+	drawn at quarter resolution, which is both what the hardware did and
+	what a phone GPU wants.  The period effects are one `gl_glide_*`
+	command away and are documented in docs/web/WEBGLIDE.md.
 
 =============================================================================
 */
 
 cvar_t gl_glide_dither = {"gl_glide_dither", "1", CVAR_ARCHIVE};
 cvar_t gl_glide_postfilter = {"gl_glide_postfilter", "0", CVAR_ARCHIVE};
-cvar_t gl_glide_lodbias = {"gl_glide_lodbias", "-0.5", CVAR_ARCHIVE};
+cvar_t gl_glide_lodbias = {"gl_glide_lodbias", "0", CVAR_ARCHIVE};
 cvar_t gl_glide_gamma = {"gl_glide_gamma", "1", CVAR_ARCHIVE};
 cvar_t gl_glide_tbuffer = {"gl_glide_tbuffer", "1", CVAR_ARCHIVE};
 cvar_t gl_glide_motionblur = {"gl_glide_motionblur", "0", CVAR_ARCHIVE};
 cvar_t gl_glide_fogtable = {"gl_glide_fogtable", "1", CVAR_ARCHIVE};
 cvar_t gl_glide_colordepth = {"gl_glide_colordepth", "32", CVAR_ARCHIVE};
 cvar_t gl_glide_mipmapdither = {"gl_glide_mipmapdither", "0", CVAR_ARCHIVE};
-cvar_t gl_glide_supersample = {"gl_glide_supersample", "1", CVAR_ARCHIVE};
+cvar_t gl_glide_scenescale = {"gl_glide_scenescale", "0.5", CVAR_ARCHIVE};
 cvar_t gl_glide_anisotropy = {"gl_glide_anisotropy", "8", CVAR_ARCHIVE};
 cvar_t gl_glide_crt = {"gl_glide_crt", "0", CVAR_ARCHIVE};
 cvar_t gl_glide_crt_mask = {"gl_glide_crt_mask", "0", CVAR_ARCHIVE};
@@ -161,6 +162,21 @@ int		gl2_frame_polys;
 int		gl2_frame_batches;
 
 static mleaf_t	*gl2_oldviewleaf;
+
+/*
+================
+GL2_FilterChanged
+
+gl_texturemode and gl_glide_anisotropy are sampled once per texture, at
+load time, so a change has to be pushed back over everything already
+resident.
+================
+*/
+static void GL2_FilterChanged (cvar_t *var)
+{
+	(void) var;
+	GL2_ApplyTextureMode ();
+}
 
 static void Web_RegisterRendererCvars (void)
 {
@@ -216,12 +232,15 @@ static void Web_RegisterRendererCvars (void)
 	Cvar_RegisterVariable(&gl_glide_fogtable);
 	Cvar_RegisterVariable(&gl_glide_colordepth);
 	Cvar_RegisterVariable(&gl_glide_mipmapdither);
-	Cvar_RegisterVariable(&gl_glide_supersample);
+	Cvar_RegisterVariable(&gl_glide_scenescale);
 	Cvar_RegisterVariable(&gl_glide_anisotropy);
 	Cvar_RegisterVariable(&gl_glide_crt);
 	Cvar_RegisterVariable(&gl_glide_crt_mask);
 	Cvar_RegisterVariable(&gl_glide_crt_curve);
 	Cvar_RegisterVariable(&gl_glide_crt_vignette);
+
+	Cvar_SetCallback(&gl_texturemode, GL2_FilterChanged);
+	Cvar_SetCallback(&gl_glide_anisotropy, GL2_FilterChanged);
 }
 
 

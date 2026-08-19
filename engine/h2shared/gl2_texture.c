@@ -69,6 +69,45 @@ static int		gl2_scratch_texels;
 
 /*
 ================
+GL2_ProbeCaps
+
+What this context will actually do for us.  Nothing else in the web build
+fills gl_renderer_caps in -- gl_vidsdl.c is a desktop file and is not
+compiled -- so without this the anisotropy path below is dead and
+gl_glide_anisotropy silently does nothing.
+================
+*/
+static void GL2_ProbeCaps (void)
+{
+	GLint	count = 0, i;
+	GLfloat	max_aniso = 0.0f;
+
+	memset (&gl_renderer_caps, 0, sizeof(gl_renderer_caps));
+	gl_max_anisotropy = 1;
+
+	glGetIntegerv (GL_NUM_EXTENSIONS, &count);
+	for (i = 0; i < count; i++)
+	{
+		const char	*name = (const char *) glGetStringi (GL_EXTENSIONS, (GLuint)i);
+
+		if (!name || !strstr (name, "texture_filter_anisotropic"))
+			continue;
+		glGetFloatv (GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &max_aniso);
+		if (max_aniso >= 2.0f)
+		{
+			gl_renderer_caps.anisotropy = true;
+			gl_max_anisotropy = (int) max_aniso;
+		}
+		break;
+	}
+
+	Con_DPrintf ("WebGlide: anisotropic filtering %s (max %d)\n",
+		gl_renderer_caps.anisotropy ? "available" : "unavailable",
+		gl_max_anisotropy);
+}
+
+/*
+================
 GL2_TextureHash
 ================
 */
@@ -364,8 +403,10 @@ void GL2_InvalidateBindings (void)
 ================
 GL2_ApplyTextureMode
 
-gl_texturemode / gl_glide_anisotropy changed: re-apply to every live
-texture.  Rare, and cheap enough to do the obvious way.
+Resolves gl_texturemode into gl_filter_idx and re-applies it, plus
+gl_glide_anisotropy, to every live texture.  Called once before the first
+upload and again whenever either cvar changes -- rare, and cheap enough to
+do the obvious way.
 ================
 */
 void GL2_ApplyTextureMode (void)
@@ -491,6 +532,12 @@ void GL2_TextureInit (void)
 	GL2_InvalidateBindings ();
 
 	glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
+
+	GL2_ProbeCaps ();
+	/* Resolve gl_texturemode before the first texture is uploaded: every
+	 * texture picks its filters up at load time, and nothing re-applies
+	 * them unless the cvar changes. */
+	GL2_ApplyTextureMode ();
 
 	gl2_white_texture = GL2_LoadTexture ("*white", 1, 1, white,
 			GL2TEX_RGBA | GL2TEX_CLAMP | GL2TEX_PERSIST);

@@ -24,8 +24,10 @@ The rules that follow from that brief:
 * Everything expensive that depends only on the assets — mip chains, alpha
   fringe repair, lightmap atlases, `.lit` colour — happens once at load time,
   never per frame.
-* The scene is rendered into an offscreen buffer that may be larger than the
-  display (`gl_glide_supersample`) and resolved on scan-out.
+* The scene is rendered into an offscreen buffer sized as a fraction of the
+  view (`gl_glide_scenescale`, default quarter resolution) and resolved on
+  scan-out. The 2D HUD, menus and console are drawn on the canvas afterwards,
+  at panel resolution, so text stays crisp.
 * The period look is a set of scan-out *choices*, not a limitation: the 16bpp
   ordered dither, the 2×2 "22-bit" postfilter, the T-buffer blur and the
   optional CRT are all cvars.
@@ -73,6 +75,32 @@ Dither and fog are shared GLSL fragments rather than separate passes, because
 that is where the hardware did them: the Voodoo dithered at pixel write time
 and fogged in the same combine stage as texturing.
 
+Every varying and uniform that carries a *coordinate* — texture coordinates,
+lightmap coordinates, the sky's world position, fog depth, the scan-out's
+source size — is declared `highp` in the fragment stage. The colour maths is
+left at the default `mediump`, which is what the hardware had. This matters
+on Apple GPUs, where `mediump` really is fp16: Quake's world texture
+coordinates run to thousands of texels, and quantising them to fp16 makes the
+sampled texel and the implicit mip derivative jitter from pixel to pixel,
+which reads as static crawling over every wall.
+
+## Texture filtering
+
+Textures are filtered and mipmapped by default. `gl_texturemode` defaults to
+`GL_LINEAR_MIPMAP_LINEAR` and is applied to every resident texture when it
+changes, as is `gl_glide_anisotropy` — which needs
+`EXT_texture_filter_anisotropic`, probed once at texture-manager init.
+Unfiltered mip chains are the other half of the static: a minified wall
+sampled `GL_NEAREST` from level 0 picks a different texel every time the
+camera twitches.
+
+Set `gl_texturemode GL_NEAREST` if you want the unfiltered look back; it is a
+console command away and the mip chains are already there.
+
+Because `gl_texturemode` is archived, a `config.cfg` written by a build from
+before this was wired up pins the old `GL_NEAREST` default. If the walls still
+crawl, set the cvar once — it will stick.
+
 ## Coloured light
 
 Colour comes from two places, both already present in the game data:
@@ -89,21 +117,21 @@ for running WebGlide at all.
 ## Cvars
 
 All `gl_glide_*` cvars are archived. The defaults are the look the brochure
-promised — full colour, a supersampled scene, no scanlines — not the
-hardware's limits.
+promised — full colour, filtered and mipmapped textures, no scanlines — at a
+resolution a phone GPU is happy to sustain.
 
 | Name | Default | Meaning |
 | --- | --- | --- |
 | `gl_glide_dither` | `1` | 16bpp ordered dither. |
 | `gl_glide_postfilter` | `0` | The 2×2 "22-bit" scan-out filter. |
-| `gl_glide_lodbias` | `-0.5` | `grTexLodBiasValue()`, i.e. mip selection bias. |
+| `gl_glide_lodbias` | `0` | `grTexLodBiasValue()`, i.e. mip selection bias. Negative sharpens and sparkles. |
 | `gl_glide_gamma` | `1` | The Voodoo gamma ramp. |
 | `gl_glide_tbuffer` | `1` | VSA-100 T-buffer accumulation. Disabled automatically if the buffer is unavailable. |
 | `gl_glide_motionblur` | `0` | T-buffer temporal blend, 0…0.9. |
 | `gl_glide_fogtable` | `1` | `GR_FOG_WITH_TABLE` emulation. |
 | `gl_glide_colordepth` | `32` | `16` = dithered, `32` = straight RGBA8. |
 | `gl_glide_mipmapdither` | `0` | Voodoo Graphics mip dithering. |
-| `gl_glide_supersample` | `1` | Scene buffer scale, 1…2. |
+| `gl_glide_scenescale` | `0.5` | Scene buffer scale per axis, 0.25…2. `0.5` is quarter resolution; above `1` supersamples. |
 | `gl_glide_anisotropy` | `8` | Max anisotropy; `1` = off. |
 | `gl_glide_crt` | `0` | Scanline strength; `0` = off. |
 | `gl_glide_crt_mask` | `0` | Aperture grille strength. |
