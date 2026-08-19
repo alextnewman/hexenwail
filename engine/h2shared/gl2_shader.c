@@ -64,7 +64,7 @@
 #define GLIDE_FOG_FN \
 	"uniform vec3 u_fogcolor;\n" \
 	"uniform float u_fogdensity;\n" \
-	"in float v_fogdepth;\n" \
+	"in highp float v_fogdepth;\n" \
 	"vec3 GlideFog (vec3 color)\n" \
 	"{\n" \
 	" if (u_fogdensity <= 0.0) return color;\n" \
@@ -146,23 +146,23 @@ static const char glide_world_vert[] =
 static const char glide_world_frag[] =
 	GLIDE_VERSION
 	GLIDE_FRAG_PRECISION
-	"in vec2 v_texcoord;\n"
-	"in vec2 v_lmcoord;\n"
+	"in highp vec2 v_texcoord;\n"
+	"in highp vec2 v_lmcoord;\n"
 	GLIDE_BAYER_FN
 	GLIDE_FOG_FN
 	GLIDE_DITHER_FN
 	GLIDE_LOD_FN
 	"uniform sampler2D u_diffuse;\n"
 	"uniform sampler2D u_lightmap;\n"
-	"uniform vec2 u_turbscale;\n"
-	"uniform float u_turbtime;\n"
+	"uniform highp vec2 u_turbscale;\n"
+	"uniform highp float u_turbtime;\n"
 	"uniform float u_alpha;\n"
 	"uniform float u_overbright;\n"
 	"uniform int u_flags;\n"
 	"out vec4 frag_color;\n"
 	"void main ()\n"
 	"{\n"
-	" vec2 uv = v_texcoord;\n"
+	" highp vec2 uv = v_texcoord;\n"
 	/* The liquid warp is the classic turbsin table: the surface's
 	 * texel coordinates displaced by a sine of the other axis. Liquid
 	 * batches hand us texels, everything else hands us normalised
@@ -209,21 +209,21 @@ static const char glide_sky_vert[] =
 static const char glide_sky_frag[] =
 	GLIDE_VERSION
 	GLIDE_FRAG_PRECISION
-	"in vec3 v_worldpos;\n"
+	"in highp vec3 v_worldpos;\n"
 	GLIDE_BAYER_FN
 	GLIDE_FOG_FN
 	GLIDE_DITHER_FN
 	"uniform sampler2D u_diffuse;\n"
 	"uniform sampler2D u_texture2;\n"
-	"uniform vec3 u_eye;\n"
-	"uniform float u_time;\n"
+	"uniform highp vec3 u_eye;\n"
+	"uniform highp float u_time;\n"
 	"out vec4 frag_color;\n"
 	"void main ()\n"
 	"{\n"
-	" vec3 dir = v_worldpos - u_eye;\n"
+	" highp vec3 dir = v_worldpos - u_eye;\n"
 	" dir.z *= 3.0;\n"
-	" float scale = 6.0 * 63.0 / max (length (dir), 0.001);\n"
-	" vec2 base = dir.xy * scale;\n"
+	" highp float scale = 6.0 * 63.0 / max (length (dir), 0.001);\n"
+	" highp vec2 base = dir.xy * scale;\n"
 	" vec4 solid = texture (u_diffuse, (base + u_time * 8.0) * (1.0 / 128.0));\n"
 	" vec4 clouds = texture (u_texture2, (base + u_time * 16.0) * (1.0 / 128.0));\n"
 	" vec3 color = mix (solid.rgb, clouds.rgb, clouds.a);\n"
@@ -261,7 +261,7 @@ static const char glide_model_vert[] =
 static const char glide_model_frag[] =
 	GLIDE_VERSION
 	GLIDE_FRAG_PRECISION
-	"in vec2 v_texcoord;\n"
+	"in highp vec2 v_texcoord;\n"
 	"in vec4 v_color;\n"
 	GLIDE_BAYER_FN
 	GLIDE_FOG_FN
@@ -310,11 +310,11 @@ static const char glide_post_vert[] =
 static const char glide_post_frag[] =
 	GLIDE_VERSION
 	GLIDE_FRAG_PRECISION
-	"in vec2 v_texcoord;\n"
+	"in highp vec2 v_texcoord;\n"
 	"uniform sampler2D u_source;\n"
 	"uniform sampler2D u_history;\n"
-	"uniform vec2 u_screensize;\n"
-	"uniform vec2 u_outputsize;\n"
+	"uniform highp vec2 u_screensize;\n"
+	"uniform highp vec2 u_sourcesize;\n"
 	"uniform float u_postfilter;\n"
 	"uniform float u_gamma;\n"
 	"uniform float u_contrast;\n"
@@ -324,11 +324,11 @@ static const char glide_post_frag[] =
 	"uniform int u_flags;\n"
 	"out vec4 frag_color;\n"
 	/* Barrel distortion, in scan-out texture space. */
-	"vec2 CrtWarp (vec2 uv)\n"
+	"highp vec2 CrtWarp (highp vec2 uv)\n"
 	"{\n"
 	" if (u_crt.z <= 0.0) return uv;\n"
-	" vec2 c = uv * 2.0 - 1.0;\n"
-	" vec2 off = abs (c.yx) / vec2 (6.0, 5.0) * u_crt.z;\n"
+	" highp vec2 c = uv * 2.0 - 1.0;\n"
+	" highp vec2 off = abs (c.yx) / vec2 (6.0, 5.0) * u_crt.z;\n"
 	" c += c * off * off;\n"
 	" return c * 0.5 + 0.5;\n"
 	"}\n"
@@ -344,20 +344,20 @@ static const char glide_post_frag[] =
 	"  frag_color = vec4 (mix (scene, history, u_blend), 1.0);\n"
 	"  return;\n"
 	" }\n"
-	" vec2 uv = CrtWarp (v_texcoord);\n"
+	" highp vec2 uv = CrtWarp (v_texcoord);\n"
 	" if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)\n"
 	" {\n"
 	"  frag_color = vec4 (0.0, 0.0, 0.0, 1.0);\n"
 	"  return;\n"
 	" }\n"
-	/* Supersampled scenes resolve for free here: the source texture is
-	 * sampled bilinearly, so a 2x buffer read at output rate is a box
-	 * downsample. The postfilter is the Voodoo's 2x2 scan-out average,
-	 * kept because it is the look, not because we cannot afford better. */
+	/* The scene buffer is resolved here by the sampler: a quarter-res
+	 * source is stretched bilinearly, a supersampled one is box-filtered
+	 * down. The postfilter is the Voodoo's 2x2 scan-out average, taken
+	 * over source texels so it stays a scan-out filter at any scale. */
 	" vec3 color = texture (u_source, uv).rgb;\n"
 	" if (u_postfilter > 0.0)\n"
 	" {\n"
-	"  vec2 texel = 1.0 / max (u_outputsize, vec2 (1.0));\n"
+	"  highp vec2 texel = 1.0 / max (u_sourcesize, vec2 (1.0));\n"
 	"  vec3 sum = color;\n"
 	"  sum += texture (u_source, uv + vec2 (texel.x, 0.0)).rgb;\n"
 	"  sum += texture (u_source, uv + vec2 (0.0, texel.y)).rgb;\n"
@@ -369,14 +369,14 @@ static const char glide_post_frag[] =
 	 * grille in output pixels, and a little vignette. */
 	" if (u_crt.x > 0.0 || u_crt.y > 0.0 || u_crt.w > 0.0)\n"
 	" {\n"
-	"  float line = fract (uv.y * max (u_screensize.y, 1.0));\n"
+	"  highp float line = fract (uv.y * max (u_screensize.y, 1.0));\n"
 	"  float scan = mix (1.0, 0.55 + 0.45 * sin (line * 3.14159265), u_crt.x);\n"
 	"  vec3 grille = vec3 (1.0);\n"
 	"  float phase = mod (gl_FragCoord.x, 3.0);\n"
 	"  if (phase < 1.0) grille = vec3 (1.0, 0.75, 0.75);\n"
 	"  else if (phase < 2.0) grille = vec3 (0.75, 1.0, 0.75);\n"
 	"  else grille = vec3 (0.75, 0.75, 1.0);\n"
-	"  vec2 d = uv - 0.5;\n"
+	"  highp vec2 d = uv - 0.5;\n"
 	"  float vignette = 1.0 - u_crt.w * dot (d, d) * 2.0;\n"
 	"  color *= scan * mix (vec3 (1.0), grille, u_crt.y) * vignette;\n"
 	"  color *= 1.0 + 0.35 * u_crt.x + 0.25 * u_crt.y;\n"
@@ -485,7 +485,7 @@ static qboolean GL2_LinkProgram (gl2program_t *out, const char *name,
 	out->u_tint = glGetUniformLocation (program, "u_tint");
 	out->u_lodbias = glGetUniformLocation (program, "u_lodbias");
 	out->u_mipdither = glGetUniformLocation (program, "u_mipdither");
-	out->u_outputsize = glGetUniformLocation (program, "u_outputsize");
+	out->u_sourcesize = glGetUniformLocation (program, "u_sourcesize");
 	out->u_crt = glGetUniformLocation (program, "u_crt");
 	return true;
 }

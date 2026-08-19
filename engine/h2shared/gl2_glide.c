@@ -2,7 +2,7 @@
  * gl2_glide.c -- WebGlide matrices, scene buffer and scan-out.
  *
  * The scene is not drawn to the canvas.  It is drawn into an offscreen
- * buffer -- optionally larger than the display, see gl_glide_supersample --
+ * buffer -- a fraction of the view by default, see gl_glide_scenescale --
  * and then "scanned out" through a pass that does what the Voodoo's RAMDAC
  * did on the way to the monitor: the 2x2 postfilter, the gamma ramp, the
  * palette blend, and (if you want it) a CRT.
@@ -276,7 +276,8 @@ static GLuint GL2_CreateSceneTexture (int width, int height)
 	glBindTexture (GL_TEXTURE_2D, texture);
 	glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0,
 			GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	/* Linear, so that a supersampled buffer resolves in the sampler. */
+	/* Linear both ways: the sampler is what resolves a supersampled
+	 * buffer and what stretches a quarter-resolution one. */
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -405,11 +406,16 @@ GL2_GlideBeginScene
 
 x/y/width/height are the destination rectangle on the canvas, in GL
 (bottom-left origin) pixels.
+
+The scene itself is drawn at gl_glide_scenescale of that -- a quarter of
+the pixels by default -- and the scan-out pass resolves it onto the
+destination, which is also where the sampler turns a supersampled buffer
+back into a picture.
 ================
 */
 void GL2_GlideBeginScene (int x, int y, int width, int height)
 {
-	float	supersample;
+	float	scale;
 	int	scene_w, scene_h;
 	double	pixels;
 
@@ -418,14 +424,14 @@ void GL2_GlideBeginScene (int x, int y, int width, int height)
 	gl2_dest_width = q_max(width, 1);
 	gl2_dest_height = q_max(height, 1);
 
-	supersample = gl_glide_supersample.value;
-	if (supersample < 0.25f)
-		supersample = 0.25f;
-	if (supersample > 2.0f)
-		supersample = 2.0f;
+	scale = gl_glide_scenescale.value;
+	if (scale < 0.25f)
+		scale = 0.25f;
+	if (scale > 2.0f)
+		scale = 2.0f;
 
-	scene_w = (int)(gl2_dest_width * supersample + 0.5f);
-	scene_h = (int)(gl2_dest_height * supersample + 0.5f);
+	scene_w = (int)(gl2_dest_width * scale + 0.5f);
+	scene_h = (int)(gl2_dest_height * scale + 0.5f);
 	scene_w = q_max(scene_w, 1);
 	scene_h = q_max(scene_h, 1);
 
@@ -487,7 +493,7 @@ static void GL2_ScanOutPass (GLuint source, GLuint history, int flags, float ble
 	glUniform1i (gl2_post_program.u_flags, flags);
 	glUniform1f (gl2_post_program.u_blend, blend);
 	glUniform2f (gl2_post_program.u_screensize, (float)vid.width, (float)vid.height);
-	glUniform2f (gl2_post_program.u_outputsize, (float)gl2_dest_width, (float)gl2_dest_height);
+	glUniform2f (gl2_post_program.u_sourcesize, (float)gl2_scene_width, (float)gl2_scene_height);
 
 	if (!(flags & 1))
 	{
