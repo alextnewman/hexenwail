@@ -1,11 +1,11 @@
 name: 'Build hexenwail WebAssembly + PWA artifact'
 description: >-
-  Installs a pinned Emscripten SDK (with caching), runs the lightweight
-  Node PWA tests, builds the full WebAssembly client with both renderer
-  configurations, and assembles the static Pages/PWA artifact from the
-  shipping (software) build. Single source of truth shared by the PR
-  "PWA / WebAssembly" check and the GitHub Pages deployment workflow so
-  the two build recipes cannot drift apart.
+  Installs a pinned Emscripten SDK (with caching), prefetches the ogg/vorbis
+  ports, runs the lightweight Node PWA tests, builds the full WebAssembly
+  client with both renderer configurations, and assembles the static
+  Pages/PWA artifact from the shipping (software) build. Single source of
+  truth shared by the PR "PWA / WebAssembly" check and the GitHub Pages
+  deployment workflow so the two build recipes cannot drift apart.
 
 inputs:
   emsdk-version:
@@ -77,6 +77,28 @@ runs:
         path: emsdk
         key: emsdk-${{ runner.os }}-${{ inputs.emsdk-version }}
 
+    # Emscripten's cache holds both the compiled sysroot libraries and any
+    # built ports. By default it lives *inside* the emsdk checkout, which
+    # would make it a hostage of the emsdk cache above: that key never
+    # changes, so once it is warm actions/cache stops saving it and every
+    # later run would refetch the ports over the network. Pin the cache to
+    # its own path with its own key instead.
+    - name: Pin Emscripten cache location
+      shell: bash
+      run: echo "EM_CACHE=$HOME/.emscripten_cache" >> "$GITHUB_ENV"
+
+    - name: Cache Emscripten sysroot + ports
+      uses: actions/cache@v4
+      with:
+        path: ~/.emscripten_cache
+        # engine/CMakeLists.txt is what decides which ports this build needs
+        # (see USE_CODEC_VORBIS), so changing it earns a fresh cache entry --
+        # while the restore-keys prefix still seeds it from the previous one
+        # so a port set that did not change is not refetched.
+        key: emcache-${{ runner.os }}-${{ inputs.emsdk-version }}-${{ hashFiles('engine/CMakeLists.txt') }}
+        restore-keys: |
+          emcache-${{ runner.os }}-${{ inputs.emsdk-version }}-
+
     - name: Install emsdk
       shell: bash
       run: |
@@ -87,6 +109,19 @@ runs:
         cd emsdk
         ./emsdk install "${{ inputs.emsdk-version }}"
         ./emsdk activate "${{ inputs.emsdk-version }}"
+
+    # Ogg Vorbis music decoding uses the Emscripten ogg/vorbis ports, which
+    # emcc downloads from github.com the first time they are built. Do that
+    # here, as its own step, rather than letting it happen implicitly in the
+    # middle of the compile: a port fetch is the one network call left in the
+    # build, and this way a failure names itself instead of surfacing as a
+    # mystery "vorbis/vorbisfile.h: No such file or directory". With the
+    # cache above warm this is a no-op.
+    - name: Prefetch Emscripten ogg/vorbis ports
+      shell: bash
+      run: |
+        source "$PWD/emsdk/emsdk_env.sh"
+        embuilder build ogg vorbis
 
     - name: Build WebAssembly client (software renderer, shipping default)
       shell: bash

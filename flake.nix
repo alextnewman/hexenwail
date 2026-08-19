@@ -63,12 +63,14 @@
           # WebAssembly / Emscripten build.
           #
           # Best effort: nixpkgs' emscripten is not the pinned emsdk that
-          # CI uses, and a pure `nix build` has no network, so anything
-          # that needs an Emscripten port would fail here.  The engine no
-          # longer links any port (no SDL), which makes this far more
-          # likely to work than it used to -- but if it does not, use
-          # `nix develop` (below) or the emsdk directly and run
-          # scripts/wasm-build.sh, which is what CI does.
+          # CI uses, and a pure `nix build` has no network, so it cannot
+          # fetch an Emscripten port.  The shipping build uses exactly one
+          # (ogg/vorbis, for OGG music), so this derivation configures with
+          # -DUSE_CODEC_VORBIS=OFF and produces a client that plays
+          # wav/mp3/flac music but not ogg.  It is a build-health check,
+          # not a shipping artifact: for that, use `nix develop` (below) or
+          # the emsdk directly and run scripts/wasm-build.sh, which is what
+          # CI does.
           wasm = pkgs.stdenv.mkDerivation {
             pname = "hexenwail-wasm";
             inherit version;
@@ -88,7 +90,8 @@
 
             # Use Emscripten's CMake toolchain.  WEB_RENDERER defaults to
             # "software"; pass -DWEB_RENDERER=webgl2 to build the retained
-            # GPU renderer instead.
+            # GPU renderer instead.  USE_CODEC_VORBIS is off here because a
+            # pure build cannot fetch the Emscripten vorbis port.
             configurePhase = ''
               runHook preConfigure
 
@@ -97,6 +100,7 @@
               emcmake cmake \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DWEB_RENDERER=software \
+                -DUSE_CODEC_VORBIS=OFF \
                 ..
 
               runHook postConfigure
