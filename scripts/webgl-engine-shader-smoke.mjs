@@ -8,6 +8,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SHADER_HEADER = resolve(ROOT, 'engine/h2shared/gl_shader.h');
 const SHADER_SOURCE = resolve(ROOT, 'engine/h2shared/gl_shader.c');
 const POSTPROCESS_SOURCE = resolve(ROOT, 'engine/h2shared/gl_postprocess.c');
+const WEBGLIDE_SOURCE = resolve(ROOT, 'engine/h2shared/gl2_shader.c');
 
 const PROGRAM_SPECS = [
   ['2d', 'shader', 's2d_vert', 's2d_frag'],
@@ -21,6 +22,21 @@ const PROGRAM_SPECS = [
   ['bloom_bright', 'postprocess', 'bloom_vert_src', 'bloom_bright_frag_src'],
   ['bloom_down', 'postprocess', 'bloom_vert_src', 'bloom_down_frag_src'],
   ['bloom_up', 'postprocess', 'bloom_vert_src', 'bloom_up_frag_src'],
+  // WebGlide: the experimental web GPU renderer (docs/web/WEBGLIDE.md).
+  ['webglide_world', 'webglide', 'glide_world_vert', 'glide_world_frag'],
+  ['webglide_sky', 'webglide', 'glide_sky_vert', 'glide_sky_frag'],
+  ['webglide_model', 'webglide', 'glide_model_vert', 'glide_model_frag'],
+  ['webglide_post', 'webglide', 'glide_post_vert', 'glide_post_frag'],
+];
+
+const WEBGLIDE_MACROS = [
+  'GLIDE_VERSION',
+  'GLIDE_VERT_PRECISION',
+  'GLIDE_FRAG_PRECISION',
+  'GLIDE_BAYER_FN',
+  'GLIDE_FOG_FN',
+  'GLIDE_DITHER_FN',
+  'GLIDE_LOD_FN',
 ];
 
 function tokenize(expression) {
@@ -109,10 +125,11 @@ function injectEngineDefines(source) {
 }
 
 export async function extractEngineWebGLPrograms() {
-  const [header, shaderSource, postprocessSource] = await Promise.all([
+  const [header, shaderSource, postprocessSource, webglideSource] = await Promise.all([
     readFile(SHADER_HEADER, 'utf8'),
     readFile(SHADER_SOURCE, 'utf8'),
     readFile(POSTPROCESS_SOURCE, 'utf8'),
+    readFile(WEBGLIDE_SOURCE, 'utf8'),
   ]);
   const webProfileStart = header.indexOf('#ifdef __EMSCRIPTEN__');
   const webProfileEnd = header.indexOf('#else', webProfileStart);
@@ -130,7 +147,11 @@ export async function extractEngineWebGLPrograms() {
   macros.set('GLSL_BICUBIC_LM_FN', readDefine(shaderSource, 'GLSL_BICUBIC_LM_FN', macros));
   macros.set('GLSL_CAUSTICS_FN', readDefine(shaderSource, 'GLSL_CAUSTICS_FN', macros));
 
-  const sources = { shader: shaderSource, postprocess: postprocessSource };
+  for (const name of WEBGLIDE_MACROS) {
+    macros.set(name, readDefine(webglideSource, name, macros));
+  }
+
+  const sources = { shader: shaderSource, postprocess: postprocessSource, webglide: webglideSource };
   return PROGRAM_SPECS.map(([name, family, vertexName, fragmentName]) => ({
     name,
     vertex: injectEngineDefines(evaluateCStringExpression(

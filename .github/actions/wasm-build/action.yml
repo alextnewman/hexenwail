@@ -2,10 +2,12 @@ name: 'Build hexenwail WebAssembly + PWA artifact'
 description: >-
   Installs a pinned Emscripten SDK (with caching), prefetches the ogg/vorbis
   ports, runs the lightweight Node PWA tests, builds the full WebAssembly
-  client with both renderer configurations, and assembles the static
-  Pages/PWA artifact from the shipping (software) build. Single source of
-  truth shared by the PR "PWA / WebAssembly" check and the GitHub Pages
-  deployment workflow so the two build recipes cannot drift apart.
+  client with both renderer configurations (both shipped in the PWA
+  artifact — software as the launch default and the experimental WebGlide
+  GPU bundle as an opt-in), and assembles the static Pages/PWA artifact.
+  Single source of truth shared by the PR "PWA / WebAssembly" check and the
+  GitHub Pages deployment workflow so the two build recipes cannot drift
+  apart.
 
 inputs:
   emsdk-version:
@@ -129,9 +131,17 @@ runs:
         source "$PWD/emsdk/emsdk_env.sh"
         ./scripts/wasm-build.sh software
 
-    # The WebGL2 renderer is retained but not shipped by default; build it so
-    # it cannot silently rot. See docs/web/ARCHITECTURE.md.
-    - name: Build WebAssembly client (webgl2 renderer, regression guard)
+    # The WebGL2 renderer used to be a compile-only regression guard whose
+    # output was thrown away. It now ships alongside the software bundle
+    # as the launcher's opt-in "WebGlide" experimental GPU renderer, an
+    # experimental pipeline inspired by mid-90s 3Dfx Glide hardware (see
+    # docs/PWA.md and web/app.js). engine/CMakeLists.txt names the
+    # artefacts hexenwail-webglide.* under -DWEB_RENDERER=webgl2 -- the
+    # CMake option value is still "webgl2" but the shipped bundle basename
+    # and the user-facing renderer name are WebGlide. The two bundles
+    # land side by side so the Emscripten .js still finds its own .wasm
+    # sibling by basename.
+    - name: Build WebAssembly client (webgl2 renderer, WebGlide GPU bundle)
       shell: bash
       run: |
         source "$PWD/emsdk/emsdk_env.sh"
@@ -140,3 +150,23 @@ runs:
     - name: Assemble PWA artifact
       shell: bash
       run: ./scripts/wasm-assemble-artifact.sh "${{ inputs.dist-dir }}"
+
+    # CI builds both renderer configurations, so the assembled artefact
+    # must contain both bundles. wasm-validate-artifact.sh keeps the
+    # WebGlide bundle informational so a local `make dist` from a fresh
+    # clone still succeeds with software-only output; this step is where
+    # the "CI ships both" contract is enforced. A missing pair here means
+    # the assemble step failed to pick up the webgl2 build even though
+    # we just ran it.
+    - name: Verify shipped WebGlide GPU bundle
+      shell: bash
+      run: |
+        set -eu
+        dist="${{ inputs.dist-dir }}"
+        for required in hexenwail-webglide.js hexenwail-webglide.wasm; do
+          if [ ! -s "$dist/$required" ]; then
+            echo "::error::CI artefact is missing the WebGlide GPU bundle: $dist/$required"
+            exit 1
+          fi
+        done
+        echo "WebGlide GPU bundle present in $dist."

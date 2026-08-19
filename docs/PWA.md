@@ -190,6 +190,49 @@ panel that small has no chrome worth returning to; ☰ → **Sync & exit to
 launcher** still works. Being a pure function of size, this is self-healing:
 rotate or resize back above the breakpoint and the chrome returns on its own.
 
+## Renderer (experimental)
+
+The launcher ships two WebAssembly engine bundles side by side and picks
+which one to load at startup. The choice lives in the **Renderer
+(experimental)** card in the launcher panel:
+
+- **Software (default, stable)** — the classic 8bpp software rasteriser
+  presented on an accelerated canvas. This is the shipping, supported path
+  and what every fresh install loads. Unless the card explicitly opts into
+  WebGlide, this is what runs.
+- **WebGlide (experimental GPU)** — an experimental GPU renderer that
+  chases the mid-90s 3Dfx look — filtered textures, coloured light,
+  translucent water, fog, optional CRT scan-out — with modern shaders
+  under it. It is **off by default**: it may render incorrectly, produce
+  visual glitches, or fail to start entirely. Use only if you are actively
+  trying it out. WebGlide is deliberately distinct from any previous
+  "maximum GL2" WebGL2 profile — the shared build option value stays
+  `webgl2`, but the shipped bundle basename (`hexenwail-webglide.*`) and
+  the user-facing renderer name are WebGlide.
+
+The engine bundle is chosen once per launcher load, so a change reloads
+the launcher automatically when no game is running; if the engine is
+already running, the change is queued and takes effect on the next
+launcher load (exit to the launcher via ☰ → **Sync & exit to launcher**).
+The preference is stored in the same local browser storage as the touch
+controls settings, alongside your other launcher preferences.
+
+If the WebGlide bundle is missing from the artifact (a local `make dist`
+builds only the software renderer by default), the launcher fails loudly
+on load, names the toggle, and explains how to switch back to the
+software renderer so the launcher never ends up dead. To ship both
+bundles locally, build the second configuration explicitly before
+assembling `dist/`:
+
+```bash
+./scripts/wasm-build.sh software                    # shipping default
+./scripts/wasm-build.sh webgl2 engine/build-webgl2  # WebGlide bundle
+./scripts/wasm-assemble-artifact.sh dist
+```
+
+CI builds both configurations on every run, so a deployed Pages artifact
+always ships both bundles regardless of the launcher's default.
+
 ## Keyboard
 
 `in_web.c` owns the browser keyboard mapping. Two web-specific rules:

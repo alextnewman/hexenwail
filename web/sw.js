@@ -14,7 +14,28 @@ const CORE_ASSETS = [
   './hexenwail.js',
   './hexenwail.wasm',
 ];
+// The WebGlide experimental GPU bundle is deliberately NOT in
+// CORE_ASSETS. Two reasons:
+//   * install cost: precaching megabytes of .js + .wasm on every fresh
+//     install would slow the first paint for the ~all users who never
+//     enable the experimental renderer;
+//   * install robustness: cache.addAll() is atomic, so a single 404 on
+//     hexenwail-webglide.js from a software-only local build would abort
+//     the whole SW install and leave the launcher without an offline
+//     shell.
+// Instead, the bundle is runtime-cached on first use: the fetch handler
+// treats requests for these URLs the same way it treats CORE_ASSETS
+// (cache-first, populate on network success), which is enough for an
+// installed PWA that has once launched WebGlide to keep working offline
+// afterwards.
+const OPTIONAL_ASSETS = [
+  './hexenwail-webglide.js',
+  './hexenwail-webglide.wasm',
+  './hexenwail-webglide.data',
+  './hexenwail-webglide.worker.js',
+];
 const CORE_ASSET_URLS = CORE_ASSETS.map((asset) => new URL(asset, self.location).href);
+const OPTIONAL_ASSET_URLS = OPTIONAL_ASSETS.map((asset) => new URL(asset, self.location).href);
 const INDEX_URL = new URL('./index.html', self.location).href;
 
 self.addEventListener('install', (event) => {
@@ -60,7 +81,7 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) {
     return;
   }
-  if (!CORE_ASSET_URLS.includes(request.url)) {
+  if (!CORE_ASSET_URLS.includes(request.url) && !OPTIONAL_ASSET_URLS.includes(request.url)) {
     return;
   }
 

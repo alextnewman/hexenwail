@@ -64,6 +64,9 @@ test('headless smoke gate compiles the actual engine WebGL shader sources', asyn
   assert.deepEqual(programs.map(({ name }) => name), [
     '2d', 'flat', 'world', 'world_opaque', 'alias', 'particle', 'sky',
     'postprocess', 'bloom_bright', 'bloom_down', 'bloom_up',
+    // WebGlide shaders live in gl2_shader.c and ride the same headless
+    // smoke gate so a broken program is caught before it hits an iPad.
+    'webglide_world', 'webglide_sky', 'webglide_model', 'webglide_post',
   ]);
   assert.match(byName.world.fragment, /vec4 BicubicLightmap/);
   assert.match(byName.world.fragment, /float Caustics/);

@@ -19,7 +19,7 @@ test('manifest uses relative project-pages-safe paths', () => {
 
 test('service worker precaches repo-managed launcher assets', () => {
   const matches = [...swText.matchAll(/'\.\/([^']+)'/g)].map((match) => match[1]);
-  const repoManaged = matches.filter((asset) => !asset.startsWith('hexenwail.'));
+  const repoManaged = matches.filter((asset) => !asset.startsWith('hexenwail.') && !asset.startsWith('hexenwail-webglide.'));
   for (const asset of repoManaged) {
     const relativePath = asset === '' ? 'index.html' : asset;
     assert.equal(existsSync(join(repoRoot, 'web', relativePath)), true, `missing precache asset ${asset}`);
@@ -27,6 +27,27 @@ test('service worker precaches repo-managed launcher assets', () => {
   assert.ok(matches.includes('hexenwail.js'));
   assert.ok(matches.includes('hexenwail.wasm'));
   assert.ok(matches.includes('lib/phone-controls.js'));
+});
+
+test('service worker keeps the WebGlide GPU bundle out of the install precache', () => {
+  // The WebGlide bundle is runtime-cached on first use rather than
+  // precached. Two reasons: precaching megabytes of experimental code
+  // would slow the first paint for the ~all users who never toggle it
+  // on; and cache.addAll is atomic, so a 404 on a software-only local
+  // build would abort the whole SW install and leave the launcher
+  // without an offline shell.
+  const coreBlock = swText.match(/const CORE_ASSETS = \[([\s\S]*?)\];/)?.[1];
+  assert.ok(coreBlock, 'CORE_ASSETS array is defined');
+  assert.doesNotMatch(coreBlock, /hexenwail-webglide/,
+    'CORE_ASSETS must not precache the experimental WebGlide bundle');
+  const optionalBlock = swText.match(/const OPTIONAL_ASSETS = \[([\s\S]*?)\];/)?.[1];
+  assert.ok(optionalBlock, 'OPTIONAL_ASSETS array is defined');
+  assert.match(optionalBlock, /'\.\/hexenwail-webglide\.js'/);
+  assert.match(optionalBlock, /'\.\/hexenwail-webglide\.wasm'/);
+  // Runtime-cached on first use, so both core and optional URLs feed the
+  // same cache-first fetch path; anything else would break offline play
+  // after a single WebGlide session.
+  assert.match(swText, /CORE_ASSET_URLS\.includes\(request\.url\) && !OPTIONAL_ASSET_URLS\.includes\(request\.url\)/);
 });
 
 test('service worker cache is deployment-versioned and refreshes core assets', () => {
