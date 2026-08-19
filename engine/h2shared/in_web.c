@@ -224,20 +224,15 @@ static gpstick_t	gp_move, gp_look;
 
 static qboolean Web_StrContainsNoCase (const char *haystack, const char *needle)
 {
-	size_t i, len = strlen(needle);
+	size_t i, hlen = strlen(haystack), nlen = strlen(needle);
 
-	if (!len)
+	if (!nlen)
 		return true;
-	for (i = 0; haystack[i]; i++)
+	if (hlen < nlen)
+		return false;
+	for (i = 0; i + nlen <= hlen; i++)
 	{
-		size_t j;
-		for (j = 0; j < len; j++)
-		{
-			if (tolower((unsigned char)haystack[i + j]) !=
-			    tolower((unsigned char)needle[j]))
-				break;	/* also stops at the terminator */
-		}
-		if (j == len)
+		if (!q_strncasecmp(haystack + i, needle, nlen))
 			return true;
 	}
 	return false;

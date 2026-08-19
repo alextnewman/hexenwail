@@ -65,6 +65,7 @@ test('the gamepad is polled by the native web input driver, not an SDL layer', (
   // The Gamepad API is poll-only, so the driver has to sample it from the
   // host frame rather than wait for events.
   const commands = inputBackend.match(/void IN_Commands \(void\)\n\{([\s\S]*?)\n\}/)?.[1];
+  assert.ok(commands, 'IN_Commands is defined');
   assert.match(commands, /Web_PollGamepad\(\);/);
   assert.match(inputBackend, /emscripten_sample_gamepad_data\(\)/);
   assert.match(inputBackend, /emscripten_get_num_gamepads\(\)/);
