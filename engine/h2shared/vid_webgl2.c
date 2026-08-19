@@ -179,6 +179,10 @@ void VID_Init (const unsigned char *palette)
 	VID_BuildTintTables(palette);
 	vid.colormap = host_colormap;
 	vid.fullbright = 256 - LittleLong(*((int *)vid.colormap + 2048));
+	/* The colormap is content; the fullbright split has to be sane before
+	 * the texture manager can build self-lit masks from it. */
+	if (vid.fullbright < 1 || vid.fullbright > 256)
+		vid.fullbright = 224;
 	emscripten_get_element_css_size("#canvas", &width, &height);
 	if (width <= 0 || height <= 0)
 	{

@@ -599,6 +599,10 @@ static void GL2_LoadWorldTextures (qmodel_t *world)
 		}
 		if (texture->name[0] == '{')
 			flags |= GL2TEX_HOLEY;
+		/* Liquids and fences never take the additive self-lit pass --
+		 * the same exclusions the desktop renderer makes. */
+		else if (texture->name[0] != '*')
+			flags |= GL2TEX_FULLBRIGHT;
 
 		gl2_textures_by_index[i] = GL2_LoadTexture (texture->name,
 				(int)texture->width, (int)texture->height,
@@ -1038,18 +1042,45 @@ static void GL2_DrawChainLightmapped (int head, msurface_t *surfaces)
 
 /*
 ================
-GL2_WorldSurfaceFlags
+GL2_DrawChainUnlit
+
+Draws one texture's chain in one batch, with no lightmap lookup at all.
+Brush entities carrying an MLS light value take this path: their surfaces
+usually have no baked lightmap samples, so the atlas would multiply their
+flat light down to black.
+================
+*/
+static void GL2_DrawChainUnlit (int head)
+{
+	int	surfnum, count = 0;
+
+	for (surfnum = head; surfnum >= 0; surfnum = gl2_surfaces[surfnum].chain)
+		count = GL2_AppendSurface (count, &gl2_surfaces[surfnum]);
+
+	GL2_DrawIndices (count);
+}
+
+/*
+================
+GL2_BindSurfaceTexture
+
+Binds a chain's diffuse and self-lit textures and returns the matching
+shader flags.  The two belong together: the fullbright bit must never be
+set without a mask bound, and unit 2 must always hold something complete.
 
 '{' textures keep their cut-out through a shader discard, because the
 opaque world chains run with blending off and depth writes on.
 ================
 */
-static GLint GL2_WorldSurfaceFlags (const gl2texture_t *texture)
+static GLint GL2_BindSurfaceTexture (gl2texture_t *texture, qboolean lightmapped)
 {
-	GLint	flags = GL2_WORLDFLAG_LIGHTMAP;
+	GLint	flags = lightmapped ? GL2_WORLDFLAG_LIGHTMAP : 0;
 
+	GL2_Bind (0, texture);
 	if (texture && (texture->flags & GL2TEX_HOLEY))
 		flags |= GL2_WORLDFLAG_ALPHATEST;
+	if (GL2_BindFullbright (2, texture))
+		flags |= GL2_WORLDFLAG_FULLBRIGHT;
 	return flags;
 }
 
@@ -1070,6 +1101,7 @@ static void GL2_DrawTextureChains (void)
 	glUniform1f (program->u_alpha, 1.0f);
 	glUniform1f (program->u_turbtime, gl2_time);
 	glUniform2f (program->u_turbscale, 1.0f, 1.0f);
+	glUniform1f (program->u_light, 1.0f);
 	glUniform1i (program->u_flags, GL2_WORLDFLAG_LIGHTMAP);
 	GL2_SetupSceneUniforms (program);
 
@@ -1080,8 +1112,7 @@ static void GL2_DrawTextureChains (void)
 		if (gl2_texchain[i] < 0)
 			continue;
 		texture = gl2_textures_by_index[GL2_TextureAnimation (i, 0)];
-		GL2_Bind (0, texture);
-		glUniform1i (program->u_flags, GL2_WorldSurfaceFlags (texture));
+		glUniform1i (program->u_flags, GL2_BindSurfaceTexture (texture, true));
 		GL2_DrawChainLightmapped (gl2_texchain[i], cl.worldmodel->surfaces);
 	}
 }
@@ -1143,7 +1174,7 @@ so each gets the right warp scale and its own alpha.  Opaque liquids go
 first with depth writes on, so the translucent ones blend over them.
 ================
 */
-static void GL2_DrawWaterChain (const gl2matrix_t *mvp, msurface_t *surfaces)
+static void GL2_DrawWaterChain (const gl2matrix_t *mvp, msurface_t *surfaces, float light)
 {
 	const gl2program_t	*program = &gl2_world_program;
 	qboolean		blending = false;
@@ -1158,8 +1189,13 @@ static void GL2_DrawWaterChain (const gl2matrix_t *mvp, msurface_t *surfaces)
 	glUniform1f (program->u_overbright, 1.0f);
 	glUniform1f (program->u_alpha, 1.0f);
 	glUniform1f (program->u_turbtime, gl2_time);
+	glUniform1f (program->u_light, light);
 	glUniform1i (program->u_flags, GL2_WORLDFLAG_TURB);
 	GL2_SetupSceneUniforms (program);
+
+	/* Liquids carry no self-lit mask, but unit 2 still has to hold a
+	 * texture the shader can legally sample. */
+	GL2_BindFullbright (2, NULL);
 
 	/* Re-bucket the chain by texture: the same lmchain field, reused. */
 	for (i = 0; i < gl2_numtexchains; i++)
@@ -1336,7 +1372,7 @@ void GL2_DrawWorldWater (void)
 	glDepthMask (GL_TRUE);
 	glDisable (GL_BLEND);
 
-	GL2_DrawWaterChain (&gl2_view_projection, cl.worldmodel->surfaces);
+	GL2_DrawWaterChain (&gl2_view_projection, cl.worldmodel->surfaces, 1.0f);
 
 	glBindVertexArray (0);
 }
@@ -1357,9 +1393,10 @@ void GL2_DrawBrushEntity (entity_t *entity)
 	gl2matrix_t		model_matrix, mvp;
 	vec3_t			mins, maxs;
 	msurface_t		*surf;
-	int			i, surfnum;
+	int			i, surfnum, mls;
 	float			alpha = 1.0f;
-	qboolean		rotated;
+	float			intensity = 1.0f;
+	qboolean		rotated, lightmapped;
 
 	if (!model || model->type != mod_brush || !gl2_world_vao || !gl2_surfaces)
 		return;
@@ -1399,6 +1436,19 @@ void GL2_DrawBrushEntity (entity_t *entity)
 
 	if (entity->drawflags & DRF_TRANSLUCENT)
 		alpha = r_wateralpha.value;
+
+	/* Hexen II's model light styles, the same dispatch R_DrawAliasModel
+	 * uses: an absolute light value, or the pre-baked light style the
+	 * flag names.  Surfaces lit this way have no baked lightmap samples
+	 * to look up -- multiplying an empty atlas rectangle by the flat
+	 * light is what turns bit pillars and lifts pure black -- so they
+	 * skip the lightmap entirely, as vanilla Hexen II did. */
+	mls = entity->drawflags & MLS_MASKIN;
+	if (mls == MLS_ABSLIGHT)
+		intensity = (float)entity->abslight / 255.0f;
+	else if (mls != MLS_NONE)
+		intensity = (float)d_lightstylevalue[24 + mls] / 255.0f;
+	lightmapped = (mls == MLS_NONE);
 
 	GL2_RotateForEntity (&model_matrix, entity->origin, entity->angles);
 	GL2_MatrixMultiply (&mvp, &gl2_view_projection, &model_matrix);
@@ -1444,6 +1494,7 @@ void GL2_DrawBrushEntity (entity_t *entity)
 	glUniform1f (program->u_alpha, alpha);
 	glUniform1f (program->u_turbtime, gl2_time);
 	glUniform2f (program->u_turbscale, 1.0f, 1.0f);
+	glUniform1f (program->u_light, intensity);
 	glUniform1i (program->u_flags, GL2_WORLDFLAG_LIGHTMAP);
 	GL2_SetupSceneUniforms (program);
 
@@ -1454,9 +1505,12 @@ void GL2_DrawBrushEntity (entity_t *entity)
 		if (gl2_texchain[i] < 0)
 			continue;
 		texture = gl2_textures_by_index[GL2_TextureAnimation (i, entity->frame)];
-		GL2_Bind (0, texture);
-		glUniform1i (program->u_flags, GL2_WorldSurfaceFlags (texture));
-		GL2_DrawChainLightmapped (gl2_texchain[i], model->surfaces);
+		glUniform1i (program->u_flags,
+			GL2_BindSurfaceTexture (texture, lightmapped));
+		if (lightmapped)
+			GL2_DrawChainLightmapped (gl2_texchain[i], model->surfaces);
+		else
+			GL2_DrawChainUnlit (gl2_texchain[i]);
 	}
 
 	if (gl2_waterchain >= 0)
@@ -1465,7 +1519,7 @@ void GL2_DrawBrushEntity (entity_t *entity)
 		 * and the water pass wants an opaque baseline of its own. */
 		glDisable (GL_BLEND);
 		glDepthMask (GL_TRUE);
-		GL2_DrawWaterChain (&mvp, model->surfaces);
+		GL2_DrawWaterChain (&mvp, model->surfaces, intensity);
 	}
 
 	glDisable (GL_BLEND);

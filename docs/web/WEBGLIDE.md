@@ -114,6 +114,31 @@ Colour comes from two places, both already present in the game data:
 The 8bpp software renderer collapses both to a grey ramp. This is the payoff
 for running WebGlide at all.
 
+## Light that is not the lightmap
+
+Two things in Hexen II are lit without reference to a lightmap sample, and
+both have to be reproduced or the world reads as far darker than the
+software renderer draws it.
+
+**Self-lit texels.** Palette indices at or above `vid.fullbright` (224 in the
+stock colormap) are the colours the colormap never shades: torch flames,
+lava crust, rune glow, lamp glass. `gl2_texture.c` builds a companion mask
+texture for every palette texture that contains any of them — the fullbright
+texels at full colour, everything else black — and the `world` and `model`
+shaders add it on top of the lit surface. Textures without such texels get
+no mask and no cost; `*` liquids and `{` fences are excluded, as they are in
+the desktop renderer. `gl_fullbrights 0` turns the mask off at bind time, so
+it takes effect immediately rather than at the next map load.
+
+**Model light styles.** A brush entity's `drawflags & MLS_MASKIN` carries
+either an absolute light value (`MLS_ABSLIGHT`, from `entity_t::abslight`) or
+the index of a pre-baked light style — `MLS_FULLBRIGHT`, `MLS_POWERMODE`,
+`MLS_TORCH`, `MLS_TOTALDARK`. Those surfaces normally have **no baked
+lightmap samples at all**, so multiplying the atlas by the flat light gives
+zero: bit pillars, lifts and similar brushwork render pure black. They take a
+single-pass unlit draw with the flat light in `u_light` instead, which is
+what vanilla Hexen II did and what the desktop GL renderer still does.
+
 ## Cvars
 
 All `gl_glide_*` cvars are archived. The defaults are the look the brochure
@@ -125,7 +150,7 @@ resolution a phone GPU is happy to sustain.
 | `gl_glide_dither` | `1` | 16bpp ordered dither. |
 | `gl_glide_postfilter` | `0` | The 2×2 "22-bit" scan-out filter. |
 | `gl_glide_lodbias` | `0` | `grTexLodBiasValue()`, i.e. mip selection bias. Negative sharpens and sparkles. |
-| `gl_glide_gamma` | `1` | The Voodoo gamma ramp. |
+| `gl_glide_gamma` | `1` | The Voodoo gamma ramp, multiplied into `v_gamma`. |
 | `gl_glide_tbuffer` | `1` | VSA-100 T-buffer accumulation. Disabled automatically if the buffer is unavailable. |
 | `gl_glide_motionblur` | `0` | T-buffer temporal blend, 0…0.9. |
 | `gl_glide_fogtable` | `1` | `GR_FOG_WITH_TABLE` emulation. |
@@ -139,10 +164,19 @@ resolution a phone GPU is happy to sustain.
 | `gl_glide_crt_vignette` | `0` | Corner falloff. |
 
 Shared client cvars that WebGlide actually honours include `gl_overbright`,
-`gl_texturemode`, `gl_coloredlight`, the liquid alphas (`r_wateralpha`,
-`r_lavaalpha`, `r_slimealpha`, `r_telealpha`, `r_turbalpha`) and the light
-policy cvars (`gl_missile_glows`, `gl_torch_dlight`, `gl_flashintensity`,
+`gl_fullbrights`, `gl_overbright_models`, `gl_texturemode`, `gl_coloredlight`,
+`v_gamma`, `v_contrast`, the liquid alphas (`r_wateralpha`, `r_lavaalpha`,
+`r_slimealpha`, `r_telealpha`, `r_turbalpha`) and the light policy cvars
+(`gl_missile_glows`, `gl_torch_dlight`, `gl_flashintensity`,
 `gl_extra_dynamic_lights`).
+
+`v_gamma` is an exponent, not a multiplier, exactly as in the rest of the
+engine: the software renderer bakes `pow(c, v_gamma)` into the palette, so
+values below `1` brighten. `gl_glide_gamma` multiplies into it, and the
+product is clamped to 0.3…3. Both layers of the frame apply it — the scene
+in the scan-out pass, the 2D layer (HUD, menus, console) in its own shader —
+because the 2D layer is drawn straight to the canvas after scan-out and would
+otherwise ignore the brightness slider entirely.
 
 Which of the liquid alphas a turbulent surface gets is decided per texture,
 as in the desktop GL renderer. The model loader this configuration builds
@@ -158,12 +192,9 @@ something to bind to; they currently do nothing here: `r_scale`, `r_softemu`,
 `r_dither`, `r_hdr`, `r_hdr_exposure`, `gl_fxaa`, `r_motionblur`,
 `r_lightmap_bicubic`, `gl_flashblend`, `gl_texture_anisotropy` (use
 `gl_glide_anisotropy`), `r_waterwarp`, `r_texture_external`,
-`r_texture_external_hud`, `gl_fullbrights`, `gl_glows`, `gl_other_glows`,
-`gl_glow_intensity`.
+`r_texture_external_hud`, `gl_glows`, `gl_other_glows`, `gl_glow_intensity`.
 
-Two known gaps behind that last group: the texture manager builds no
-fullbright mask, so palette fullbright pixels are lit like any other texel
-rather than staying at full brightness; and the model path does not consume
+One known gap behind that last group: the model path does not consume
 `qmodel_t::glow_settings`, so the QC-driven glow orbs and trails are absent.
 
 ## Diagnostics
@@ -190,8 +221,9 @@ There are no `renderer_status` / `renderer_safe` commands and no
 `scripts/webgl-smoke-test.sh` runs Chrome/Chromium with software WebGL2 and
 `scripts/webgl-engine-shader-smoke.mjs`, which extracts the engine's actual
 shader strings from `gl2_shader.c` (the `webglide_world`, `webglide_sky`,
-`webglide_model` and `webglide_post` programs) plus the legacy web-profile
-families still kept in `gl_shader.c` / `gl_postprocess.c`, compiles and links
+`webglide_model` and `webglide_post` programs) and `draw_webgl2.c` (the
+`webglide_ui` 2D program) plus the legacy web-profile families still kept in
+`gl_shader.c` / `gl_postprocess.c`, compiles and links
 every one of them in WebGL2, draws generated textures through the world
 contract into an RGBA8 FBO, and rejects GL errors, unexpected pixels and
 predominantly black output. It runs in CI before the WASM build.

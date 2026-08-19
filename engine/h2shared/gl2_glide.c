@@ -475,6 +475,30 @@ void GL2_GlideBeginScene (int x, int y, int width, int height)
 
 /*
 ================
+GL2_GammaContrast
+
+The engine's brightness controls, resolved once for both layers of the
+frame.  v_gamma is an exponent, not a multiplier: the software renderer
+bakes pow(c, v_gamma) into the palette, so values below 1 brighten.
+gl_glide_gamma rides on top of it as the Voodoo's own RAMDAC ramp did,
+and applies to the 2D layer as well because a RAMDAC could not tell the
+menu from the world.
+================
+*/
+void GL2_GammaContrast (float *gamma, float *contrast)
+{
+	float	g = gl_glide_gamma.value * v_gamma.value;
+
+	if (g < 0.3f)
+		g = 0.3f;
+	if (g > 3.0f)
+		g = 3.0f;
+	*gamma = g;
+	*contrast = q_max(v_contrast.value, 0.1f);
+}
+
+/*
+================
 GL2_ScanOutPass
 
 One fullscreen triangle through the post program.
@@ -484,7 +508,7 @@ static void GL2_ScanOutPass (GLuint source, GLuint history, int flags, float ble
 {
 	float	dither = 0.0f;
 	float	tint[4];
-	float	gamma;
+	float	gamma, contrast;
 
 	GL2_UseProgram (&gl2_post_program);
 	GL2_BindName (0, source);
@@ -502,11 +526,9 @@ static void GL2_ScanOutPass (GLuint source, GLuint history, int flags, float ble
 		if (dither > 1.0f) dither = 1.0f;
 		glUniform1f (gl2_post_program.u_postfilter, dither);
 
-		gamma = gl_glide_gamma.value * v_gamma.value;
-		if (gamma < 0.3f) gamma = 0.3f;
-		if (gamma > 3.0f) gamma = 3.0f;
+		GL2_GammaContrast (&gamma, &contrast);
 		glUniform1f (gl2_post_program.u_gamma, gamma);
-		glUniform1f (gl2_post_program.u_contrast, q_max(v_contrast.value, 0.1f));
+		glUniform1f (gl2_post_program.u_contrast, contrast);
 
 		GL2_PolyBlendColor (tint);
 		glUniform4f (gl2_post_program.u_tint, tint[0], tint[1], tint[2], tint[3]);

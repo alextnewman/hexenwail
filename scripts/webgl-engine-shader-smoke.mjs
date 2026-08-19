@@ -9,6 +9,7 @@ const SHADER_HEADER = resolve(ROOT, 'engine/h2shared/gl_shader.h');
 const SHADER_SOURCE = resolve(ROOT, 'engine/h2shared/gl_shader.c');
 const POSTPROCESS_SOURCE = resolve(ROOT, 'engine/h2shared/gl_postprocess.c');
 const WEBGLIDE_SOURCE = resolve(ROOT, 'engine/h2shared/gl2_shader.c');
+const WEBGLIDE_UI_SOURCE = resolve(ROOT, 'engine/h2shared/draw_webgl2.c');
 
 const PROGRAM_SPECS = [
   ['2d', 'shader', 's2d_vert', 's2d_frag'],
@@ -27,6 +28,7 @@ const PROGRAM_SPECS = [
   ['webglide_sky', 'webglide', 'glide_sky_vert', 'glide_sky_frag'],
   ['webglide_model', 'webglide', 'glide_model_vert', 'glide_model_frag'],
   ['webglide_post', 'webglide', 'glide_post_vert', 'glide_post_frag'],
+  ['webglide_ui', 'webglide_ui', 'ui_vertex_source', 'ui_fragment_source'],
 ];
 
 const WEBGLIDE_MACROS = [
@@ -125,11 +127,12 @@ function injectEngineDefines(source) {
 }
 
 export async function extractEngineWebGLPrograms() {
-  const [header, shaderSource, postprocessSource, webglideSource] = await Promise.all([
+  const [header, shaderSource, postprocessSource, webglideSource, webglideUiSource] = await Promise.all([
     readFile(SHADER_HEADER, 'utf8'),
     readFile(SHADER_SOURCE, 'utf8'),
     readFile(POSTPROCESS_SOURCE, 'utf8'),
     readFile(WEBGLIDE_SOURCE, 'utf8'),
+    readFile(WEBGLIDE_UI_SOURCE, 'utf8'),
   ]);
   const webProfileStart = header.indexOf('#ifdef __EMSCRIPTEN__');
   const webProfileEnd = header.indexOf('#else', webProfileStart);
@@ -151,7 +154,12 @@ export async function extractEngineWebGLPrograms() {
     macros.set(name, readDefine(webglideSource, name, macros));
   }
 
-  const sources = { shader: shaderSource, postprocess: postprocessSource, webglide: webglideSource };
+  const sources = {
+    shader: shaderSource,
+    postprocess: postprocessSource,
+    webglide: webglideSource,
+    webglide_ui: webglideUiSource,
+  };
   return PROGRAM_SPECS.map(([name, family, vertexName, fragmentName]) => ({
     name,
     vertex: injectEngineDefines(evaluateCStringExpression(
