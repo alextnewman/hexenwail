@@ -252,13 +252,13 @@ static gamepad_type_t Web_GPClassify (const char *id)
 	if (Web_StrContainsNoCase(id, "dualsense") ||
 	    Web_StrContainsNoCase(id, "dualshock") ||
 	    Web_StrContainsNoCase(id, "playstation") ||
-	    Web_StrContainsNoCase(id, "054c"))
+	    Web_StrContainsNoCase(id, "054c"))	/* Sony USB vendor id */
 		return GAMEPAD_TYPE_PLAYSTATION;
 	if (Web_StrContainsNoCase(id, "nintendo") ||
 	    Web_StrContainsNoCase(id, "switch") ||
 	    Web_StrContainsNoCase(id, "joy-con") ||
 	    Web_StrContainsNoCase(id, "joycon") ||
-	    Web_StrContainsNoCase(id, "057e"))
+	    Web_StrContainsNoCase(id, "057e"))	/* Nintendo USB vendor id */
 		return GAMEPAD_TYPE_NINTENDO_SWITCH;
 	return GAMEPAD_TYPE_UNKNOWN;
 }
@@ -392,7 +392,10 @@ static void Web_GPForget (void)
 	for (i = 0; i < GPB_COUNT; i++)
 		gp_button_key[i] = 0;
 	for (i = 0; i < GPNAV_COUNT; i++)
+	{
 		gp_nav_down[i] = false;
+		gp_nav_repeat[i] = 0;
+	}
 	gp_move.x = gp_move.y = gp_look.x = gp_look.y = 0;
 }
 
@@ -498,12 +501,15 @@ static void Web_PollGamepad (void)
 	}
 
 	num_pads = emscripten_get_num_gamepads();
-	if (num_pads <= 0 || !Web_SelectGamepad(num_pads, &state))
+	if (num_pads <= 0)
 	{
 		if (gp_index >= 0)
 			Web_GPDisconnect();
 		return;
 	}
+	/* Web_SelectGamepad has already disconnected the old pad if it failed. */
+	if (!Web_SelectGamepad(num_pads, &state))
+		return;
 
 	gamekey = Key_IsGameKey();
 
