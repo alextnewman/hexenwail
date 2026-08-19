@@ -649,10 +649,24 @@ void R_RenderView (void)
 
 void R_ViewChanged (float aspect) { (void)aspect; }
 
-void R_SetVrect (vrect_t *pvrect, vrect_t *pvrectin, int lineadj)
+/*
+===============
+R_SetVrect
+
+pvrectin is the full screen rect, pvrect is the 3D view rect to fill in --
+the same in/out order as the software rasteriser's R_SetVrect in r_main.c.
+There is no 8/2 pixel alignment to honour on a GPU, so the view simply
+fills the screen above the status bar strip.
+===============
+*/
+void R_SetVrect (vrect_t *pvrectin, vrect_t *pvrect, int lineadj)
 {
 	*pvrect = *pvrectin;
 	pvrect->height -= lineadj;
+	if (pvrect->width < 1)
+		pvrect->width = 1;
+	if (pvrect->height < 1)
+		pvrect->height = 1;
 }
 
 void R_PushDlights (void)
