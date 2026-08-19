@@ -170,6 +170,10 @@ static const char glide_world_frag[] =
 	" if ((u_flags & 1) != 0)\n"
 	"  uv = (uv + 8.0 * sin (uv.yx * 0.125 + u_turbtime)) * u_turbscale;\n"
 	" vec4 albedo = texture (u_diffuse, uv, GlideLod ());\n"
+	/* '{' textures -- fences, grates, foliage -- are drawn in the opaque
+	 * chains with blending off, so the cut-out has to be a discard. */
+	" if ((u_flags & 4) != 0 && albedo.a < 0.666)\n"
+	"  discard;\n"
 	" vec3 color = albedo.rgb;\n"
 	" if ((u_flags & 2) != 0)\n"
 	"  color *= texture (u_lightmap, v_lmcoord).rgb * u_overbright;\n"

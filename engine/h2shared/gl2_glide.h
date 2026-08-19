@@ -114,6 +114,7 @@ void GL2_MatrixScale (gl2matrix_t *out, float x, float y, float z);
 #define GL2TEX_HOLEY		(1u << 2)	/* palette index 0 is clear */
 #define GL2TEX_CLAMP		(1u << 3)
 #define GL2TEX_NEAREST		(1u << 4)	/* never filter (particles, sky) */
+#define GL2TEX_DYNAMIC		(1u << 5)	/* content changes under a fixed name */
 #define GL2TEX_PERSIST		(1u << 6)	/* survives a map change */
 #define GL2TEX_RGBA		(1u << 7)	/* source is already 32bpp */
 
@@ -194,6 +195,7 @@ qboolean GL2_ShadersReady (void);
 /* World shader feature bits, mirrored in the GLSL source. */
 #define GL2_WORLDFLAG_TURB	1
 #define GL2_WORLDFLAG_LIGHTMAP	2
+#define GL2_WORLDFLAG_ALPHATEST	4
 
 /* Model shader feature bits. */
 #define GL2_MODELFLAG_ALPHATEST	1
@@ -253,6 +255,7 @@ void GL2_WorldNewMap (void);
 void GL2_WorldShutdown (void);
 void GL2_BuildLightmaps (void);
 void GL2_DrawWorld (void);
+void GL2_DrawWorldWater (void);
 void GL2_DrawBrushEntity (entity_t *entity);
 void GL2_SkyNewMap (texture_t *texture);
 qboolean GL2_WorldHasColoredLight (void);
@@ -315,7 +318,7 @@ extern int		gl2_dlightframecount;
 extern mleaf_t		*gl2_viewleaf;
 extern entity_t		*gl2_currententity;
 extern vec3_t		gl2_modelorg;
-extern float		gl2_frametime;
+extern float		gl2_time;	/* cl.time, the shader animation phase */
 extern int		gl2_scene_width, gl2_scene_height;
 extern int		gl2_frame_polys;
 extern int		gl2_frame_batches;

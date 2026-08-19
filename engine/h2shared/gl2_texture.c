@@ -254,6 +254,10 @@ GL2_LoadTexture
 Uploads 8bpp palette data (or RGBA with GL2TEX_RGBA) and returns a handle.
 A second request for the same name and shape reuses the existing texture,
 which is what makes brush models and animated textures cheap.
+
+The cache key is the name, so a caller whose pixels change under a fixed
+name -- a translated player skin -- must pass GL2TEX_DYNAMIC to get the
+new content uploaded over the existing GL object.
 ================
 */
 gl2texture_t *GL2_LoadTexture (const char *name, int width, int height,
@@ -269,12 +273,16 @@ gl2texture_t *GL2_LoadTexture (const char *name, int width, int height,
 	texture = GL2_FindTexture (name);
 	if (texture)
 	{
-		if (texture->width == width && texture->height == height &&
-		    texture->flags == flags)
+		if (texture->width != width || texture->height != height ||
+		    texture->flags != flags)
+		{
+			/* Same name, different shape: reload in place. */
+			glDeleteTextures (1, &texture->id);
+			texture->id = 0;
+		}
+		else if (!(flags & GL2TEX_DYNAMIC))
 			return texture;
-		/* Same name, different shape: reload in place. */
-		glDeleteTextures (1, &texture->id);
-		texture->id = 0;
+		/* else: volatile content, re-specified over the same GL name. */
 	}
 	else
 	{
@@ -307,7 +315,8 @@ gl2texture_t *GL2_LoadTexture (const char *name, int width, int height,
 		rgba = GL2_ExpandPalette (data, width * height, flags);
 	}
 
-	glGenTextures (1, &texture->id);
+	if (!texture->id)
+		glGenTextures (1, &texture->id);
 	glActiveTexture (GL_TEXTURE0);
 	gl2_bound[0] = texture->id;
 	glBindTexture (GL_TEXTURE_2D, texture->id);

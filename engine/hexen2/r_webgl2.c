@@ -156,15 +156,13 @@ int		gl2_dlightframecount;
 mleaf_t		*gl2_viewleaf;
 entity_t	*gl2_currententity;
 vec3_t		gl2_modelorg;
-float		gl2_frametime;
+float		gl2_time;
 int		gl2_frame_polys;
 int		gl2_frame_batches;
 
 static mleaf_t	*gl2_oldviewleaf;
-static double	gl2_lasttime;
 
 static void Web_RegisterRendererCvars (void)
-
 {
 	Cvar_RegisterVariable(&r_norefresh);
 	Cvar_RegisterVariable(&r_drawentities);
@@ -387,16 +385,13 @@ GL2_SetupFrame
 */
 static void GL2_SetupFrame (void)
 {
-	double	now = cl.time;
-
 	r_framecount++;
 	gl2_frame_polys = 0;
 	gl2_frame_batches = 0;
 
-	gl2_frametime = (float)(now - gl2_lasttime);
-	if (gl2_frametime < 0 || gl2_frametime > 0.5f)
-		gl2_frametime = 0;
-	gl2_lasttime = now;
+	/* The liquid warp and the sky scroll are absolute phases, not deltas:
+	 * the shaders take cl.time straight, as the desktop GL path does. */
+	gl2_time = (float)cl.time;
 
 	VectorCopy (r_refdef.vieworg, r_origin);
 	AngleVectors (r_refdef.viewangles, vpn, vright, vup);
@@ -636,6 +631,9 @@ void R_RenderView (void)
 		GL2_DrawWorld();
 
 	GL2_DrawEntitiesOnList(false);
+	/* World liquids blend with depth writes off, so they belong after the
+	 * opaque entities and before the translucent ones. */
+	GL2_DrawWorldWater();
 	GL2_DrawEntitiesOnList(true);
 	GL2_DrawViewModel();
 	R_DrawParticles();

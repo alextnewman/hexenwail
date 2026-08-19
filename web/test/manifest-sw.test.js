@@ -47,7 +47,7 @@ test('service worker keeps the WebGlide GPU bundle out of the install precache',
   // Runtime-cached on first use, so both core and optional URLs feed the
   // same cache-first fetch path; anything else would break offline play
   // after a single WebGlide session.
-  assert.match(swText, /CORE_ASSET_URLS\.includes\(request\.url\) && !OPTIONAL_ASSET_URLS\.includes\(request\.url\)/);
+  assert.match(swText, /if \(!CORE_ASSET_URLS\.includes\(request\.url\) && !OPTIONAL_ASSET_URLS\.includes\(request\.url\)\)/);
 });
 
 test('service worker cache is deployment-versioned and refreshes core assets', () => {

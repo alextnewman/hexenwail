@@ -358,6 +358,10 @@ static gl2texture_t *GL2_AliasSkin (entity_t *entity, const aliashdr_t *paliashd
 			for (i = 0; i < size; i++)
 				translated[i] = entity->colormap[pixels[i]];
 			pixels = translated;
+			/* Player skins change when a client changes colour, so
+			 * the cache has to re-upload rather than hand back the
+			 * pixels it saw first. */
+			flags |= GL2TEX_DYNAMIC;
 			q_snprintf (name, sizeof(name), "%s:player%d:%d",
 					entity->model->name, entnum, skinnum);
 		}
@@ -367,14 +371,7 @@ static gl2texture_t *GL2_AliasSkin (entity_t *entity, const aliashdr_t *paliashd
 
 	texture = GL2_LoadTexture (name, pmdl->skinwidth, pmdl->skinheight, pixels, flags);
 
-	if (translated)
-	{
-		/* Player skins change when a client changes colour, so keep
-		 * the cached copy honest by reloading it every frame it is
-		 * seen; GL2_LoadTexture reuses the slot, so this is an
-		 * upload, not an allocation. */
-		free (translated);
-	}
+	free (translated);
 	return texture;
 }
 
@@ -709,7 +706,7 @@ void GL2_DrawAliasModel (entity_t *entity)
 	vec3_t			mins, maxs, scale, offset, angles;
 	vec3_t			forward, right, up;
 	float			alpha = 1.0f;
-	float			shadelight, iw, ih;
+	float			iw, ih;
 	unsigned int		shaderflags = 0;
 	int			blend = GL2_BLEND_OPAQUE;
 	int			i, pose, numtris;
@@ -738,10 +735,13 @@ void GL2_DrawAliasModel (entity_t *entity)
 	VectorCopy (gl2_lightcolor, tint);
 	GL2_ApplyColorShade (entity, tint);
 
-	/* Quantised normal-dot row for this yaw, the GLQuake Gouraud model. */
+	/* Quantised normal-dot row for this yaw, the GLQuake Gouraud model.
+	 * tint already carries the sampled intensity per channel, so the only
+	 * per-vertex term is the normal dot; the GL renderer's /200 scale
+	 * becomes /200*255 because these are bytes, not floats. */
 	gl2_shadedots = gl2_avertexnormal_dots
 		[((int)(entity->angles[1] * (SHADEDOT_QUANT / 360.0f))) & (SHADEDOT_QUANT - 1)];
-	shadelight = gl2_shadelight / 200.0f;
+	VectorScale (tint, 255.0f / 200.0f, tint);
 
 	if (entity->drawflags & DRF_TRANSLUCENT)
 	{
@@ -814,7 +814,7 @@ void GL2_DrawAliasModel (entity_t *entity)
 			out->s = st->s * iw;
 			out->t = st->t * ih;
 
-			light = gl2_shadedots[vert->lightnormalindex] * shadelight;
+			light = gl2_shadedots[vert->lightnormalindex];
 			for (c = 0; c < 3; c++)
 			{
 				int	value = (int)(tint[c] * light);
@@ -839,7 +839,8 @@ void GL2_DrawAliasModel (entity_t *entity)
 =============================================================================
 */
 
-static const mspriteframe_t *GL2_SpriteFrame (entity_t *entity, const msprite_t *psprite)
+static const mspriteframe_t *GL2_SpriteFrame (entity_t *entity, const msprite_t *psprite,
+						int *frame_out, int *subframe_out)
 {
 	const mspriteframedesc_t	*pframedesc;
 	const mspritegroup_t		*pspritegroup;
@@ -850,6 +851,8 @@ static const mspriteframe_t *GL2_SpriteFrame (entity_t *entity, const msprite_t 
 
 	if (frame >= psprite->numframes || frame < 0)
 		frame = 0;
+	*frame_out = frame;
+	*subframe_out = 0;
 
 	pframedesc = &psprite->frames[frame];
 	if (pframedesc->type == SPR_SINGLE)
@@ -868,6 +871,7 @@ static const mspriteframe_t *GL2_SpriteFrame (entity_t *entity, const msprite_t 
 		if (intervals[i] > targettime)
 			break;
 	}
+	*subframe_out = i;
 	return pspritegroup->frames[i];
 }
 
@@ -967,7 +971,7 @@ void GL2_DrawSpriteModel (entity_t *entity)
 	float			alpha = 1.0f;
 	unsigned int		flags = GL2TEX_ALPHA;
 	int			blend = GL2_BLEND_ALPHA;
-	int			i;
+	int			i, framenum, subframe;
 	static const float	corner_s[6] = { 0, 0, 1, 0, 1, 1 };
 	static const float	corner_t[6] = { 1, 0, 0, 1, 0, 1 };
 
@@ -977,7 +981,7 @@ void GL2_DrawSpriteModel (entity_t *entity)
 	psprite = (const msprite_t *) Mod_Extradata (model);
 	if (!psprite)
 		return;
-	frame = GL2_SpriteFrame (entity, psprite);
+	frame = GL2_SpriteFrame (entity, psprite, &framenum, &subframe);
 	if (!frame || frame->width <= 0 || frame->height <= 0)
 		return;
 
@@ -992,7 +996,9 @@ void GL2_DrawSpriteModel (entity_t *entity)
 	if (model->flags & EF_SPECIAL_TRANS)
 		blend = GL2_BLEND_ADD;
 
-	q_snprintf (name, sizeof(name), "%s:%d", model->name, entity->frame);
+	/* Grouped sprites animate within one entity frame, so the subframe has
+	 * to be part of the cache key or the first one uploaded sticks. */
+	q_snprintf (name, sizeof(name), "%s:%d:%d", model->name, framenum, subframe);
 	texture = GL2_LoadTexture (name, frame->width, frame->height,
 				frame->pixels, flags | GL2TEX_CLAMP);
 	if (!texture)

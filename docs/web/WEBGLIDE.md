@@ -22,8 +22,8 @@ The rules that follow from that brief:
 * The world is the exception: its geometry never moves, so it lives in a
   static vertex buffer drawn as per-texture index batches.
 * Everything expensive that depends only on the assets — mip chains, alpha
-  fringe repair, fullbright masks, lightmap atlases, `.lit` colour — happens
-  once at load time, never per frame.
+  fringe repair, lightmap atlases, `.lit` colour — happens once at load time,
+  never per frame.
 * The scene is rendered into an offscreen buffer that may be larger than the
   display (`gl_glide_supersample`) and resolved on scan-out.
 * The period look is a set of scan-out *choices*, not a limitation: the 16bpp
@@ -45,7 +45,7 @@ toggle, the console messages and the shipped bundle basename
 | `engine/hexen2/r_webgl2.c` | Renderer entry points, cvars, the per-entity PimpModel override table, `Fog_ParseServerMessage`. |
 | `engine/h2shared/gl2_glide.c` | Matrices, the offscreen scene buffer, T-buffer accumulation and scan-out. |
 | `engine/h2shared/gl2_world.c` | World geometry, lightmap atlases (128 × 128 RGBA), `.lit` colour, sky. |
-| `engine/h2shared/gl2_alias.c` | Alias models, sprites, particles and glow orbs — CPU transformed and lit. |
+| `engine/h2shared/gl2_alias.c` | Alias models, sprites and particles — CPU transformed and lit. |
 | `engine/h2shared/gl2_texture.c` | Texture manager: palette expansion, alpha fringe repair, mip generation. |
 | `engine/h2shared/gl2_shader.c` | The four shader programs. Sources are extracted and compiled for real by the smoke test, so keep them as `static const char <name>[] = ...` literals. |
 | `engine/h2shared/gl2_glide.h` | Internal interface and the `gl_glide_*` cvar declarations. |
@@ -65,7 +65,7 @@ needs:
 | --- | --- |
 | `world` | Lightmapped world and brush surfaces plus warped liquids — one combine unit with a different address generator, as on a Voodoo. |
 | `sky` | The two scrolling sky layers. |
-| `model` | Everything the CPU transformed and lit: alias models, sprites, particles, glow orbs. |
+| `model` | Everything the CPU transformed and lit: alias models, sprites, particles. |
 | `post` | Scan-out: T-buffer accumulation, the 2×2 postfilter, the gamma ramp and the palette blend. |
 
 Dither and fog are shared GLSL fragments rather than separate passes, because
@@ -120,7 +120,13 @@ something to bind to; they currently do nothing here: `r_scale`, `r_softemu`,
 `r_dither`, `r_hdr`, `r_hdr_exposure`, `gl_fxaa`, `r_motionblur`,
 `r_lightmap_bicubic`, `gl_flashblend`, `gl_texture_anisotropy` (use
 `gl_glide_anisotropy`), `r_waterwarp`, `r_texture_external`,
-`r_texture_external_hud`.
+`r_texture_external_hud`, `gl_fullbrights`, `gl_glows`, `gl_other_glows`,
+`gl_glow_intensity`.
+
+Two known gaps behind that last group: the texture manager builds no
+fullbright mask, so palette fullbright pixels are lit like any other texel
+rather than staying at full brightness; and the model path does not consume
+`qmodel_t::glow_settings`, so the QC-driven glow orbs and trails are absent.
 
 ## Diagnostics
 

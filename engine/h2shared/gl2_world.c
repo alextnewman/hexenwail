@@ -74,6 +74,7 @@ static int		gl2_numtexchains;
 static gl2texture_t	**gl2_textures_by_index;
 static int		gl2_skychain;
 static int		gl2_waterchain;
+static int		gl2_worldwaterchain = -1;	/* deferred past opaque entities */
 static int		gl2_lmhead[WEB_MAX_LIGHTMAPS];
 
 static GLuint		gl2_lightmap_textures[WEB_MAX_LIGHTMAPS];
@@ -1037,6 +1038,23 @@ static void GL2_DrawChainLightmapped (int head, msurface_t *surfaces)
 
 /*
 ================
+GL2_WorldSurfaceFlags
+
+'{' textures keep their cut-out through a shader discard, because the
+opaque world chains run with blending off and depth writes on.
+================
+*/
+static GLint GL2_WorldSurfaceFlags (const gl2texture_t *texture)
+{
+	GLint	flags = GL2_WORLDFLAG_LIGHTMAP;
+
+	if (texture && (texture->flags & GL2TEX_HOLEY))
+		flags |= GL2_WORLDFLAG_ALPHATEST;
+	return flags;
+}
+
+/*
+================
 GL2_DrawTextureChains
 ================
 */
@@ -1050,18 +1068,70 @@ static void GL2_DrawTextureChains (void)
 	glUniform2f (program->u_scroll, 0.0f, 0.0f);
 	glUniform1f (program->u_overbright, gl2_lightmap_overbright ? 2.0f : 1.0f);
 	glUniform1f (program->u_alpha, 1.0f);
-	glUniform1f (program->u_turbtime, gl2_frametime);
+	glUniform1f (program->u_turbtime, gl2_time);
 	glUniform2f (program->u_turbscale, 1.0f, 1.0f);
 	glUniform1i (program->u_flags, GL2_WORLDFLAG_LIGHTMAP);
 	GL2_SetupSceneUniforms (program);
 
 	for (i = 0; i < gl2_numtexchains; i++)
 	{
+		gl2texture_t	*texture;
+
 		if (gl2_texchain[i] < 0)
 			continue;
-		GL2_Bind (0, gl2_textures_by_index[GL2_TextureAnimation (i, 0)]);
+		texture = gl2_textures_by_index[GL2_TextureAnimation (i, 0)];
+		GL2_Bind (0, texture);
+		glUniform1i (program->u_flags, GL2_WorldSurfaceFlags (texture));
 		GL2_DrawChainLightmapped (gl2_texchain[i], cl.worldmodel->surfaces);
 	}
+}
+
+/*
+================
+GL2_ClampAlpha
+================
+*/
+static float GL2_ClampAlpha (float alpha)
+{
+	if (alpha < 0.1f)
+		return 0.1f;
+	if (alpha > 1.0f)
+		return 1.0f;
+	return alpha;
+}
+
+/*
+================
+GL2_LiquidAlpha
+
+Per-liquid alpha, mirroring R_LiquidAlpha in the desktop GL renderer.  The
+model loader this configuration builds against carries no per-texture
+content class, so the two signals available are the vanilla SURF_TRANSLUCENT
+flag (Mod_SetDrawingFlags sets it for *lowlight and *rtex078) and the
+texture name.  Everything else stays opaque under r_turbalpha, which is
+what vanilla Hexen II did.
+================
+*/
+static float GL2_LiquidAlpha (const texture_t *texture, qboolean translucent)
+{
+	const char	*name;
+
+	if (!texture)
+		return GL2_ClampAlpha (r_turbalpha.value);
+
+	name = (texture->name[0] == '*') ? texture->name + 1 : texture->name;
+
+	if (!q_strncasecmp (name, "lava", 4))
+		return (r_lavaalpha.value <= 0) ? 1.0f : GL2_ClampAlpha (r_lavaalpha.value);
+	if (!q_strncasecmp (name, "slime", 5))
+		return (r_slimealpha.value <= 0) ? 1.0f : GL2_ClampAlpha (r_slimealpha.value);
+	if (!q_strncasecmp (name, "tele", 4))
+		return (r_telealpha.value <= 0) ? 0.7f : GL2_ClampAlpha (r_telealpha.value);
+	if (translucent || strstr (name, "water") || strstr (name, "ice") ||
+	    strstr (name, "glass"))
+		return GL2_ClampAlpha (r_wateralpha.value);
+
+	return GL2_ClampAlpha (r_turbalpha.value);
 }
 
 /*
@@ -1069,38 +1139,27 @@ static void GL2_DrawTextureChains (void)
 GL2_DrawWaterChain
 
 Liquids: warped in the shader, optionally translucent, batched per texture
-so each gets the right warp scale.
+so each gets the right warp scale and its own alpha.  Opaque liquids go
+first with depth writes on, so the translucent ones blend over them.
 ================
 */
-static void GL2_DrawWaterChain (msurface_t *surfaces)
+static void GL2_DrawWaterChain (const gl2matrix_t *mvp, msurface_t *surfaces)
 {
 	const gl2program_t	*program = &gl2_world_program;
-	float			alpha;
-	int			i;
+	qboolean		blending = false;
+	int			pass, i;
 
 	if (gl2_waterchain < 0)
 		return;
 
-	alpha = r_wateralpha.value;
-	if (alpha < 0.0f)
-		alpha = 0.0f;
-	else if (alpha > 1.0f)
-		alpha = 1.0f;
-
 	GL2_UseProgram (program);
-	glUniformMatrix4fv (program->u_mvp, 1, GL_FALSE, gl2_view_projection.m);
+	glUniformMatrix4fv (program->u_mvp, 1, GL_FALSE, mvp->m);
 	glUniform2f (program->u_scroll, 0.0f, 0.0f);
 	glUniform1f (program->u_overbright, 1.0f);
-	glUniform1f (program->u_alpha, alpha);
-	glUniform1f (program->u_turbtime, gl2_frametime);
+	glUniform1f (program->u_alpha, 1.0f);
+	glUniform1f (program->u_turbtime, gl2_time);
 	glUniform1i (program->u_flags, GL2_WORLDFLAG_TURB);
 	GL2_SetupSceneUniforms (program);
-
-	if (alpha < 1.0f)
-	{
-		glEnable (GL_BLEND);
-		glDepthMask (GL_FALSE);
-	}
 
 	/* Re-bucket the chain by texture: the same lmchain field, reused. */
 	for (i = 0; i < gl2_numtexchains; i++)
@@ -1119,31 +1178,57 @@ static void GL2_DrawWaterChain (msurface_t *surfaces)
 	}
 	gl2_waterchain = -1;
 
-	for (i = 0; i < gl2_numtexchains; i++)
+	for (pass = 0; pass < 2; pass++)
 	{
-		const texture_t	*texture = cl.worldmodel->textures[i];
-		int		count = 0;
-		int		surfnum;
+		for (i = 0; i < gl2_numtexchains; i++)
+		{
+			const texture_t	*texture = cl.worldmodel->textures[i];
+			float		alpha;
+			int		count = 0;
+			int		surfnum;
 
-		if (gl2_texchain[i] < 0)
-			continue;
+			if (gl2_texchain[i] < 0)
+				continue;
 
-		glUniform2f (program->u_turbscale,
-			(texture && texture->width) ? 1.0f / (float)texture->width : 1.0f,
-			(texture && texture->height) ? 1.0f / (float)texture->height : 1.0f);
-		GL2_Bind (0, gl2_textures_by_index[i]);
+			alpha = GL2_LiquidAlpha (texture,
+				(surfaces[gl2_texchain[i]].flags & SURF_TRANSLUCENT) != 0);
+			if ((alpha < 1.0f) != (pass == 1))
+				continue;
 
-		for (surfnum = gl2_texchain[i]; surfnum >= 0;
-		     surfnum = gl2_surfaces[surfnum].lmchain)
-			count = GL2_AppendSurface (count, &gl2_surfaces[surfnum]);
-		gl2_texchain[i] = -1;
+			if (blending != (alpha < 1.0f))
+			{
+				blending = (alpha < 1.0f);
+				if (blending)
+				{
+					glEnable (GL_BLEND);
+					glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+					glDepthMask (GL_FALSE);
+				}
+				else
+				{
+					glDisable (GL_BLEND);
+					glDepthMask (GL_TRUE);
+				}
+			}
+			glUniform1f (program->u_alpha, alpha);
 
-		GL2_DrawIndices (count);
+			glUniform2f (program->u_turbscale,
+				(texture && texture->width) ? 1.0f / (float)texture->width : 1.0f,
+				(texture && texture->height) ? 1.0f / (float)texture->height : 1.0f);
+			GL2_Bind (0, gl2_textures_by_index[i]);
+
+			for (surfnum = gl2_texchain[i]; surfnum >= 0;
+			     surfnum = gl2_surfaces[surfnum].lmchain)
+				count = GL2_AppendSurface (count, &gl2_surfaces[surfnum]);
+
+			GL2_DrawIndices (count);
+		}
 	}
 
-	(void)surfaces;
+	for (i = 0; i < gl2_numtexchains; i++)
+		gl2_texchain[i] = -1;
 
-	if (alpha < 1.0f)
+	if (blending)
 	{
 		glDisable (GL_BLEND);
 		glDepthMask (GL_TRUE);
@@ -1181,7 +1266,7 @@ static void GL2_DrawSkyChain (void)
 	GL2_UseProgram (program);
 	glUniformMatrix4fv (program->u_mvp, 1, GL_FALSE, gl2_view_projection.m);
 	glUniform3f (program->u_eye, r_origin[0], r_origin[1], r_origin[2]);
-	glUniform1f (program->u_time, gl2_frametime);
+	glUniform1f (program->u_time, gl2_time);
 	GL2_SetupSceneUniforms (program);
 
 	GL2_Bind (0, gl2_solidsky);
@@ -1218,7 +1303,40 @@ void GL2_DrawWorld (void)
 
 	GL2_DrawSkyChain ();
 	GL2_DrawTextureChains ();
-	GL2_DrawWaterChain (cl.worldmodel->surfaces);
+
+	/* The water pass is deferred: it blends with depth writes off, so it
+	 * has to run after the opaque entities, not before them. */
+	gl2_worldwaterchain = gl2_waterchain;
+	gl2_waterchain = -1;
+
+	glBindVertexArray (0);
+}
+
+/*
+================
+GL2_DrawWorldWater
+
+The world's liquid surfaces, drawn once the opaque entities are down.
+================
+*/
+void GL2_DrawWorldWater (void)
+{
+	if (!cl.worldmodel || !gl2_surfaces || !gl2_world_vao || !GL2_ShadersReady ())
+		return;
+	if (gl2_worldwaterchain < 0)
+		return;
+
+	gl2_waterchain = gl2_worldwaterchain;
+	gl2_worldwaterchain = -1;
+
+	glBindVertexArray (gl2_world_vao);
+	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, gl2_world_ibo);
+
+	glEnable (GL_DEPTH_TEST);
+	glDepthMask (GL_TRUE);
+	glDisable (GL_BLEND);
+
+	GL2_DrawWaterChain (&gl2_view_projection, cl.worldmodel->surfaces);
 
 	glBindVertexArray (0);
 }
@@ -1305,10 +1423,18 @@ void GL2_DrawBrushEntity (entity_t *entity)
 	glBindVertexArray (gl2_world_vao);
 	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, gl2_world_ibo);
 
+	/* The model batch we were flushed out of may have left an additive or
+	 * alpha blend behind; brush entities start from a known opaque state. */
 	if (alpha < 1.0f)
 	{
 		glEnable (GL_BLEND);
+		glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glDepthMask (GL_FALSE);
+	}
+	else
+	{
+		glDisable (GL_BLEND);
+		glDepthMask (GL_TRUE);
 	}
 
 	GL2_UseProgram (program);
@@ -1316,25 +1442,39 @@ void GL2_DrawBrushEntity (entity_t *entity)
 	glUniform2f (program->u_scroll, 0.0f, 0.0f);
 	glUniform1f (program->u_overbright, gl2_lightmap_overbright ? 2.0f : 1.0f);
 	glUniform1f (program->u_alpha, alpha);
-	glUniform1f (program->u_turbtime, gl2_frametime);
+	glUniform1f (program->u_turbtime, gl2_time);
 	glUniform2f (program->u_turbscale, 1.0f, 1.0f);
 	glUniform1i (program->u_flags, GL2_WORLDFLAG_LIGHTMAP);
 	GL2_SetupSceneUniforms (program);
 
 	for (i = 0; i < gl2_numtexchains; i++)
 	{
+		gl2texture_t	*texture;
+
 		if (gl2_texchain[i] < 0)
 			continue;
-		GL2_Bind (0, gl2_textures_by_index[GL2_TextureAnimation (i, entity->frame)]);
+		texture = gl2_textures_by_index[GL2_TextureAnimation (i, entity->frame)];
+		GL2_Bind (0, texture);
+		glUniform1i (program->u_flags, GL2_WorldSurfaceFlags (texture));
 		GL2_DrawChainLightmapped (gl2_texchain[i], model->surfaces);
 	}
 
 	if (gl2_waterchain >= 0)
 	{
-		/* The water pass rebinds u_mvp, so restore the entity's. */
-		GL2_DrawWaterChain (model->surfaces);
-		GL2_UseProgram (program);
-		glUniformMatrix4fv (program->u_mvp, 1, GL_FALSE, mvp.m);
+		/* Entity liquids are transformed by the entity's own matrix,
+		 * and the water pass owns the blend state it needs. */
+		if (alpha < 1.0f)
+		{
+			glDisable (GL_BLEND);
+			glDepthMask (GL_TRUE);
+		}
+		GL2_DrawWaterChain (&mvp, model->surfaces);
+		if (alpha < 1.0f)
+		{
+			glEnable (GL_BLEND);
+			glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			glDepthMask (GL_FALSE);
+		}
 	}
 
 	if (alpha < 1.0f)
@@ -1624,7 +1764,7 @@ void GL2_WorldShutdown (void)
 	free (gl2_textures_by_index);
 	gl2_textures_by_index = NULL;
 	gl2_numtexchains = 0;
-	gl2_skychain = gl2_waterchain = -1;
+	gl2_skychain = gl2_waterchain = gl2_worldwaterchain = -1;
 	gl2_solidsky = gl2_alphasky = NULL;
 	gl2_litdata = NULL;
 	gl2_lit_loaded = false;
@@ -1641,6 +1781,12 @@ void GL2_WorldNewMap (void)
 	int		i;
 
 	GL2_WorldShutdown ();
+
+	/* Everything the last map brought with it -- world textures, model
+	 * skins, sprite frames, the two sky layers -- goes now.  Without this
+	 * the table fills up and same-named textures (*skysolid, *skyclouds)
+	 * hand the new map the old map's pixels. */
+	GL2_FreeMapTextures ();
 
 	if (!world || !world->numsurfaces)
 		return;
