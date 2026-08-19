@@ -154,10 +154,12 @@ static const char glide_world_frag[] =
 	GLIDE_LOD_FN
 	"uniform sampler2D u_diffuse;\n"
 	"uniform sampler2D u_lightmap;\n"
+	"uniform sampler2D u_texture2;\n"
 	"uniform highp vec2 u_turbscale;\n"
 	"uniform highp float u_turbtime;\n"
 	"uniform float u_alpha;\n"
 	"uniform float u_overbright;\n"
+	"uniform float u_light;\n"
 	"uniform int u_flags;\n"
 	"out vec4 frag_color;\n"
 	"void main ()\n"
@@ -175,8 +177,18 @@ static const char glide_world_frag[] =
 	" if ((u_flags & 4) != 0 && albedo.a < 0.666)\n"
 	"  discard;\n"
 	" vec3 color = albedo.rgb;\n"
+	/* Lightmapped surfaces take the atlas; everything else -- liquids,
+	 * and brush entities carrying an MLS/abslight value, which have no
+	 * baked samples to look up -- takes the flat entity light. */
 	" if ((u_flags & 2) != 0)\n"
 	"  color *= texture (u_lightmap, v_lmcoord).rgb * u_overbright;\n"
+	" else\n"
+	"  color *= u_light;\n"
+	/* Self-lit texels (torches, lava, runes) are added on top of the
+	 * lit surface, so they stay bright in an unlit room. The mask is
+	 * black wherever the texture has no fullbright palette indices. */
+	" if ((u_flags & 8) != 0)\n"
+	"  color += texture (u_texture2, uv, GlideLod ()).rgb;\n"
 	" frag_color = vec4 (GlideDither (GlideFog (color)), albedo.a * u_alpha);\n"
 	"}\n";
 
@@ -268,6 +280,7 @@ static const char glide_model_frag[] =
 	GLIDE_DITHER_FN
 	GLIDE_LOD_FN
 	"uniform sampler2D u_diffuse;\n"
+	"uniform sampler2D u_texture2;\n"
 	"uniform float u_alpha;\n"
 	"uniform int u_flags;\n"
 	"out vec4 frag_color;\n"
@@ -277,6 +290,10 @@ static const char glide_model_frag[] =
 	" if ((u_flags & 1) != 0 && texel.a < 0.666)\n"
 	"  discard;\n"
 	" vec3 color = texel.rgb * v_color.rgb;\n"
+	/* Fullbright skin texels ignore the entity's light, exactly as the
+	 * software renderer's colormap row 0 does for indices >= 224. */
+	" if ((u_flags & 4) != 0)\n"
+	"  color += texture (u_texture2, v_texcoord, GlideLod ()).rgb;\n"
 	/* Additive passes (glow orbs, particle flares) are light, not
 	 * surface: fogging them would tint the light source itself. */
 	" if ((u_flags & 2) == 0)\n"
@@ -381,9 +398,12 @@ static const char glide_post_frag[] =
 	"  color *= scan * mix (vec3 (1.0), grille, u_crt.y) * vignette;\n"
 	"  color *= 1.0 + 0.35 * u_crt.x + 0.25 * u_crt.y;\n"
 	" }\n"
-	" color = clamp (color * u_contrast, 0.0, 1.0);\n"
-	" color = pow (color, vec3 (1.0 / max (u_gamma, 0.1)));\n"
-	" frag_color = vec4 (color, 1.0);\n"
+	/* Contrast, then gamma, in the engine's convention: gamma is the
+	 * exponent itself (v_gamma 0.5 is brighter than 1.0), the same
+	 * ramp the software renderer bakes into the palette. */
+	" color = (color - 0.5) * u_contrast + 0.5;\n"
+	" color = pow (max (color, vec3 (0.0)), vec3 (max (u_gamma, 0.1)));\n"
+	" frag_color = vec4 (clamp (color, 0.0, 1.0), 1.0);\n"
 	"}\n";
 
 /*
@@ -466,6 +486,7 @@ static qboolean GL2_LinkProgram (gl2program_t *out, const char *name,
 	out->u_texture2 = glGetUniformLocation (program, "u_texture2");
 	out->u_alpha = glGetUniformLocation (program, "u_alpha");
 	out->u_overbright = glGetUniformLocation (program, "u_overbright");
+	out->u_light = glGetUniformLocation (program, "u_light");
 	out->u_turbtime = glGetUniformLocation (program, "u_turbtime");
 	out->u_turbscale = glGetUniformLocation (program, "u_turbscale");
 	out->u_fogcolor = glGetUniformLocation (program, "u_fogcolor");
@@ -515,11 +536,13 @@ void GL2_ShaderInit (void)
 	glUseProgram (gl2_world_program.program);
 	glUniform1i (gl2_world_program.u_diffuse, 0);
 	glUniform1i (gl2_world_program.u_lightmap, 1);
+	glUniform1i (gl2_world_program.u_texture2, 2);
 	glUseProgram (gl2_sky_program.program);
 	glUniform1i (gl2_sky_program.u_diffuse, 0);
 	glUniform1i (gl2_sky_program.u_texture2, 2);
 	glUseProgram (gl2_model_program.program);
 	glUniform1i (gl2_model_program.u_diffuse, 0);
+	glUniform1i (gl2_model_program.u_texture2, 2);
 	glUseProgram (gl2_post_program.program);
 	glUniform1i (gl2_post_program.u_source, 0);
 	glUniform1i (gl2_post_program.u_history, 1);

@@ -1,4 +1,5 @@
 #include "quakedef.h"
+#include "gl2_glide.h"
 
 #define WEB_MAX_CACHED_PICS	256
 #define WEB_PLAYER_WIDTH	68
@@ -32,6 +33,7 @@ static webcachepic_t pic_cache[WEB_MAX_CACHED_PICS];
 static int pic_cache_count;
 static GLuint ui_program, ui_vao, ui_vbo;
 static GLint ui_size_uniform, ui_color_uniform, ui_texture_uniform;
+static GLint ui_gamma_uniform, ui_contrast_uniform;
 static GLuint charset_texture, smallfont_texture, bigfont_texture;
 static GLuint console_texture, backtile_texture;
 static byte player_pixels[MAX_PLAYER_CLASS][WEB_PLAYER_WIDTH * WEB_PLAYER_HEIGHT];
@@ -40,7 +42,7 @@ static int canvas_width, canvas_height;
 /* Origin of the current 2D canvas, in screen pixels (see GL_SetCanvas). */
 static int canvas_x, canvas_y;
 
-static const char *ui_vertex_source =
+static const char ui_vertex_source[] =
 	"#version 300 es\n"
 	"layout(location=0) in vec2 a_position;\n"
 	"layout(location=1) in vec2 a_texcoord;\n"
@@ -52,14 +54,26 @@ static const char *ui_vertex_source =
 	" v_texcoord=a_texcoord;\n"
 	"}\n";
 
-static const char *ui_fragment_source =
+/* The 2D layer is drawn straight to the canvas, after the scene has been
+ * scanned out, so it has to apply the gamma ramp itself: the software
+ * renderer gets it for free by baking v_gamma into the palette, and
+ * without this the brightness slider would move the world and leave the
+ * menu, HUD and console behind. */
+static const char ui_fragment_source[] =
 	"#version 300 es\n"
 	"precision mediump float;\n"
 	"in vec2 v_texcoord;\n"
 	"uniform sampler2D u_texture;\n"
 	"uniform vec4 u_color;\n"
+	"uniform float u_gamma;\n"
+	"uniform float u_contrast;\n"
 	"out vec4 frag_color;\n"
-	"void main(){frag_color=texture(u_texture,v_texcoord)*u_color;}\n";
+	"void main(){\n"
+	" vec4 c=texture(u_texture,v_texcoord)*u_color;\n"
+	" c.rgb=(c.rgb-0.5)*u_contrast+0.5;\n"
+	" c.rgb=pow(max(c.rgb,vec3(0.0)),vec3(u_gamma));\n"
+	" frag_color=vec4(clamp(c.rgb,0.0,1.0),c.a);\n"
+	"}\n";
 
 static GLuint Draw_CompileShader (GLenum type, const char *source)
 {
@@ -95,6 +109,8 @@ static void Draw_InitProgram (void)
 	ui_size_uniform = glGetUniformLocation(ui_program, "u_size");
 	ui_color_uniform = glGetUniformLocation(ui_program, "u_color");
 	ui_texture_uniform = glGetUniformLocation(ui_program, "u_texture");
+	ui_gamma_uniform = glGetUniformLocation(ui_program, "u_gamma");
+	ui_contrast_uniform = glGetUniformLocation(ui_program, "u_contrast");
 
 	glGenVertexArrays(1, &ui_vao);
 	glGenBuffers(1, &ui_vbo);
@@ -148,8 +164,10 @@ static void Draw_Quad (GLuint texture, float x, float y, float width, float heig
 		{x0, y0, sl, tl}, {x0 + width, y0, sh, tl}, {x0 + width, y0 + height, sh, th},
 		{x0, y0, sl, tl}, {x0 + width, y0 + height, sh, th}, {x0, y0 + height, sl, th}
 	};
+	float gamma, contrast;
 	if (!texture)
 		return;
+	GL2_GammaContrast(&gamma, &contrast);
 	glDisable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -157,6 +175,8 @@ static void Draw_Quad (GLuint texture, float x, float y, float width, float heig
 	glUniform2f(ui_size_uniform, canvas_width, canvas_height);
 	glUniform4f(ui_color_uniform, r, g, b, a);
 	glUniform1i(ui_texture_uniform, 0);
+	glUniform1f(ui_gamma_uniform, gamma);
+	glUniform1f(ui_contrast_uniform, contrast);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
 	glBindVertexArray(ui_vao);

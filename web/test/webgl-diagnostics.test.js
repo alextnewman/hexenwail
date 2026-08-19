@@ -67,6 +67,9 @@ test('headless smoke gate compiles the actual engine WebGL shader sources', asyn
     // WebGlide shaders live in gl2_shader.c and ride the same headless
     // smoke gate so a broken program is caught before it hits an iPad.
     'webglide_world', 'webglide_sky', 'webglide_model', 'webglide_post',
+    // The 2D layer applies the gamma ramp itself (draw_webgl2.c), so it
+    // rides the same gate.
+    'webglide_ui',
   ]);
   assert.match(byName.world.fragment, /vec4 BicubicLightmap/);
   assert.match(byName.world.fragment, /float Caustics/);

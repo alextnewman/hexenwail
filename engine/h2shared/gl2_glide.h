@@ -83,6 +83,19 @@ extern cvar_t	gl_glide_crt_vignette;	/* corner falloff */
 /*
 =============================================================================
 
+	brightness (gl2_glide.c)
+
+	v_gamma / v_contrast, resolved the same way for the scene and for
+	the 2D layer.
+
+=============================================================================
+*/
+
+void GL2_GammaContrast (float *gamma, float *contrast);
+
+/*
+=============================================================================
+
 	matrices (gl2_glide.c)
 
 	Column-major 4x4, laid out the way glUniformMatrix4fv wants them.
@@ -120,10 +133,12 @@ void GL2_MatrixScale (gl2matrix_t *out, float x, float y, float z);
 #define GL2TEX_DYNAMIC		(1u << 5)	/* content changes under a fixed name */
 #define GL2TEX_PERSIST		(1u << 6)	/* survives a map change */
 #define GL2TEX_RGBA		(1u << 7)	/* source is already 32bpp */
+#define GL2TEX_FULLBRIGHT	(1u << 8)	/* build the self-lit companion mask */
 
 typedef struct gl2texture_s
 {
 	GLuint			id;
+	GLuint			fullbright;	/* self-lit mask, 0 when the texture has none */
 	int			width, height;
 	unsigned int		flags;
 	unsigned int		content_tag;	/* GL2TEX_DYNAMIC: identifies the uploaded content */
@@ -142,6 +157,7 @@ void GL2_InvalidateBindings (void);
 void GL2_ApplyTextureMode (void);
 gl2texture_t *GL2_ParticleTexture (void);
 gl2texture_t *GL2_WhiteTexture (void);
+qboolean GL2_BindFullbright (int unit, gl2texture_t *texture);
 
 /*
 =============================================================================
@@ -163,6 +179,7 @@ typedef struct
 	GLint	u_texture2;
 	GLint	u_alpha;
 	GLint	u_overbright;
+	GLint	u_light;
 	GLint	u_turbtime;
 	GLint	u_turbscale;
 	GLint	u_fogcolor;
@@ -200,10 +217,12 @@ qboolean GL2_ShadersReady (void);
 #define GL2_WORLDFLAG_TURB	1
 #define GL2_WORLDFLAG_LIGHTMAP	2
 #define GL2_WORLDFLAG_ALPHATEST	4
+#define GL2_WORLDFLAG_FULLBRIGHT	8
 
 /* Model shader feature bits. */
 #define GL2_MODELFLAG_ALPHATEST	1
 #define GL2_MODELFLAG_NOFOG	2
+#define GL2_MODELFLAG_FULLBRIGHT	4
 
 /*
 =============================================================================

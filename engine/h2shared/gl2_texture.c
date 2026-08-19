@@ -2,8 +2,8 @@
  * gl2_texture.c -- WebGlide texture manager.
  *
  * Everything expensive happens here, once, at load time: palette
- * expansion, alpha fringe repair and mip generation.  The frame loop only
- * ever binds.
+ * expansion, alpha fringe repair, fullbright masks and mip generation.  The
+ * frame loop only ever binds.
  *
  * Copyright (C) 1996-1997  Id Software, Inc.
  * Copyright (C) 1997-1998  Raven Software Corp.
@@ -61,6 +61,7 @@ static gl2texture_t	*gl2_texture_hash[GL2_TEXTURE_HASH_SIZE];
 
 static gl2texture_t	*gl2_particle_texture;
 static gl2texture_t	*gl2_white_texture;
+static gl2texture_t	*gl2_black_texture;
 
 static GLuint		gl2_bound[4];
 
@@ -272,6 +273,82 @@ static void GL2_SetFilters (const gl2texture_t *texture)
 
 /*
 ================
+GL2_BuildFullbrightMask
+
+The self-lit companion of a palette texture: the texels whose palette index
+is at or above vid.fullbright (224 in the stock colormap, and the reason a
+torch stays lit in a pitch-black room) kept at full colour, everything else
+black.  The world and model shaders add it on top of the lit surface, so
+black costs nothing and the mip chain fades the glow out with distance.
+
+Nothing is allocated for a texture that has no such texels, which is most
+of them.
+================
+*/
+static void GL2_BuildFullbrightMask (gl2texture_t *texture, const byte *data)
+{
+	int		texels = texture->width * texture->height;
+	int		threshold = vid.fullbright;
+	unsigned int	*rgba;
+	qboolean	any = false;
+	int		i;
+
+	/* The same guard as the desktop's Mod_LoadFullbrightTexture: a
+	 * colormap that does not describe a fullbright range (256 means
+	 * "none") gets no mask rather than an invented threshold. */
+	if (threshold < 1 || threshold > 255)
+	{
+		if (texture->fullbright)
+		{
+			glDeleteTextures (1, &texture->fullbright);
+			texture->fullbright = 0;
+		}
+		return;
+	}
+
+	for (i = 0; i < texels; i++)
+	{
+		/* 255 is the transparency index, never a light source. */
+		if (data[i] >= threshold && data[i] != 255)
+		{
+			any = true;
+			break;
+		}
+	}
+
+	if (!any)
+	{
+		if (texture->fullbright)
+		{
+			glDeleteTextures (1, &texture->fullbright);
+			texture->fullbright = 0;
+		}
+		return;
+	}
+
+	rgba = GL2_Scratch (texels);
+	for (i = 0; i < texels; i++)
+	{
+		if (data[i] >= threshold && data[i] != 255)
+			rgba[i] = d_8to24table[data[i]] | 0xff000000u;
+		else
+			rgba[i] = 0xff000000u;
+	}
+
+	if (!texture->fullbright)
+		glGenTextures (1, &texture->fullbright);
+	glActiveTexture (GL_TEXTURE0);
+	gl2_bound[0] = texture->fullbright;
+	glBindTexture (GL_TEXTURE_2D, texture->fullbright);
+	glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA, texture->width, texture->height, 0,
+			GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+	if (texture->flags & GL2TEX_MIPMAP)
+		glGenerateMipmap (GL_TEXTURE_2D);
+	GL2_SetFilters (texture);
+}
+
+/*
+================
 GL2_FindTexture
 ================
 */
@@ -368,6 +445,16 @@ gl2texture_t *GL2_LoadTexture (const char *name, int width, int height,
 		glGenerateMipmap (GL_TEXTURE_2D);
 	GL2_SetFilters (texture);
 
+	if ((flags & GL2TEX_FULLBRIGHT) && !(flags & GL2TEX_RGBA))
+	{
+		GL2_BuildFullbrightMask (texture, data);
+	}
+	else if (texture->fullbright)
+	{
+		glDeleteTextures (1, &texture->fullbright);
+		texture->fullbright = 0;
+	}
+
 	return texture;
 }
 
@@ -379,6 +466,28 @@ GL2_Bind
 void GL2_Bind (int unit, gl2texture_t *texture)
 {
 	GL2_BindName (unit, texture ? texture->id : 0);
+}
+
+/*
+================
+GL2_BindFullbright
+
+Binds the texture's self-lit mask and says whether there is one.  There is
+always something bound -- a 1x1 black texture when there is no mask -- so
+the shader's fullbright fetch is well defined however the driver decides to
+schedule the branch.
+================
+*/
+qboolean GL2_BindFullbright (int unit, gl2texture_t *texture)
+{
+	GLuint	mask = 0;
+
+	if (texture && gl_fullbrights.integer)
+		mask = texture->fullbright;
+
+	GL2_BindName (unit, mask ? mask :
+			(gl2_black_texture ? gl2_black_texture->id : 0));
+	return mask != 0;
 }
 
 void GL2_BindName (int unit, GLuint texture)
@@ -439,6 +548,12 @@ void GL2_ApplyTextureMode (void)
 		gl2_bound[0] = gl2_textures[i].id;
 		glBindTexture (GL_TEXTURE_2D, gl2_textures[i].id);
 		GL2_SetFilters (&gl2_textures[i]);
+		if (gl2_textures[i].fullbright)
+		{
+			gl2_bound[0] = gl2_textures[i].fullbright;
+			glBindTexture (GL_TEXTURE_2D, gl2_textures[i].fullbright);
+			GL2_SetFilters (&gl2_textures[i]);
+		}
 	}
 }
 
@@ -465,9 +580,12 @@ void GL2_FreeMapTextures (void)
 				gl2_textures[kept] = gl2_textures[i];
 			kept++;
 		}
-		else if (gl2_textures[i].id)
+		else
 		{
-			glDeleteTextures (1, &gl2_textures[i].id);
+			if (gl2_textures[i].id)
+				glDeleteTextures (1, &gl2_textures[i].id);
+			if (gl2_textures[i].fullbright)
+				glDeleteTextures (1, &gl2_textures[i].fullbright);
 		}
 	}
 	gl2_numtextures = kept;
@@ -483,6 +601,7 @@ void GL2_FreeMapTextures (void)
 	/* The kept entries moved, so re-resolve the renderer's own handles. */
 	gl2_particle_texture = GL2_FindTexture ("*particle");
 	gl2_white_texture = GL2_FindTexture ("*white");
+	gl2_black_texture = GL2_FindTexture ("*black");
 }
 
 /*
@@ -529,6 +648,7 @@ GL2_TextureInit
 void GL2_TextureInit (void)
 {
 	static const byte	white[4] = { 255, 255, 255, 255 };
+	static const byte	black[4] = { 0, 0, 0, 255 };
 
 	gl2_numtextures = 0;
 	memset (gl2_texture_hash, 0, sizeof(gl2_texture_hash));
@@ -543,6 +663,8 @@ void GL2_TextureInit (void)
 	GL2_ApplyTextureMode ();
 
 	gl2_white_texture = GL2_LoadTexture ("*white", 1, 1, white,
+			GL2TEX_RGBA | GL2TEX_CLAMP | GL2TEX_PERSIST);
+	gl2_black_texture = GL2_LoadTexture ("*black", 1, 1, black,
 			GL2TEX_RGBA | GL2TEX_CLAMP | GL2TEX_PERSIST);
 	GL2_BuildParticleTexture ();
 }

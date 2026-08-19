@@ -193,6 +193,9 @@ void GL2_FlushModelBatch (void)
 	GL2_SetupSceneUniforms (program);
 
 	GL2_Bind (0, gl2_batch_texture);
+	if (GL2_BindFullbright (2, gl2_batch_texture))
+		glUniform1i (program->u_flags,
+			(GLint)(gl2_batch_flags | GL2_MODELFLAG_FULLBRIGHT));
 	GL2_ApplyBlendMode (gl2_batch_blend);
 
 	glDrawArrays (GL_TRIANGLES, 0, gl2_batch_count);
@@ -352,7 +355,7 @@ static gl2texture_t *GL2_AliasSkin (entity_t *entity, const aliashdr_t *paliashd
 	const maliasskindesc_t	*pskindesc;
 	const byte		*pixels;
 	gl2texture_t		*texture;
-	unsigned int		flags = GL2TEX_MIPMAP;
+	unsigned int		flags = GL2TEX_MIPMAP | GL2TEX_FULLBRIGHT;
 	int			skinnum, size, entnum;
 
 	pskindesc = GL2_AliasSkinDesc (paliashdr, pmdl, entity, &skinnum);
