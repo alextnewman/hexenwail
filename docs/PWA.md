@@ -1,6 +1,6 @@
 # Hexenwail PWA / GitHub Pages build
 
-This repository now includes a GitHub-Pages-deployable, installable PWA shell for the WebAssembly build of Hexenwail, including a rudimentary phone mode for iPhone/iOS Safari.
+This repository now includes a GitHub-Pages-deployable, installable PWA shell for the WebAssembly build of Hexenwail, including fullscreen play and a rudimentary phone mode for iPhone/iOS Safari.
 
 ## Goals
 
@@ -124,19 +124,56 @@ All launcher URLs are relative (`./...`) so the site works under project Pages p
 
 Use assets from your own copy of Hexen II / Portal of Praevus, for example from GOG or Steam. This project does **not** include game data.
 
-## Phone mode
+## Fullscreen play
 
-On phone-sized coarse-pointer devices, starting the engine switches the page from
-the launcher into a game-focused viewport: the header and import panels disappear,
-the canvas fills the visual viewport, safe-area insets are honored, page scrolling
-is disabled only while playing, and resize/rotation events are forwarded to the
-SDL/WebAssembly renderer. Landscape is strongly recommended on iPhone because it
-leaves room for the game view plus touch controls.
+Starting the engine always switches the page from the launcher into a
+game-focused surface: the header and import panels disappear, the canvas fills
+the window, safe-area insets are honored, page scrolling is disabled while
+playing, and resize/rotation/fullscreen events are forwarded to the renderer
+through `Web_ResizeCanvas`.
 
-The in-game **☰** button opens a small phone overlay. It can resume play, send
-Escape to the engine menu, or **Sync & restart to launcher**. The latter first
-syncs the runtime filesystem to browser storage and then reloads the page to get
-a fresh WebAssembly runtime.
+Two layers are involved, and they are deliberately independent:
+
+- **Immersive layout** (`<body data-immersive="true">`) is pure launcher CSS. It
+  always works, including in an installed iOS PWA where the Fullscreen API is
+  missing or refused.
+- **Native fullscreen** is requested on top of it, from the same click that
+  starts the game, so the browser sees a valid user gesture. The fullscreen
+  element is the game *surface* (`.viewport`), not the bare canvas, so the touch
+  controls and the in-game overlay come along with it.
+
+Because both layers are driven by the launch action, the launcher can no longer
+end up fullscreen without a game (the old **Request fullscreen** button did
+exactly that: an empty black fullscreen canvas). The **Fullscreen play** button
+is enabled only while the engine is running and toggles both layers together;
+leaving fullscreen through the browser (desktop Esc, iPad system gesture) drops
+the immersive layout too, so the launcher chrome always comes back.
+
+The in-game **☰** button opens a small overlay. It can resume play, send Escape
+to the engine menu, **Show launcher** (leave fullscreen but keep playing), or
+**Sync & exit to launcher**. The last one first syncs the runtime filesystem to
+browser storage and then reloads the page to get a fresh WebAssembly runtime.
+
+Phone mode is now only about panel size: it is detected from the viewport's
+*short* side (500 CSS px in either orientation), so a phone is in phone mode in
+both orientations and an iPad never is. The previous 820px rule matched iPad
+landscape and left iPads permanently in phone mode.
+
+## Keyboard
+
+`in_web.c` owns the browser keyboard mapping. Two web-specific rules:
+
+- **`` ` `` acts as Escape.** iPad keyboards (Magic Keyboard, Smart Keyboard
+  Folio) have no Escape key, and Hexen II's menus are built entirely around it.
+- **`Shift`+`` ` `` (i.e. `~`) toggles the console**, which is the classic second
+  console key and is reachable on every keyboard.
+
+Set `in_key_backquote_escape 0` to restore the classic behaviour where both
+`` ` `` and `~` toggle the console.
+
+The engine also owns cursor visibility, because there is no window manager and
+no Pointer Lock on iPadOS Safari: `IN_Commands` hides the browser cursor while
+`key_dest` is `key_game` and shows it again in the menu or console.
 
 Selecting **Quit** inside Hexen II uses a browser-specific Emscripten path: the
 engine performs its normal shutdown, cancels the browser main loop, notifies the
@@ -148,9 +185,10 @@ for a clean restart.
 
 ### Touch mappings
 
-In auto mode, touch controls are shown only when the launcher believes the device
-is a touch-only phone environment: a coarse pointer with no hover/fine pointer,
-no connected gamepad, and a viewport short side no larger than 820 CSS pixels.
+In auto mode, touch controls are shown when the launcher believes the device is
+touch-only: a coarse pointer with no hover/fine pointer and no connected
+gamepad. Screen size is deliberately not part of that test — a bare iPad is as
+touch-only as a phone, and an iPad on a Magic Keyboard is not touch-only at all.
 If a touchpad/mouse, physical keyboard activity, pen, wheel, or controller is
 detected, auto mode hides the overlay and releases all held touch inputs. The
 launcher setting can choose auto/on/off behavior, left- or right-handed layout,
@@ -167,7 +205,7 @@ Default mappings reuse existing engine input bindings:
 - **Jump**: jump (`SPACE`)
 - **Use**: lift/use interaction (`K_GP_LTHUMB`, default `impulse 13`)
 - **◀ / ▶**: previous/next weapon (`K_GP_LSHOULDER` / `K_GP_RSHOULDER`)
-- phone overlay **Send Esc/Menu**: Escape
+- in-game overlay **Send Esc/Menu**: Escape
 
 The controls use Pointer Events and track each touch by pointer ID, so moving,
 looking, and firing can happen at the same time. Held keys/buttons are released
@@ -276,7 +314,8 @@ Practical ways to confirm readiness:
 
 - **Pointer Lock:** not currently available on iPadOS Safari, so true desktop-style mouselook is limited there
 - **Phone look:** iPhone/iOS Safari also lacks Pointer Lock; phone mode feeds relative drag deltas through an explicit engine bridge instead of relying on browser mouse capture
-- **Display mode:** installed iPadOS PWAs use `standalone`; this is effectively edge-to-edge but not true unrestricted fullscreen
+- **Display mode:** installed iPadOS PWAs use `standalone`; this is effectively edge-to-edge but not true unrestricted fullscreen, so the launcher's immersive layout — not the Fullscreen API — is what guarantees a full-window game there
+- **Escape key:** iPad keyboards have none, so the web port maps `` ` `` to Escape and moves the console to `Shift`+`` ` ``
 - **Restart after Quit:** after the engine's normal Quit, the page returns to the launcher but reloads before starting a new game because the same WebAssembly runtime is not assumed to be restartable
 - **Storage persistence:** `navigator.storage.persist()` is requested, but Safari can still evict data under storage pressure
 - **Renderer feature gap vs desktop:** WebGL2 / ES 3.0 has no SSBOs, so `r_alias_gpu` remains disabled in WASM builds
@@ -312,4 +351,4 @@ The archive may contain unsupported paths, exceed the configured resource caps, 
 
 ### Mouse capture is incomplete on iPad/iPhone
 
-That is expected today. Pointer Lock is the main blocker on iPadOS Safari. External keyboards, mice, and physical controllers remain supported; iPhone phone mode adds explicit touch controls for movement, looking, attack, jump, use, weapon switching, and menu access.
+That is expected today. Pointer Lock is the main blocker on iPadOS Safari. External keyboards, mice, and physical controllers remain supported; touch-only devices get explicit touch controls for movement, looking, attack, jump, use, weapon switching, and menu access. The system cursor is hidden during gameplay and shown again in menus and the console, so a visible cursor while playing means the engine still thinks the menu owns input.

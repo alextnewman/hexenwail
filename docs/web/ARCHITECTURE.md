@@ -113,6 +113,19 @@ Rules of thumb when adding a guard:
   `engine/hexen2/quakeinc.h`, which is an `#if`/`#elif` chain over renderers and
   is correct by construction.
 
+## Window state and input ownership
+
+Fullscreen, cursor and keyboard responsibilities are split along the same line
+as everything else — the shell owns the page, the engine owns the game:
+
+| Concern | Owner | Notes |
+| --- | --- | --- |
+| Immersive layout and native fullscreen | `web/` | `data-immersive` hides the launcher chrome and always works; the Fullscreen API is a best-effort extra requested from the launch gesture. Both are entered when the game starts, so there is no "fullscreen with no game" state. |
+| Canvas size | `web/` → `Web_ResizeCanvas` | Every resize, rotation and fullscreen transition re-measures the game surface and hands CSS pixels to the engine. |
+| Cursor visibility | `engine/h2shared/in_web.c` | There is no window manager and no Pointer Lock on iPadOS Safari, so `IN_Commands` hides the cursor while `key_dest == key_game`. |
+| Key mapping | `engine/h2shared/in_web.c` | Web-specific: `` ` `` is Escape (iPad keyboards have none) and `Shift`+`` ` `` toggles the console. `in_key_backquote_escape 0` restores classic behaviour. |
+| Touch controls | `web/lib/phone-controls.js` | Shown when the device is touch-only (pointer capability, not screen size). Phone mode is a size-only signal that forces the immersive layout. |
+
 ## Ownership boundaries
 
 | Area | Owner | Notes |

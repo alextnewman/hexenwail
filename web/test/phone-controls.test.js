@@ -126,7 +126,7 @@ test('phone mode DOM includes playing layout, touch visibility rules, and quit h
   assert.match(html, /id="phone-exit-button"/);
   assert.match(html, /data-touch-only="true"/);
   assert.match(html, /data-phone-mode="true"/);
-  assert.match(html, /@media \(pointer: coarse\) and \(hover: none\) and \(max-width: 820px\), \(pointer: coarse\) and \(hover: none\) and \(max-height: 820px\)/);
+  assert.match(html, /@media \(pointer: coarse\) and \(hover: none\) \{/);
   assert.match(app, /isLikelyTouchOnlyEnvironment/);
   assert.match(app, /isPhoneModeEnvironment/);
   assert.match(app, /PHONE_VIEWPORT_QUERY/);
@@ -137,4 +137,30 @@ test('phone mode DOM includes playing layout, touch visibility rules, and quit h
   assert.match(app, /addEventListener\('pageshow', checkForServiceWorkerUpdate\)/);
   assert.equal([...app.matchAll(/startEngineFromUserAction\(/g)].length, 2,
     'engine startup should only be defined and invoked by the launch-button handler');
+});
+
+test('phone mode keys off the panel short side so iPads are never trapped in it', () => {
+  const repoRoot = process.cwd();
+  const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
+  const query = app.match(/const PHONE_VIEWPORT_QUERY = '([^']+)'/)?.[1];
+  assert.ok(query, 'PHONE_VIEWPORT_QUERY is declared as a string literal');
+
+  const limits = [...query.matchAll(/max-(?:width|height): (\d+)px/g)].map((match) => Number(match[1]));
+  assert.equal(limits.length, 2, 'both orientations are covered');
+  for (const limit of limits) {
+    // Phone short side <= ~450 CSS px; smallest iPad short side ~740 CSS px.
+    assert.ok(limit >= 450 && limit < 700, `phone short-side limit ${limit} must exclude iPads`);
+  }
+  assert.match(query, /\(pointer: coarse\) and \(hover: none\)/);
+});
+
+test('touch-control auto detection depends on pointer capability, not viewport size', () => {
+  const repoRoot = process.cwd();
+  const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
+  const body = app.match(/function isLikelyTouchOnlyEnvironment\(\) \{([\s\S]*?)\n\}/)?.[1];
+  assert.ok(body, 'isLikelyTouchOnlyEnvironment is defined');
+  assert.doesNotMatch(body, /isPhoneModeEnvironment|PHONE_VIEWPORT_QUERY/,
+    'a bare iPad is as touch-only as a phone, so screen size must not gate touch controls');
+  assert.match(body, /any-pointer: coarse/);
+  assert.match(body, /hasConnectedGamepad\(\)/);
 });
