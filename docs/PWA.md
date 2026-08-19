@@ -128,9 +128,22 @@ Use assets from your own copy of Hexen II / Portal of Praevus, for example from 
 
 Starting the engine always switches the page from the launcher into a
 game-focused surface: the header and import panels disappear, the canvas fills
-the window, safe-area insets are honored, page scrolling is disabled while
-playing, and resize/rotation/fullscreen events are forwarded to the renderer
+the window, page scrolling is disabled while playing, and
+resize/rotation/fullscreen events are forwarded to the renderer
 through `Web_ResizeCanvas`.
+
+Play is **edge to edge**. An installed iOS PWA cannot hide the status bar, so
+padding the window with the safe-area insets would only trade game pixels for
+black bars; instead the canvas takes the whole window and the system glyphs
+sit over the outer edge of the picture — a game authored for a 320 × 200-ish
+screen with a border can afford that, wasted screen space it cannot. The
+renderer completes the job from its side: the software backend takes the
+canvas aspect for its render resolution rather than pillarboxing 4:3 (see
+[`web/SOFTWARE_RENDERER.md`](web/SOFTWARE_RENDERER.md#aspect-policy)).
+
+Everything interactive keeps its own safe-area inset, so the ☰ button, the
+touch controls and the in-game overlay never hide under the status bar, the
+home indicator or a rounded corner.
 
 Two layers are involved, and they are deliberately independent:
 
@@ -154,6 +167,15 @@ The in-game **☰** button opens a small overlay. It can resume play, send Escap
 to the engine menu, **Show launcher** (leave fullscreen but keep playing), or
 **Sync & exit to launcher**. The last one first syncs the runtime filesystem to
 browser storage and then reloads the page to get a fresh WebAssembly runtime.
+
+**☰ hides while a controller is connected.** A gamepad already has a menu
+button — `in_web.c` binds Start to the engine menu — so leaving a launcher
+glyph floating over the game would be pure clutter. It comes back on
+disconnect. The button is driven by `<body data-gamepad>`, which is set from
+the `gamepadconnected` / `gamepaddisconnected` events (Safari only lists a pad
+through `navigator.getGamepads()` once it has sent input, so the events are
+the authoritative signal and the poll is the fallback for a page loaded with
+one already attached).
 
 Phone mode is only about panel size: it is detected from the viewport's *short*
 side (500 CSS px in either orientation), so a phone is in phone mode in both
@@ -265,6 +287,26 @@ drive the whole UI: in menus and the console the D-pad and move stick act as
 arrow keys with auto-repeat, the triggers act as Enter, and (via the shared menu
 code) A confirms while B backs out. Held buttons remember which key they emitted,
 so nothing sticks down across a menu transition, a disconnect, or `gamepad 0`.
+
+### Console-style menu navigation
+
+The pad drives the menus the way a console pause menu behaves:
+
+| Button | In the menu |
+| --- | --- |
+| Start | closes the menu outright, from any screen, and reopens it from gameplay |
+| A / L2 / R2 | confirm (Enter) |
+| B | back one screen (Escape) |
+| D-pad / move stick | move the cursor, with auto-repeat when held |
+| L1 / R1 | page up / page down on the scrolling screens (the mods list) |
+
+Start is deliberately not a "back" key: Escape and B unwind one screen at a
+time, while Start toggles the whole menu, so a second press resumes play no
+matter how deep the player is. It is still a normal bindable key — `Key_Init`
+binds it to `togglemenu` — but when it has no binding at all it falls back to
+toggling the menu, so a `config.cfg` written before that default existed (the
+file starts with `unbindall`) cannot leave a controller-only player stranded.
+Rebind it from **Options → Customize controls** and the bind wins as usual.
 
 Rumble uses `vibrationActuator.playEffect` when the browser has it, scaled by
 `joy_rumble`. Safari does not implement it today, so it is best-effort and silent

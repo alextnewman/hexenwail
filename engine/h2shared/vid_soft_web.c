@@ -52,6 +52,11 @@ unsigned int	d_8to24table[256];
  * resolutions, not display modes -- the presentation canvas always runs at
  * the panel's full device resolution and scales this image up on the GPU.
  *
+ * A rung is a *budget*, not a fixed shape: with vid_soft_widescreen set
+ * (the default) the entry's short side is kept and the long side is stretched
+ * to the canvas aspect, so the image fills the panel edge to edge instead of
+ * pillarboxing.  See VID_ModeSize().
+ *
  * Entries flagged as "panel aligned" divide an M1 iPad Pro panel exactly:
  *   683x512  x4 = 2732x2048  (12.9-inch, exact)
  *   1024x768 x2 = 2048x1536  (fits both panels with a small border)
@@ -92,7 +97,10 @@ static const softmode_t softmodes[] = {
 static cvar_t	vid_soft_mode = {"vid_soft_mode", "0", CVAR_ARCHIVE};
 /* 0 = nearest neighbour (classic crunchy pixels), 1 = pixel-art antialiasing. */
 static cvar_t	vid_soft_filter = {"vid_soft_filter", "0", CVAR_ARCHIVE};
-/* 0 = keep the 4:3 render aspect and pillarbox, 1 = stretch to fill. */
+/* 1 = render at the canvas aspect so play is edge to edge, 0 = classic 4:3. */
+static cvar_t	vid_soft_widescreen = {"vid_soft_widescreen", "1", CVAR_ARCHIVE};
+/* Only consulted with vid_soft_widescreen 0:
+ * 0 = keep the 4:3 render aspect and pillarbox, 1 = stretch to fill. */
 static cvar_t	vid_soft_stretch = {"vid_soft_stretch", "0", CVAR_ARCHIVE};
 
 static byte	*vid_framebuffer;
@@ -119,7 +127,7 @@ static void VID_DestRect (int src_w, int src_h, int *x, int *y, int *w, int *h)
 {
 	float	src_aspect;
 
-	if (vid_soft_stretch.integer)
+	if (vid_soft_stretch.integer && !vid_soft_widescreen.integer)
 	{
 		*x = *y = 0;
 		*w = canvas_width;
@@ -140,8 +148,126 @@ static void VID_DestRect (int src_w, int src_h, int *x, int *y, int *w, int *h)
 	}
 	if (*w < 1) *w = 1;
 	if (*h < 1) *h = 1;
+	/* A widescreen render size is a whole number of pixels, so it can only
+	 * match the canvas aspect to within a rounding error. Absorb bars
+	 * thinner than half a percent rather than leave a seam of dead pixels
+	 * down the edge of the panel; the resulting stretch is not visible. */
+	if (canvas_width - *w <= canvas_width / 200)
+		*w = canvas_width;
+	if (canvas_height - *h <= canvas_height / 200)
+		*h = canvas_height;
 	*x = (canvas_width - *w) / 2;
 	*y = (canvas_height - *h) / 2;
+}
+
+/*
+================
+VID_ModeSize
+
+The render size for a ladder rung on the current canvas.
+
+Classic mode hands back the rung as authored (4:3). Widescreen mode keeps
+the rung's short side -- which is what actually costs frame time -- and
+extends the long side to the canvas aspect, so the image fills the panel
+with no bars. Hexen II's "Hor+" FOV adaptation (fov_adapt, on by default)
+turns the extra width into extra view rather than a stretched one, and the
+2D canvases are centred by GL_SetCanvas, so the HUD and menus do not care.
+
+The rasterizer's MAXWIDTH/MAXHEIGHT ceilings still bind: an extreme canvas
+aspect gives up size on the long side rather than exceed them.
+================
+*/
+static void VID_ModeSize (int mode, int *width, int *height)
+{
+	int	w, h;
+	float	aspect;
+
+	if (mode < 0 || mode >= NUM_SOFTMODES)
+		mode = 0;
+	w = softmodes[mode].width;
+	h = softmodes[mode].height;
+
+	if (vid_soft_widescreen.integer && canvas_width > 0 && canvas_height > 0)
+	{
+		aspect = (float)canvas_width / (float)canvas_height;
+		if (aspect >= 4.0f / 3.0f)
+		{
+			w = (int)(h * aspect + 0.5f);
+			if (w > MAXWIDTH)
+			{
+				w = MAXWIDTH;
+				h = (int)(w / aspect + 0.5f);
+			}
+		}
+		else	/* taller than 4:3: keep the width, show more vertically */
+		{
+			h = (int)(w / aspect + 0.5f);
+			if (h > MAXHEIGHT)
+			{
+				h = MAXHEIGHT;
+				w = (int)(h * aspect + 0.5f);
+			}
+		}
+	}
+
+	if (w < 320) w = 320;
+	if (h < 200) h = 200;
+	if (w > MAXWIDTH) w = MAXWIDTH;
+	if (h > MAXHEIGHT) h = MAXHEIGHT;
+	*width = w;
+	*height = h;
+}
+
+/*
+================
+VID_ModeDesc
+
+Human-readable size of a rung on this canvas, which is not the authored 4:3
+size once widescreen is in play.
+================
+*/
+static const char *VID_ModeDesc (int mode, char *buf, size_t bufsize)
+{
+	int	w, h;
+
+	VID_ModeSize (mode, &w, &h);
+	if (mode >= 0 && mode < NUM_SOFTMODES &&
+	    w == softmodes[mode].width && h == softmodes[mode].height)
+		q_strlcpy (buf, softmodes[mode].desc, bufsize);
+	else
+		q_snprintf (buf, bufsize, "%d x %d", w, h);
+	return buf;
+}
+
+/*
+================
+VID_UpdateAspect
+
+vid.aspect is the pixel aspect *as presented*: the ratio of the horizontal
+and vertical scale factors the presenter applies. Filling and letterboxing
+both preserve the render aspect, so it is 1 (square pixels); only
+vid_soft_stretch makes it anything else. R_ViewChanged reads it when
+fov_adapt is off, and it has to track the canvas, not just the mode.
+================
+*/
+static void VID_UpdateAspect (void)
+{
+	int	dx, dy, dw, dh;
+	float	aspect;
+
+	if (vid.width <= 0 || vid.height <= 0)
+		return;
+
+	VID_DestRect (vid.width, vid.height, &dx, &dy, &dw, &dh);
+	if (dw <= 0 || dh <= 0)
+		return;
+
+	aspect = ((float)dw * (float)vid.height) / ((float)dh * (float)vid.width);
+	if (aspect != vid.aspect)
+	{
+		vid.aspect = aspect;
+		vid.recalc_refdef = 1;
+	}
 }
 
 /*
@@ -152,6 +278,10 @@ Picks the ladder rung that upscales most cleanly onto the current canvas.
 An exact integer upscale is always preferred because it is the only way to
 keep the software renderer's pixels perfectly square and crisp; otherwise
 the largest affordable rung wins.
+
+"Exact" is tested by division, not by a tolerance: a scale of 6.95 is not an
+integer upscale, and treating it as one used to hand a 2.5 K panel the
+320 x 240 rung on the strength of a rounding fudge.
 ================
 */
 static int VID_AutoMode (void)
@@ -160,23 +290,21 @@ static int VID_AutoMode (void)
 
 	for (i = 0; i < NUM_SOFTMODES; ++i)
 	{
-		int	w = softmodes[i].width;
-		int	h = softmodes[i].height;
+		int	w, h;
 		int	dx, dy, dw, dh;
-		float	scale, rounded;
 
+		/* the widened size is what the rasterizer actually pays for */
+		VID_ModeSize (i, &w, &h);
 		if (w * h > AUTO_MAX_PIXELS)
 			continue;
 
 		VID_DestRect (w, h, &dx, &dy, &dw, &dh);
-		scale = (float)dh / (float)h;
-		if (scale < AUTO_MIN_SCALE)
+		if (dh < h * AUTO_MIN_SCALE)
 			continue;
 
 		largest = i;
 
-		rounded = (float)floor(scale + 0.5);
-		if (fabs(scale - rounded) <= 0.01 * rounded)
+		if (dh % h == 0 && dw % w == 0)
 			best = i;	/* exact integer upscale */
 	}
 
@@ -248,8 +376,7 @@ static void VID_SetSoftMode (int mode)
 	if (mode < 0 || mode >= NUM_SOFTMODES)
 		mode = 0;
 
-	width = softmodes[mode].width;
-	height = softmodes[mode].height;
+	VID_ModeSize (mode, &width, &height);
 
 	in_mode_set = true;
 	VID_AllocBuffers (width, height);
@@ -258,9 +385,9 @@ static void VID_SetSoftMode (int mode)
 	vid.height = vid.conheight = height;
 	vid.rowbytes = vid.conrowbytes = width;
 	vid.buffer = vid.conbuffer = vid.direct = vid_framebuffer;
-	vid.aspect = ((float)height / (float)width) * (320.0f / 240.0f);
 	vid.numpages = 1;
 	vid.recalc_refdef = 1;
+	VID_UpdateAspect ();
 
 	D_InitCaches (vid_surfcache, vid_surfcachesize);
 	WebCanvas_SetSource (width, height);
@@ -277,13 +404,26 @@ static void VID_SetSoftMode (int mode)
 static void VID_CheckMode (void)
 {
 	int	wanted = VID_WantedMode ();
+	int	width, height;
 
-	if (wanted != vid_current_mode)
+	/* A rung's size is a function of the canvas aspect too, so an unchanged
+	 * rung index does not mean an unchanged framebuffer. */
+	VID_ModeSize (wanted, &width, &height);
+
+	if (wanted != vid_current_mode || width != vid.width || height != vid.height)
 	{
+		char	desc[48];
+
 		VID_SetSoftMode (wanted);
 		Con_DPrintf ("software resolution: %s (canvas %dx%d, %s)\n",
-			softmodes[vid_current_mode].desc, canvas_width, canvas_height,
-			WebCanvas_BackendName ());
+			VID_ModeDesc (vid_current_mode, desc, sizeof(desc)),
+			canvas_width, canvas_height, WebCanvas_BackendName ());
+	}
+	else
+	{
+		/* Same framebuffer, but the canvas (or the aspect policy) may have
+		 * changed how it is presented. */
+		VID_UpdateAspect ();
 	}
 }
 
@@ -336,15 +476,17 @@ static void VID_QueryCanvasSize (void)
 
 static void VID_SoftMode_f (void)
 {
+	char	desc[48];
 	int	i;
 
 	if (Cmd_Argc () < 2)
 	{
 		Con_Printf ("software resolutions (vid_soft_mode):\n");
-		Con_Printf ("  0 : auto (currently %s)\n", softmodes[VID_AutoMode ()].desc);
+		Con_Printf ("  0 : auto (currently %s)\n",
+			VID_ModeDesc (VID_AutoMode (), desc, sizeof(desc)));
 		for (i = 0; i < NUM_SOFTMODES; ++i)
 			Con_Printf ("%s%2d : %s\n", (i == vid_current_mode) ? "* " : "  ",
-				i + 1, softmodes[i].desc);
+				i + 1, VID_ModeDesc (i, desc, sizeof(desc)));
 		return;
 	}
 	Cvar_SetValueQuick (&vid_soft_mode, atoi (Cmd_Argv (1)));
@@ -353,8 +495,11 @@ static void VID_SoftMode_f (void)
 
 void VID_Init (const unsigned char *palette)
 {
+	char	desc[48];
+
 	Cvar_RegisterVariable (&vid_soft_mode);
 	Cvar_RegisterVariable (&vid_soft_filter);
+	Cvar_RegisterVariable (&vid_soft_widescreen);
 	Cvar_RegisterVariable (&vid_soft_stretch);
 	Cmd_AddCommand ("vid_softmode", VID_SoftMode_f);
 
@@ -371,8 +516,8 @@ void VID_Init (const unsigned char *palette)
 
 	vid_initialized = true;
 	Con_SafePrintf ("Software renderer: %s on %s canvas %dx%d\n",
-		softmodes[vid_current_mode].desc, WebCanvas_BackendName (),
-		canvas_width, canvas_height);
+		VID_ModeDesc (vid_current_mode, desc, sizeof(desc)),
+		WebCanvas_BackendName (), canvas_width, canvas_height);
 }
 
 void VID_Shutdown (void)
@@ -487,19 +632,23 @@ void VID_MenuReset (void) { vid_menu_mode = vid_current_mode; }
 
 const char *VID_MenuGetResolution (qboolean *is_current)
 {
-	static char	desc[48];
+	static char	desc[64];
+	char		size[48];
 
 	if (is_current)
 		*is_current = true;
+	VID_ModeDesc (vid_current_mode, size, sizeof(size));
 	if (vid_soft_mode.integer == 0)
-		q_snprintf (desc, sizeof(desc), "auto (%s)", softmodes[vid_current_mode].desc);
+		q_snprintf (desc, sizeof(desc), "auto (%s)", size);
 	else
-		q_strlcpy (desc, softmodes[vid_current_mode].desc, sizeof(desc));
+		q_strlcpy (desc, size, sizeof(desc));
 	return desc;
 }
 
 const char *VID_MenuGetAspect (void)
 {
+	if (vid_soft_widescreen.integer)
+		return "Fill";
 	return vid_soft_stretch.integer ? "Stretch" : "4:3";
 }
 
@@ -526,8 +675,19 @@ void VID_MenuAdjustWindowMode (int dir) { (void)dir; }
 
 void VID_MenuAdjustAspect (int dir)
 {
-	(void) dir;
-	Cvar_SetValueQuick (&vid_soft_stretch, vid_soft_stretch.integer ? 0 : 1);
+	/* Fill -> 4:3 -> Stretch, in that order both ways: three states over
+	 * two archived cvars, so an old config keeps its meaning. */
+	int	state = vid_soft_widescreen.integer ? 0 : (vid_soft_stretch.integer ? 2 : 1);
+
+	state += (dir > 0) ? 1 : -1;
+	if (state < 0)
+		state = 2;
+	else if (state > 2)
+		state = 0;
+
+	Cvar_SetValueQuick (&vid_soft_widescreen, (state == 0) ? 1 : 0);
+	Cvar_SetValueQuick (&vid_soft_stretch, (state == 2) ? 1 : 0);
+	VID_CheckMode ();
 	vid.recalc_refdef = 1;
 }
 

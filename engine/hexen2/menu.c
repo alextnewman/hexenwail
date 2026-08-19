@@ -697,24 +697,41 @@ static void M_Main_Draw (void)
 }
 
 
+/*
+================
+M_CloseMenu
+
+Leaves the menu system entirely and hands the keyboard back to the game.
+This is the teardown the main menu has always done on Escape; it is a
+function so the gamepad Start button can close from any menu screen, the
+way a console pause menu does, instead of stepping back one screen at a
+time.
+================
+*/
+static void M_CloseMenu (void)
+{
+	// leaving the main menu, reactivate mouse - S.A.
+	menu_disabled_mouse = false;
+	IN_ActivateMouse ();
+	// and check we haven't changed the music type
+	if (old_bgmtype[0] != 0 && strcmp(old_bgmtype,bgmtype.string) != 0)
+		BGM_RestartMusic ();
+	old_bgmtype[0] = 0;
+	Key_SetDest (key_game);
+	m_state = m_none;
+	Sbar_Changed ();
+	cls.demonum = m_save_demonum;
+	if (cls.demonum != -1 && !cls.demoplayback && cls.state != ca_connected)
+		CL_NextDemo ();
+}
+
+
 static void M_Main_Key (int key)
 {
 	switch (key)
 	{
 	case K_ESCAPE:
-		// leaving the main menu, reactivate mouse - S.A.
-		menu_disabled_mouse = false;
-		IN_ActivateMouse ();
-		// and check we haven't changed the music type
-		if (old_bgmtype[0] != 0 && strcmp(old_bgmtype,bgmtype.string) != 0)
-			BGM_RestartMusic ();
-		old_bgmtype[0] = 0;
-		Key_SetDest (key_game);
-		m_state = m_none;
-		Sbar_Changed ();
-		cls.demonum = m_save_demonum;
-		if (cls.demonum != -1 && !cls.demoplayback && cls.state != ca_connected)
-			CL_NextDemo ();
+		M_CloseMenu ();
 		break;
 
 	case K_DOWNARROW:
@@ -7082,6 +7099,17 @@ void M_Keybind (int key)
 
 void M_Keydown (int key, qboolean repeat)
 {
+	/* Console convention: Start is a menu toggle, not a "back" key. It
+	 * opens the menu from gameplay through its "togglemenu" bind, and here
+	 * it closes the menu outright from whatever screen the player is on,
+	 * rather than unwinding to the main menu the way Escape/B do. */
+	if (key == K_GP_START)
+	{
+		if (!repeat)
+			M_CloseMenu ();
+		return;
+	}
+
 	/* Mouse support: click=Enter, wheel=Up/Down */
 	if (key == K_MOUSE1)
 		key = K_ENTER;
@@ -7106,6 +7134,13 @@ void M_Keydown (int key, qboolean repeat)
 		key = K_LEFTARROW;
 	else if (key == K_GP_DPAD_RIGHT)
 		key = K_RIGHTARROW;
+	/* Shoulders page long lists, the console habit of L1/R1 as
+	 * "previous/next page". Only the scrolling screens (the mods list)
+	 * act on it today; everything else ignores it. */
+	else if (key == K_GP_LSHOULDER)
+		key = K_PGUP;
+	else if (key == K_GP_RSHOULDER)
+		key = K_PGDN;
 
 	/* Suppress key repeat for everything except navigation/escape */
 	if (repeat)

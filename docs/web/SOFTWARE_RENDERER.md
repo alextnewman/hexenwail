@@ -103,8 +103,11 @@ on indices.
 ## Resolution ladder
 
 The software rasteriser's cost is roughly linear in pixel count, so the
-render resolution is the single most important knob. All rungs are 4:3 (the
-aspect Hexen II's art, HUD and FOV were designed for):
+render resolution is the single most important knob. Every rung is authored
+at 4:3 (the aspect Hexen II's art, HUD and FOV were designed for), and the
+rung is a **frame budget, not a fixed shape**: on a panel that is not 4:3 the
+rung's short side is kept and the long side is extended to the canvas aspect
+so play is edge to edge (see [Aspect policy](#aspect-policy)).
 
 | # | Mode | Pixels | Notes |
 | --- | --- | --- | --- |
@@ -133,7 +136,8 @@ perfect ×2 for the 12.9″ panel — it exceeds `MAXWIDTH`.
 The tuning target is an **M1 iPad Pro**.
 
 **12.9″ (5th gen)** — 2732 × 2048 device pixels, 1366 × 1024 CSS at DPR 2.
-That is exactly 4:3, so 4:3 content fills the panel with no letterboxing.
+That is exactly 4:3, so nothing has to be widened and no bars appear either
+way.
 
 | Rung | Scale to 2732 × 2048 | |
 | --- | --- | --- |
@@ -147,33 +151,58 @@ upscale means every software pixel becomes an identical 4 × 4 block, which is
 what makes nearest-neighbour look crisp instead of shimmery.
 
 **11″ (3rd gen)** — 2388 × 1668 device pixels, 1194 × 834 CSS at DPR 2;
-aspect ≈ 1.432. 4:3 content pillarboxes to 2224 × 1668. No ladder rung gives
-an integer scale there, so auto mode falls back to the largest affordable
-rung (1024 × 768, ≈ ×2.17).
+aspect ≈ 1.432. Filling the panel at that aspect turns the 960 × 720 rung
+into 1031 × 720 (742 k pixels — *less* than the 4:3 1024 × 768 rung it
+replaces) and leaves no bars. With `vid_soft_widescreen 0` the same panel
+pillarboxes 1024 × 768 to 2224 × 1668 and burns 164 device columns on black.
 
 ### Auto mode
 
 `vid_soft_mode 0` picks a rung from the live canvas size:
 
-1. Discard rungs above `AUTO_MAX_PIXELS` (1024 × 768). Beyond that the
-   rasteriser, not the panel, becomes the bottleneck.
+1. Size each rung for the current canvas aspect, then discard rungs above
+   `AUTO_MAX_PIXELS` (1024 × 768 = 786 k). The budget is spent on the
+   resolution actually rendered, so a wide panel trades height for width
+   rather than blowing through the frame budget.
 2. Discard rungs that would upscale by less than `AUTO_MIN_SCALE` (2.0).
    Below that you pay a lot of CPU for an image barely sharper than the rung
    underneath.
-3. Among the survivors, prefer the **largest** rung whose destination scale
-   is within 1 % of an integer.
-4. If none is near-integer, take the largest survivor.
+3. Among the survivors, prefer the **largest** rung whose destination is an
+   *exact* integer multiple in both axes.
+4. If none is exact, take the largest survivor.
 5. If nothing survives, fall back to rung 1.
 
+Step 3 is a divisibility test, not a tolerance. The old "within 1 % of an
+integer" rule accepted a ×6.95 upscale as integral, which could hand a 2.5 K
+panel the 320 × 240 rung on the strength of a rounding fudge; a rung is
+either pixel-perfect or it is judged on size alone.
+
 Auto mode re-evaluates on canvas resize (orientation change, Stage Manager
-window resize, Slide Over).
+window resize, Slide Over) *and* on aspect change, because a rung's shape now
+depends on the canvas as well as its index.
 
 ### Aspect policy
 
-By default the 4:3 image keeps its aspect and is centred, with the remaining
-canvas cleared to black — pillarboxing on the 11″, nothing at all on the
-12.9″. `vid_soft_stretch 1` stretches to fill instead, which distorts
-geometry; it exists for people who prefer no bars.
+The default is **fill**: the render resolution takes the canvas aspect, so
+the image reaches every edge of the panel with no bars and no distortion.
+Hexen II's "Hor+" FOV adaptation (`fov_adapt 1`, on by default) turns the
+extra width into extra *view*, and the 2D canvases are centred by
+`GL_SetCanvas`, so the HUD and menus land where they always did.
+
+`vid.aspect` is set from the presented rectangle — the ratio of the
+horizontal and vertical scale factors the presenter applies — so it is 1.0
+(square pixels) whenever the render aspect is preserved. Only stretching
+makes it anything else.
+
+| `vid_soft_widescreen` | `vid_soft_stretch` | Result |
+| --- | --- | --- |
+| `1` (default) | ignored | Render at the canvas aspect. Edge to edge, square pixels, Hor+ FOV. |
+| `0` | `0` | Classic 4:3 render, centred, bars where the panel is not 4:3. |
+| `0` | `1` | Classic 4:3 render stretched to the canvas. No bars, distorted geometry. |
+
+The launcher does its half of edge-to-edge: immersive play drops the CSS
+safe-area padding so the canvas is the whole window. See
+[`../PWA.md`](../PWA.md#fullscreen-play).
 
 ## Cvars and commands
 
@@ -181,11 +210,11 @@ geometry; it exists for people who prefer no bars.
 | --- | --- | --- |
 | `vid_soft_mode` | `0` | `0` = auto, `1`…`10` = ladder rung. Archived. |
 | `vid_soft_filter` | `0` | `0` = nearest neighbour, `1` = sharp bilinear. Archived. |
-| `vid_soft_stretch` | `0` | `0` = keep 4:3 and letterbox, `1` = stretch to fill. Archived. |
-| `vid_softmode` | — | Console command: `vid_softmode` lists the ladder, `vid_softmode <n>` selects a rung. |
+| `vid_soft_widescreen` | `1` | `1` = render at the canvas aspect, `0` = classic 4:3. Archived. |
+| `vid_soft_stretch` | `0` | Only with `vid_soft_widescreen 0`: `0` = letterbox, `1` = stretch. Archived. |
+| `vid_softmode` | — | Console command: `vid_softmode` lists the ladder at its current shape, `vid_softmode <n>` selects a rung. |
 
-The video menu drives the same three settings, so nothing here is
-console-only.
+The video menu drives the same settings, so nothing here is console-only.
 
 ### GPU-only cvars
 
