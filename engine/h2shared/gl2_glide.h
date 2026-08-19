@@ -278,15 +278,22 @@ typedef struct
 	byte	color[4];
 } gl2vertex_t;
 
+/* How a batch reaches the frame buffer. */
+#define GL2_BLEND_OPAQUE	0
+#define GL2_BLEND_ALPHA		1
+#define GL2_BLEND_ADD		2	/* light, not surface: glows and flares */
+
 void GL2_ModelInit (void);
-void GL2_ModelNewMap (void);
-void GL2_BeginModelBatch (gl2texture_t *texture, unsigned int flags, float alpha);
+void GL2_ModelShutdown (void);
+void GL2_BeginModelFrame (void);
+void GL2_EndModelFrame (void);
+void GL2_BeginModelBatch (gl2texture_t *texture, unsigned int shaderflags,
+				float alpha, int blend);
 gl2vertex_t *GL2_ModelVertices (int count);
-void GL2_EndModelBatch (void);
+void GL2_FlushModelBatch (void);
 void GL2_DrawAliasModel (entity_t *entity);
 void GL2_DrawSpriteModel (entity_t *entity);
 void GL2_DrawParticleList (particle_t *first);
-void GL2_DrawEntityGlow (entity_t *entity);
 
 /*
 =============================================================================
