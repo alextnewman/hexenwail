@@ -1212,9 +1212,10 @@ void Key_Event (int key, qboolean down)
 			break;
 		case key_game:
 		case key_console:
-			// M_ToggleMenu_f would only close the console again, which
-			// is a dead end on a pad, so leave the console first and let
-			// it open the menu.
+			// From gameplay this opens the menu.  From the console it
+			// has to leave the console first: M_ToggleMenu_f would
+			// otherwise just close the console again, which is a dead
+			// end on a pad.
 			if (key_dest == key_console)
 				Key_SetDest (key_game);
 			M_ToggleMenu_f ();
