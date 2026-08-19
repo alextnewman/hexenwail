@@ -224,6 +224,57 @@ avoid stuck movement or fire.
 Hardware keyboard, mouse, and physical gamepad support are preserved. On iPad
 and desktop, touch controls stay hidden by default unless explicitly enabled.
 
+## Gamepad
+
+`in_web.c` contains a first-party gamepad driver written directly against the
+browser's Gamepad API (sampled through Emscripten's HTML5 bindings). There is no
+SDL joystick layer in the web build to translate, and pointer input is not
+practically playable on iPadOS, so the controller is the primary way to play on a
+tablet.
+
+Two web-specific facts shape the driver:
+
+- **The Gamepad API is poll-only.** There are no button events, so
+  `IN_Commands` samples the pad once per host frame and turns level state into
+  the engine's edge-triggered `Key_Event` calls itself.
+- **The browser already normalises the layout.** Controllers report the W3C
+  "standard gamepad" mapping — a fixed button and axis order — so the mapping is
+  a plain index table rather than a controller database. Pads reporting the
+  standard mapping are preferred when several are connected.
+
+Buttons produce the engine's existing `K_GP_*` keycodes, so the default binds and
+the **Controller Options** menu apply unchanged:
+
+| Physical | Key | Default bind |
+| --- | --- | --- |
+| A / B / X / Y | `K_GP_A` … `K_GP_Y` | jump, crouch, use artifact, jump |
+| L1 / R1 | `K_GP_LSHOULDER` / `K_GP_RSHOULDER` | previous / next weapon |
+| L2 / R2 (analog) | `K_GP_LTRIGGER` / `K_GP_RTRIGGER` | jump / attack |
+| L3 / R3 | `K_GP_LTHUMB` / `K_GP_RTHUMB` | lift object / `+altmodifier` |
+| Start / Back | `K_GP_START` / `K_GP_BACK` | menu / console |
+| D-pad ◀ ▶ | `K_GP_DPAD_LEFT` / `K_GP_DPAD_RIGHT` | inventory left / right |
+
+Triggers are analog buttons in the standard mapping; they fire once they pass
+`joy_deadzone_trigger`. The sticks use a circular deadzone plus a power curve
+(`joy_deadzone_move` / `joy_deadzone_look`, `joy_exponent_move` / `joy_exponent`)
+and feed movement and view angles from `IN_Move`. `joy_swapmovelook`,
+`joy_invert`, `joy_sensitivity_yaw` and `joy_sensitivity_pitch` behave as usual.
+
+Because a cursor is not a realistic input on iPadOS, the pad has to be able to
+drive the whole UI: in menus and the console the D-pad and move stick act as
+arrow keys with auto-repeat, the triggers act as Enter, and (via the shared menu
+code) A confirms while B backs out. Held buttons remember which key they emitted,
+so nothing sticks down across a menu transition, a disconnect, or `gamepad 0`.
+
+Rumble uses `vibrationActuator.playEffect` when the browser has it, scaled by
+`joy_rumble`. Safari does not implement it today, so it is best-effort and silent
+when missing.
+
+Set `gamepad 0` (or **Controller Options → Gamepad Enabled**) to disable polling
+entirely. Browsers only expose a pad after it has been used once, so the first
+button press is what makes the controller appear — that press is consumed by the
+browser, not the game.
+
 ## Import behavior
 
 Recognized inputs include:
@@ -321,7 +372,9 @@ Practical ways to confirm readiness:
 
 ## Browser / iPadOS limitations
 
-- **Pointer Lock:** not currently available on iPadOS Safari, so true desktop-style mouselook is limited there
+- **Pointer Lock:** not currently available on iPadOS Safari, so true desktop-style mouselook is limited there; a game controller is the recommended input on iPad
+- **Gamepad discovery:** browsers only expose a controller after it has been used at least once, so the first button press wakes the pad up instead of reaching the game
+- **Rumble:** `vibrationActuator` is not implemented by Safari, so `joy_rumble` has no effect on iPadOS
 - **Phone look:** iPhone/iOS Safari also lacks Pointer Lock; phone mode feeds relative drag deltas through an explicit engine bridge instead of relying on browser mouse capture
 - **Display mode:** installed iPadOS PWAs use `standalone`; this is effectively edge-to-edge but not true unrestricted fullscreen, so the launcher's immersive layout — not the Fullscreen API — is what guarantees a full-window game there
 - **Escape key:** iPad keyboards have none, so the web port maps `` ` `` to Escape and moves the console to `Shift`+`` ` ``
@@ -360,4 +413,17 @@ The archive may contain unsupported paths, exceed the configured resource caps, 
 
 ### Mouse capture is incomplete on iPad/iPhone
 
-That is expected today. Pointer Lock is the main blocker on iPadOS Safari. External keyboards, mice, and physical controllers remain supported; touch-only devices get explicit touch controls for movement, looking, attack, jump, use, weapon switching, and menu access. The system cursor is hidden during gameplay and shown again in menus and the console, so a visible cursor while playing means the engine still thinks the menu owns input.
+That is expected today. Pointer Lock is the main blocker on iPadOS Safari, which
+is why a game controller is the recommended way to play there — see
+[Gamepad](#gamepad). External keyboards, mice, and physical controllers remain
+supported; touch-only devices get explicit touch controls for movement, looking,
+attack, jump, use, weapon switching, and menu access. The system cursor is hidden
+during gameplay and shown again in menus and the console, so a visible cursor
+while playing means the engine still thinks the menu owns input.
+
+### The controller does nothing
+
+Press a button on the pad first: browsers deliberately hide gamepads until they
+have been used, and that first press is consumed by the browser. If it still does
+nothing, open the console (Back button, or `Shift`+`` ` ``) and check for the
+`Gamepad connected` line, and that `gamepad` is `1`.
