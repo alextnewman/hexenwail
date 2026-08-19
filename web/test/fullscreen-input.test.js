@@ -14,7 +14,7 @@ test('immersive layout is driven by its own attribute, not by phone mode', () =>
   assert.match(html, /body\[data-engine-state="running"\]\[data-immersive="true"\] \.phone-top-button/);
   assert.doesNotMatch(html, /body\[data-engine-state="running"\]\[data-phone-mode="true"\] \.topbar/,
     'hiding the launcher chrome must not depend on phone mode any more');
-  assert.match(app, /document\.body\.dataset\.immersive = state\.immersive \|\| state\.phoneMode/);
+  assert.match(app, /document\.body\.dataset\.immersive = \(state\.immersive \|\| state\.phoneMode\)/);
 });
 
 test('starting the game is what enters fullscreen play', () => {

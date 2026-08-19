@@ -656,7 +656,7 @@ function applyPreferences() {
   document.body.dataset.handedness = state.preferences.handedness;
   document.body.dataset.touchOnly = state.touchOnlyEnvironment ? 'true' : 'false';
   document.body.dataset.phoneMode = state.phoneMode ? 'true' : 'false';
-  document.body.dataset.immersive = state.immersive || state.phoneMode ? 'true' : 'false';
+  document.body.dataset.immersive = (state.immersive || state.phoneMode) ? 'true' : 'false';
   if (ui.touchControlsSetting) ui.touchControlsSetting.value = state.preferences.touchControls;
   if (ui.handednessSetting) ui.handednessSetting.value = state.preferences.handedness;
   if (ui.lookSensitivitySetting) ui.lookSensitivitySetting.value = String(state.preferences.lookSensitivity);
