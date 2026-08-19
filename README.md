@@ -133,8 +133,8 @@ deployment target is an installed iOS PWA; see
 [docs/PWA.md](docs/PWA.md) for the shell, asset import, and deployment notes.
 
 The web build renders with uHexen2's **classic 8bpp software rasteriser**, presented
-through an accelerated canvas (a WebGL2 palette-lookup blit). The WebGL2 renderer is
-retained and selectable at build time.
+through an accelerated canvas (a WebGL2 palette-lookup blit). WebGlide, the
+experimental GPU renderer, is retained and selectable at build time.
 
 **Requirements:** the [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html)
 (CI pins `4.0.23`) and Node.js 22+ for the PWA shell tests.
@@ -143,7 +143,7 @@ retained and selectable at build time.
 source "$EMSDK/emsdk_env.sh"
 
 make build          # software renderer (the shipping default)
-make build-webgl2   # the retained WebGL2 renderer
+make build-webgl2   # WebGlide, the experimental GPU renderer
 make dist           # assemble + validate the static PWA artifact in dist/
 make test           # PWA shell tests
 ```
@@ -152,7 +152,7 @@ Those targets wrap the scripts CI uses, so local and CI builds cannot drift:
 
 ```bash
 ./scripts/wasm-build.sh software
-./scripts/wasm-build.sh webgl2 engine/build-webgl2
+./scripts/wasm-build.sh webgl2 engine/build-webgl2   # -> hexenwail-webglide.*
 ./scripts/wasm-assemble-artifact.sh dist
 ./scripts/wasm-validate-artifact.sh dist
 ```
@@ -161,7 +161,7 @@ To configure CMake directly:
 
 ```bash
 emcmake cmake -S engine -B build                       # software (default)
-emcmake cmake -S engine -B build -DWEB_RENDERER=webgl2 # WebGL2
+emcmake cmake -S engine -B build -DWEB_RENDERER=webgl2 # WebGlide
 ```
 
 **Nix** (developer convenience; CI uses the pinned emsdk, not the flake):
@@ -171,8 +171,9 @@ nix develop     # web toolchain shell
 nix build       # best-effort WASM build -> installable PWA tree
 ```
 
-Design documents: [docs/web/ARCHITECTURE.md](docs/web/ARCHITECTURE.md) and
-[docs/web/SOFTWARE_RENDERER.md](docs/web/SOFTWARE_RENDERER.md).
+Design documents: [docs/web/ARCHITECTURE.md](docs/web/ARCHITECTURE.md),
+[docs/web/SOFTWARE_RENDERER.md](docs/web/SOFTWARE_RENDERER.md) and
+[docs/web/WEBGLIDE.md](docs/web/WEBGLIDE.md).
 
 ## Contributing
 

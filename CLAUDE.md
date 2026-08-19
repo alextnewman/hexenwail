@@ -67,7 +67,7 @@ agreed design; they exist so sessions stop re-deriving context from scratch.
 | --- | --- |
 | [`docs/web/ARCHITECTURE.md`](docs/web/ARCHITECTURE.md) | What the web port is, its non-goals, layering, the `WEBQUAKE` / `WEBGL2QUAKE` macro contract, ownership boundaries |
 | [`docs/web/SOFTWARE_RENDERER.md`](docs/web/SOFTWARE_RENDERER.md) | The **default** renderer: classic 8bpp rasteriser presented on an accelerated canvas, resolution ladder, iPad Pro panel math, cvars |
-| [`docs/WEBGL_RENDERER.md`](docs/WEBGL_RENDERER.md) | The retained WebGL2 renderer (`-DWEB_RENDERER=webgl2`) |
+| [`docs/web/WEBGLIDE.md`](docs/web/WEBGLIDE.md) | The experimental WebGlide GPU renderer (`-DWEB_RENDERER=webgl2`) |
 | [`docs/PWA.md`](docs/PWA.md) | PWA shell, asset import, deployment |
 
 **Settled decisions — do not reopen without an explicit instruction:**
@@ -76,8 +76,8 @@ agreed design; they exist so sessions stop re-deriving context from scratch.
   Ironwail-class modern renderer is a **non-goal**.
 * The web platform is treated as an independent OS, like a console port.
   POSIX/desktop parity and upstreamability are **non-goals**.
-* The **software renderer is the default**. The WebGL2 renderer stays in-tree
-  and buildable; do not delete it.
+* The **software renderer is the default**. The WebGlide GPU renderer stays
+  in-tree and buildable; do not delete it.
 
 If the code and these documents disagree, say so explicitly and fix one of
 them — do not silently invent a third plan.

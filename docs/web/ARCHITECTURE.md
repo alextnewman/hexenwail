@@ -54,8 +54,8 @@ software rasteriser presented through an accelerated canvas.
              |  renderer interface (R_*, Draw_*, VID_*)
              v
    +---------------------+---------------------+
-   |  software renderer  |  WebGL2 renderer    |   picked at build time
-   |  (default)          |  (kept buildable)   |
+   |  software renderer  |  WebGlide (GPU)     |   picked at build time
+   |  (default)          |  (experimental)     |
    +---------------------+---------------------+
              |                       |
              |  WebCanvas_*          |  direct GL
@@ -81,12 +81,14 @@ line of rasteriser code.
 # default: classic software rasteriser on an accelerated canvas
 emcmake cmake -S engine -B build
 
-# the experimental GPU renderer, unchanged
+# WebGlide, the experimental GPU renderer
 emcmake cmake -S engine -B build -DWEB_RENDERER=webgl2
 ```
 
-Both configurations must keep compiling. The WebGL2 renderer is **not**
-deprecated and must not be deleted.
+Both configurations must keep compiling. WebGlide is **not** deprecated and
+must not be deleted. The build option value is `webgl2` and the macro is
+`WEBGL2QUAKE`, but the shipped bundle basename (`hexenwail-webglide.*`) and
+every user-facing name are WebGlide — see [`WEBGLIDE.md`](WEBGLIDE.md).
 
 ### Macro contract
 
@@ -97,7 +99,7 @@ Those are now separate:
 | --- | --- | --- |
 | `PLATFORM_WEB` | Emscripten host: no SDL, browser event loop, OPFS filesystem | both configurations |
 | `WEBQUAKE` | web *platform* client: web VID/input/sound, extended 2D API surface | both configurations |
-| `WEBGL2QUAKE` | the WebGL2 *renderer* | `-DWEB_RENDERER=webgl2` only |
+| `WEBGL2QUAKE` | the WebGlide GPU *renderer* | `-DWEB_RENDERER=webgl2` only |
 | `WEBSOFT` | the software *renderer* | default configuration only |
 | `GLQUAKE` | the desktop OpenGL renderer | never (no desktop target is built) |
 
@@ -135,8 +137,8 @@ as everything else — the shell owns the page, the engine owns the game:
 | Engine ↔ JS entry points | `engine/CMakeLists.txt` `EXPORTED_FUNCTIONS` | Names are `Web_*`. `web/app.js` must match exactly; a mismatch fails **silently** at runtime. |
 | Platform backends | `engine/hexen2/sys_web.c`, `engine/h2shared/in_web.c`, `snd_web.c` | |
 | Music codec set | `engine/CMakeLists.txt` | `bgmusic.c` only offers a format whose codec registered itself in `S_CodecInit`, so the build file is what decides which formats exist at runtime — see below. |
-| VID / presentation | `vid_soft_web.c` + `web_canvas*.c` (software), `vid_webgl2.c` (WebGL2) | |
-| Renderer | restored `d_*.c` / `r_*.c` (software), `r_webgl2.c` (WebGL2) | |
+| VID / presentation | `vid_soft_web.c` + `web_canvas*.c` (software), `vid_webgl2.c` (WebGlide) | |
+| Renderer | restored `d_*.c` / `r_*.c` (software), `r_webgl2.c` + `gl2_*.c` (WebGlide) | |
 | Shared client (menu, sbar, console, screen) | `engine/hexen2`, `engine/h2shared` | Written against one API; renderer-specific gaps are filled by shim files, not by `#ifdef` sprinkling. |
 
 ## Audio and music
@@ -200,6 +202,5 @@ actually play.
 
 * [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md) — the default renderer and
   presenter design, resolution ladder, and cvars.
-* [`../WEBGL_RENDERER.md`](../WEBGL_RENDERER.md) — the retained WebGL2
-  renderer profile.
+* [`WEBGLIDE.md`](WEBGLIDE.md) — the experimental WebGlide GPU renderer.
 * [`../PWA.md`](../PWA.md) — PWA shell, asset import, deployment.

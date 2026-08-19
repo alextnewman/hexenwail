@@ -71,6 +71,13 @@ if(WEB_RENDERER STREQUAL "webgl2")
     list(APPEND RENDERER_SOURCES
         ${ENGINE_TOP}/hexen2/r_webgl2.c
         ${COMMONDIR}/draw_webgl2.c
+        ${COMMONDIR}/gl2_texture.c
+        ${COMMONDIR}/gl2_shader.c
+        ${COMMONDIR}/gl2_glide.c
+        ${COMMONDIR}/gl2_world.c
+        ${COMMONDIR}/gl2_alias.c
+        ${COMMONDIR}/gl_fog.c
+        ${COMMONDIR}/gl_refrag.c
     )
 else()
     add_compile_definitions(WEBSOFT)
@@ -253,7 +260,14 @@ if(GAME_DATA_DIR)
 endif()
 
 target_link_libraries(uhexen2_web PRIVATE m)
+if(WEB_RENDERER STREQUAL "webgl2")
+    # The experimental WebGlide bundle ships alongside the software one and
+    # is picked by the launcher's renderer toggle, so it needs its own name.
+    set(WEB_OUTPUT_NAME hexenwail-webglide)
+else()
+    set(WEB_OUTPUT_NAME hexenwail)
+endif()
 set_target_properties(uhexen2_web PROPERTIES
-    OUTPUT_NAME hexenwail
+    OUTPUT_NAME ${WEB_OUTPUT_NAME}
     SUFFIX ".html"
 )

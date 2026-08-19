@@ -72,12 +72,21 @@ extern webgl2_caps_t gl_renderer_caps;
 extern const int ColorIndex[16];
 extern const unsigned int ColorPercent[16];
 
+/* Hexen II's 16x16 entity colour-shade tints, built in VID_Init. */
+extern float RTint[256], GTint[256], BTint[256];
+
 void WebGL2_Init (void);
 void WebGL2_Shutdown (void);
 void WebGL2_Resize (int width, int height);
 void WebGL2_BeginFrame (void);
 void WebGL2_EndFrame (void);
 void WebGL2_DrawParticles (particle_t *first);
+
+/* efrags -- r_efrag.c is software-only, so the webgl2 build compiles the
+ * renderer-agnostic gl_refrag.c instead. */
+void R_AddEfrags (entity_t *ent);
+void R_RemoveEfrags (entity_t *ent);
+void R_StoreEfrags (efrag_t **ppefrag);
 void Fog_ParseServerMessage (void);
 
 void GL_SetCanvas (canvastype canvas);

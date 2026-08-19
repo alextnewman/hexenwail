@@ -25,8 +25,9 @@ The rasteriser cost scales with the *software* resolution, which we choose;
 the presenter cost scales with the *panel* resolution, which we do not, but
 it is one textured triangle, so it is free in practice.
 
-The WebGL2 renderer remains in-tree and buildable
-(`-DWEB_RENDERER=webgl2`). It is not deprecated.
+The WebGlide GPU renderer remains in-tree and buildable
+(`-DWEB_RENDERER=webgl2`, see [`WEBGLIDE.md`](WEBGLIDE.md)). It is not
+deprecated.
 
 ## Files
 
@@ -289,7 +290,7 @@ across map changes.
 emcmake cmake -S engine -B build-soft                        # software (default)
 emmake  make  -C build-soft -j"$(nproc)"
 
-emcmake cmake -S engine -B build-gl -DWEB_RENDERER=webgl2    # WebGL2
+emcmake cmake -S engine -B build-gl -DWEB_RENDERER=webgl2    # WebGlide
 emmake  make  -C build-gl -j"$(nproc)"
 
 npm test                                                     # PWA shell tests

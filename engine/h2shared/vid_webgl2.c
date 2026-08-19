@@ -26,18 +26,116 @@ const unsigned int ColorPercent[16] = {
 
 static EMSCRIPTEN_WEBGL_CONTEXT_HANDLE webgl_context;
 
+/*
+ * Two sizes, deliberately decoupled.
+ *
+ *   glwidth/glheight  the drawing buffer, in real device pixels.  The 3D
+ *                     scene wants every one of them.
+ *   vid.width/height  the UI space the 320-wide status bar and menus are
+ *                     laid out in.  A 2732px iPad panel would otherwise
+ *                     render the HUD at about a tenth of the screen.
+ *
+ * The ladder below reproduces the ratio the software renderer lands on
+ * (roughly a third of the screen height on a tablet, more on a phone) by
+ * picking the largest rung that still leaves the HUD at least 2x scaled.
+ */
+static const int vid_ui_heights[] = { 240, 300, 384, 480, 600, 720 };
+#define NUM_UI_HEIGHTS	((int)(sizeof(vid_ui_heights) / sizeof(vid_ui_heights[0])))
+
+cvar_t vid_ui_height = {"vid_ui_height", "0", CVAR_ARCHIVE};
+
+static void VID_PickUISize (int gw, int gh, int *out_w, int *out_h)
+{
+	float	aspect = (gh > 0) ? ((float)gw / (float)gh) : (4.0f / 3.0f);
+	int	i, height, width;
+
+	if (vid_ui_height.integer > 0)
+	{
+		height = vid_ui_height.integer;
+	}
+	else
+	{
+		height = vid_ui_heights[0];
+		for (i = 0; i < NUM_UI_HEIGHTS; i++)
+		{
+			if (vid_ui_heights[i] * 2 <= gh)
+				height = vid_ui_heights[i];
+		}
+	}
+
+	if (height > gh)
+		height = gh;
+	if (height < 200)
+		height = 200;
+	else if (height > 1024)
+		height = 1024;
+
+	width = (int)(height * aspect + 0.5f);
+	if (width < 320)
+		width = 320;
+	else if (width > 1280)
+		width = 1280;
+
+	*out_w = width;
+	*out_h = height;
+}
+
 static void VID_SetSize (int width, int height)
 {
+	int	ui_width, ui_height;
+
 	if (width < 320) width = 320;
 	if (height < 200) height = 200;
 	emscripten_set_canvas_element_size("#canvas", width, height);
-	vid.width = vid.conwidth = width;
-	vid.height = vid.conheight = height;
-	vid.rowbytes = vid.conrowbytes = width;
+
+	glwidth = width;
+	glheight = height;
+	glx = gly = 0;
+
+	VID_PickUISize(width, height, &ui_width, &ui_height);
+	vid.width = vid.conwidth = ui_width;
+	vid.height = vid.conheight = ui_height;
+	vid.rowbytes = vid.conrowbytes = ui_width;
 	vid.aspect = ((float)height / (float)width) * (320.0f / 240.0f);
 	vid.numpages = 2;
 	vid.recalc_refdef = 1;
 	WebGL2_Resize(width, height);
+}
+
+/*
+================
+VID_BuildTintTables
+
+Hexen II's 16x16 colour-shade table: sixteen palette hues at sixteen
+translucency levels.  The QC uses it for every tinted effect in the game
+-- the spell glows, the powered-up weapons, the artifact auras -- and
+without it entity_t::colorshade does nothing.
+================
+*/
+static void VID_BuildTintTables (const unsigned char *palette)
+{
+	int	i, p, c, r, g, b;
+	unsigned int	*table = d_8to24TranslucentTable;
+
+	for (i = 0; i < 16; i++)
+	{
+		c = ColorIndex[i] * 3;
+		r = palette[c];
+		g = palette[c + 1];
+		b = palette[c + 2];
+
+		for (p = 0; p < 16; p++)
+		{
+			unsigned int	a = ColorPercent[15 - p];
+
+			*table++ = (a << 24) | ((unsigned int)b << 16) |
+					((unsigned int)g << 8) | (unsigned int)r;
+
+			RTint[i * 16 + p] = ((float)r) / ((float)a);
+			GTint[i * 16 + p] = ((float)g) / ((float)a);
+			BTint[i * 16 + p] = ((float)b) / ((float)a);
+		}
+	}
 }
 
 EMSCRIPTEN_KEEPALIVE void Web_ResizeCanvas (int css_width, int css_height)
@@ -53,6 +151,8 @@ void VID_Init (const unsigned char *palette)
 	EmscriptenWebGLContextAttributes attributes;
 	double width = 0, height = 0;
 	int i;
+
+	Cvar_RegisterVariable(&vid_ui_height);
 
 	emscripten_webgl_init_context_attributes(&attributes);
 	attributes.alpha = false;
@@ -76,6 +176,7 @@ void VID_Init (const unsigned char *palette)
 			(palette[i * 3 + 2] << 16) | 0xff000000u;
 	}
 	d_8to24table[255] &= 0x00ffffffu;
+	VID_BuildTintTables(palette);
 	vid.colormap = host_colormap;
 	vid.fullbright = 256 - LittleLong(*((int *)vid.colormap + 2048));
 	emscripten_get_element_css_size("#canvas", &width, &height);

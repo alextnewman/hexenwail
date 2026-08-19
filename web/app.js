@@ -48,6 +48,13 @@ const state = {
     handedness: 'right',
     lookSensitivity: 1,
     phoneHintSeen: false,
+    /* Which WebAssembly bundle to load at launcher startup:
+     *   'software' -> ./hexenwail.js            (shipping, supported default)
+     *   'webglide' -> ./hexenwail-webglide.js   (experimental GPU renderer)
+     * The engine script is loaded once during init(), so a change here
+     * takes effect on the next launcher load; savePreferences() is what
+     * makes the choice survive that reload. */
+    renderer: 'software',
   },
   touchOnlyEnvironment: false,
   gamepadConnected: false,
@@ -645,6 +652,7 @@ function loadPreferences() {
     const sensitivity = Number(saved.lookSensitivity);
     if (Number.isFinite(sensitivity) && sensitivity >= 0.5 && sensitivity <= 2) state.preferences.lookSensitivity = sensitivity;
     state.preferences.phoneHintSeen = Boolean(saved.phoneHintSeen);
+    if (['software', 'webglide'].includes(saved.renderer)) state.preferences.renderer = saved.renderer;
   } catch (error) {
     console.warn('Could not load launcher preferences', error);
   }
@@ -673,6 +681,7 @@ function applyPreferences() {
   if (ui.touchControlsSetting) ui.touchControlsSetting.value = state.preferences.touchControls;
   if (ui.handednessSetting) ui.handednessSetting.value = state.preferences.handedness;
   if (ui.lookSensitivitySetting) ui.lookSensitivitySetting.value = String(state.preferences.lookSensitivity);
+  if (ui.rendererSetting) ui.rendererSetting.value = state.preferences.renderer;
   if (ui.phoneHint && state.preferences.phoneHintSeen) {
     ui.phoneHint.textContent = 'Touch controls are available during play. Landscape remains recommended.';
   }
@@ -1222,15 +1231,35 @@ async function ensureEngineScriptLoaded() {
     return;
   }
 
+  /* The WebGlide GPU bundle ships under a distinct basename so it can
+   * sit next to the software one in the same dist directory; the two
+   * Emscripten .js files locate their own .wasm sibling by basename, so
+   * this URL is what routes the whole runtime. Log the choice through the
+   * runtime log so a bug report shows which bundle was in use. */
+  const useWebGlide = state.preferences.renderer === 'webglide';
+  const scriptUrl = useWebGlide ? './hexenwail-webglide.js' : './hexenwail.js';
+  logToConsole('[launcher]', `Loading engine bundle: ${scriptUrl} (renderer=${state.preferences.renderer})`);
+
   await new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = './hexenwail.js';
+    script.src = scriptUrl;
     script.defer = true;
     script.onload = () => {
       state.runtimeLoaded = true;
       resolve();
     };
-    script.onerror = () => reject(new Error('Failed to load hexenwail.js. Build the WASM target before serving this directory.'));
+    script.onerror = () => {
+      /* Fail loudly and name the toggle. The WebGlide bundle is optional
+       * in the artifact (see scripts/wasm-assemble-artifact.sh), so a
+       * build without it must not leave the launcher with a dead engine
+       * script and no obvious way back. */
+      const detail = useWebGlide
+        ? `Failed to load ${scriptUrl}. The WebGlide GPU bundle is missing from this artifact.`
+          + ' Open the "Renderer (experimental)" card, switch back to "Software (default, stable)",'
+          + ' and the launcher will reload with the shipping renderer.'
+        : `Failed to load ${scriptUrl}. Build the WASM target before serving this directory.`;
+      reject(new Error(detail));
+    };
     document.head.append(script);
   });
 }
@@ -1267,6 +1296,8 @@ function bindUi() {
     touchControlsSetting: document.getElementById('touch-controls-setting'),
     handednessSetting: document.getElementById('handedness-setting'),
     lookSensitivitySetting: document.getElementById('look-sensitivity-setting'),
+    rendererSetting: document.getElementById('renderer-setting'),
+    rendererMessage: document.getElementById('renderer-message'),
     phoneHint: document.getElementById('phone-hint'),
     phoneControlsRoot: document.getElementById('phone-controls'),
     phoneMenuButton: document.getElementById('phone-menu-button'),
@@ -1342,6 +1373,36 @@ function bindUi() {
     state.preferences.lookSensitivity = Number(ui.lookSensitivitySetting.value);
     savePreferences();
     applyPreferences();
+  });
+  /* Renderer selection: the engine script is loaded exactly once during
+   * init(), so a change here can only be honoured on the next launcher
+   * load. If nothing is currently playing, reload the page automatically
+   * (persisting the choice first). If the engine is already running, do
+   * *not* reload the tab out from under it — persist the preference and
+   * tell the player how to apply it. state.engineStarted / body's
+   * data-engine-state are the same signal handleEngineQuit() sets, so a
+   * finished game (runtimeExited) counts as "not running" here. */
+  ui.rendererSetting?.addEventListener('change', () => {
+    const next = ui.rendererSetting.value === 'webglide' ? 'webglide' : 'software';
+    if (next === state.preferences.renderer) return;
+    state.preferences.renderer = next;
+    savePreferences();
+    applyPreferences();
+    const label = next === 'webglide' ? 'WebGlide experimental GPU renderer' : 'software renderer';
+    appendRuntimeLog('[launcher]', `Renderer preference changed to ${next} (${label}).`);
+    const enginePlaying = state.engineStarted && !state.runtimeExited;
+    if (enginePlaying) {
+      if (ui.rendererMessage) {
+        ui.rendererMessage.textContent = `Renderer change queued: ${label}. Exit to the launcher (☰) to reload with the new bundle.`;
+      }
+      return;
+    }
+    if (ui.rendererMessage) {
+      ui.rendererMessage.textContent = `Reloading launcher to apply the ${label}…`;
+    }
+    /* Give the runtime log and the reload-hint one paint before the
+     * navigation blows the launcher DOM away. */
+    setTimeout(() => location.reload(), 60);
   });
 
   for (const query of [

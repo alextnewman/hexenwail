@@ -495,6 +495,17 @@
           <small id="pointer-lock-hint" class="muted">Starting the game hides the launcher chrome and asks the browser for fullscreen. Press <code>☰</code> in-game to leave fullscreen or return to the launcher; with a controller connected the <code>☰</code> button steps aside and <code>Start</code> opens the menu.</small>
         </section>
         <section class="card">
+          <h2>Renderer (experimental)</h2>
+          <p>The classic 8bpp <strong>Software renderer</strong> is the shipping, supported path and is what the launcher loads by default. <strong>WebGlide</strong> is an experimental GPU renderer that chases the mid-90s 3Dfx look — filtered textures, coloured light, translucent water, fog, optional CRT scan-out — with modern shaders under it. It may render incorrectly or fail to start, and is off by default.</p>
+          <label class="setting">Rendering pipeline
+            <select id="renderer-setting">
+              <option value="software">Software (default, stable)</option>
+              <option value="webglide">WebGlide (experimental GPU)</option>
+            </select>
+          </label>
+          <small id="renderer-message" class="muted">The engine bundle is chosen once at launcher load. Changing this reloads the launcher; changes made during play take effect on the next launch.</small>
+        </section>
+        <section class="card">
           <h2>Phone controls</h2>
           <p id="phone-hint">Touch controls appear automatically on touch-only devices — iPhone, and iPad with no keyboard, trackpad, or controller attached. Landscape is recommended. The left pad moves, the right side looks, and buttons attack, jump, use, switch weapons, and open the menu.</p>
           <label class="setting">Touch controls
