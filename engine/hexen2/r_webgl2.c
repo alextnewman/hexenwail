@@ -43,7 +43,7 @@ cvar_t gl_other_glows = {"gl_other_glows", "1", CVAR_ARCHIVE};
 cvar_t gl_glow_intensity = {"gl_glow_intensity", "1", CVAR_ARCHIVE};
 cvar_t gl_fxaa = {"gl_fxaa", "0", CVAR_ARCHIVE};
 cvar_t gl_overbright_models = {"gl_overbright_models", "1", CVAR_ARCHIVE};
-cvar_t gl_coloredlight = {"gl_coloredlight", "0", CVAR_ARCHIVE};
+cvar_t gl_coloredlight = {"gl_coloredlight", "1", CVAR_ARCHIVE};
 cvar_t gl_flashblend = {"gl_flashblend", "0", CVAR_ARCHIVE};
 cvar_t gl_texture_anisotropy = {"gl_texture_anisotropy", "1", CVAR_ARCHIVE};
 cvar_t gl_texturemode = {"gl_texturemode", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE};
@@ -116,31 +116,40 @@ int R_GetPimpFlags (entity_t *e, float **gsettings_out)
 
 	WebGlide cvars
 
-	The Glide-era knobs.  Everything here defaults to the look the
-	brochure promised, not to the hardware's limits: full colour,
-	filtered and mipmapped textures, no scanlines.  The scene itself is
-	drawn at quarter resolution, which is both what the hardware did and
-	what a phone GPU wants.  The period effects are one `gl_glide_*`
-	command away and are documented in docs/web/WEBGLIDE.md.
+	The Glide-era knobs, and they default to *on*.  WebGlide is not a
+	1:1 GL port with optional period garnish; it is what Hexen II might
+	have looked like if the artists had targeted Glide and shipped a
+	reference renderer for it.  So the shipped configuration is the
+	period look: 16bpp output through the ordered dither, the 2x2
+	scan-out filter over it, a sharpening LOD bias with Voodoo Graphics
+	mip dithering, a T-buffer trail and a CRT.  The scene is drawn at
+	quarter resolution, which is both what the hardware did and what a
+	phone GPU wants.
+
+	Every one of these is archived, so any of it can be dialled back
+	from the console without a rebuild; docs/web/WEBGLIDE.md has the
+	table and the reasoning.  Being archived also means a config.cfg
+	written by an older build wins over these defaults, so a returning
+	install may need them set explicitly once.
 
 =============================================================================
 */
 
 cvar_t gl_glide_dither = {"gl_glide_dither", "1", CVAR_ARCHIVE};
-cvar_t gl_glide_postfilter = {"gl_glide_postfilter", "0", CVAR_ARCHIVE};
-cvar_t gl_glide_lodbias = {"gl_glide_lodbias", "0", CVAR_ARCHIVE};
+cvar_t gl_glide_postfilter = {"gl_glide_postfilter", "1", CVAR_ARCHIVE};
+cvar_t gl_glide_lodbias = {"gl_glide_lodbias", "-0.5", CVAR_ARCHIVE};
 cvar_t gl_glide_gamma = {"gl_glide_gamma", "1", CVAR_ARCHIVE};
 cvar_t gl_glide_tbuffer = {"gl_glide_tbuffer", "1", CVAR_ARCHIVE};
-cvar_t gl_glide_motionblur = {"gl_glide_motionblur", "0", CVAR_ARCHIVE};
+cvar_t gl_glide_motionblur = {"gl_glide_motionblur", "0.25", CVAR_ARCHIVE};
 cvar_t gl_glide_fogtable = {"gl_glide_fogtable", "1", CVAR_ARCHIVE};
-cvar_t gl_glide_colordepth = {"gl_glide_colordepth", "32", CVAR_ARCHIVE};
-cvar_t gl_glide_mipmapdither = {"gl_glide_mipmapdither", "0", CVAR_ARCHIVE};
+cvar_t gl_glide_colordepth = {"gl_glide_colordepth", "16", CVAR_ARCHIVE};
+cvar_t gl_glide_mipmapdither = {"gl_glide_mipmapdither", "1", CVAR_ARCHIVE};
 cvar_t gl_glide_scenescale = {"gl_glide_scenescale", "0.5", CVAR_ARCHIVE};
 cvar_t gl_glide_anisotropy = {"gl_glide_anisotropy", "8", CVAR_ARCHIVE};
-cvar_t gl_glide_crt = {"gl_glide_crt", "0", CVAR_ARCHIVE};
-cvar_t gl_glide_crt_mask = {"gl_glide_crt_mask", "0", CVAR_ARCHIVE};
-cvar_t gl_glide_crt_curve = {"gl_glide_crt_curve", "0", CVAR_ARCHIVE};
-cvar_t gl_glide_crt_vignette = {"gl_glide_crt_vignette", "0", CVAR_ARCHIVE};
+cvar_t gl_glide_crt = {"gl_glide_crt", "0.35", CVAR_ARCHIVE};
+cvar_t gl_glide_crt_mask = {"gl_glide_crt_mask", "0.35", CVAR_ARCHIVE};
+cvar_t gl_glide_crt_curve = {"gl_glide_crt_curve", "0.15", CVAR_ARCHIVE};
+cvar_t gl_glide_crt_vignette = {"gl_glide_crt_vignette", "0.2", CVAR_ARCHIVE};
 
 /*
 =============================================================================
