@@ -38,6 +38,12 @@
 
 #define SHADEDOT_QUANT		16
 
+/* r_alias.c:26.  The software renderer floors a model's ambient light at
+ * this before inverting it into a colormap row, so a software model's
+ * darkness index caps at (255 - LIGHT_MIN) << VID_CBITS and can never reach
+ * the darkest row.  Models are always at least faintly readable. */
+#define LIGHT_MIN		5.0f
+
 static const float	gl2_avertexnormal_dots[SHADEDOT_QUANT][256] =
 {
 #include "anorm_dots.h"
@@ -535,6 +541,32 @@ static void GL2_SetupEntityLighting (entity_t *entity)
 
 /*
 ================
+GL2_ApplyAliasLightFloor
+
+R_AliasSetupLighting applies LIGHT_MIN on the single path every software
+model goes through, after the light styles have been resolved.  The GL
+rule set returns early for EF_ROTATE and the MLS styles, so the floor has
+to be applied here, at the one call site, to cover them all.
+
+gl2_lightcolor is what actually reaches the shader, so flooring only
+gl2_ambientlight would be inert.
+================
+*/
+static void GL2_ApplyAliasLightFloor (void)
+{
+	int	i;
+
+	if (gl2_ambientlight < LIGHT_MIN)
+		gl2_ambientlight = LIGHT_MIN;
+	for (i = 0; i < 3; i++)
+	{
+		if (gl2_lightcolor[i] < LIGHT_MIN)
+			gl2_lightcolor[i] = LIGHT_MIN;
+	}
+}
+
+/*
+================
 GL2_ApplyColorShade
 
 entity_t::colorshade indexes Hexen II's 16x16 tint table: the coloured
@@ -771,6 +803,7 @@ void GL2_DrawAliasModel (entity_t *entity)
 		return;
 
 	GL2_SetupEntityLighting (entity);
+	GL2_ApplyAliasLightFloor ();
 	VectorCopy (gl2_lightcolor, tint);
 	GL2_ApplyColorShade (entity, tint);
 

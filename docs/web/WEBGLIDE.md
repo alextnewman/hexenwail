@@ -188,13 +188,44 @@ Consequences, in the order they matter:
 * **Palette snapping is a feature.** Colours hop between palette ramps as
   they darken instead of sliding smoothly to zero, which is most of what
   reads as period rather than muddy.
-* **Two floors are missing.** WebGlide has no `r_ambient` equivalent —
-  `GL2_BuildLightmapBlock` zeroes its accumulator where `r_surf.c:202` seeds
-  it — and no `LIGHT_MIN`; `gl2_alias.c` clamps ambient to `0.0f`, so models
-  *can* reach black where software guarantees they cannot.
+* **Two floors were missing — both are now closed.** WebGlide had no
+  `r_ambient` equivalent (`GL2_BuildLightmapBlock` zeroed its accumulator
+  where `r_surf.c:202` seeds it) and no `LIGHT_MIN` (`gl2_alias.c` clamped
+  ambient to `0.0f`, so models could reach black where software guarantees
+  they cannot). See [Light floors](#light-floors) below.
 * **One function blocks the faithful path.** `GL2_ExpandPalette`
   (`gl2_texture.c:197`) resolves every texel to RGBA at load and discards the
   index, so nothing downstream has an index to shade with.
+
+## Light floors
+
+The software renderer never lets geometry reach true black, and it gets
+that for free from the colormap: its darkest row still carries hue, so an
+unlit wall reads as *dark stone*. WebGlide multiplies albedo by the
+lightmap in linear RGB, where unlit means literally zero, so the same map
+data collapses to a black screen. Two floors restore the software
+renderer's guarantee.
+
+**World surfaces — `r_ambient`.** `GL2_BuildLightmapBlock` seeds every
+lightmap block with `r_ambient * 256` before accumulating light styles,
+the same value in the same order as `r_surf.c:202`. The seed is 8.8 fixed
+point, and the shader then applies `u_overbright`, so the albedo floor
+works out to `r_ambient / 255 * 2` — `16` lands at about 12.5%.
+
+This diverges deliberately from software, which defaults `r_ambient` to
+`0` because it does not need the help. It is **not** `CVAR_ARCHIVE`:
+`config.cfg` is shared with the software build, and persisting it would
+silently raise the software renderer's black level too. Put it in
+`autoexec.cfg` to make a tuned value stick. Changing it takes effect
+immediately — `GL2_DrawWorld` polls it and rebuilds, exactly as it already
+does for `gl_overbright`.
+
+**Models — `LIGHT_MIN`.** `GL2_ApplyAliasLightFloor` floors both
+`gl2_ambientlight` and `gl2_lightcolor` at `5`, matching `r_alias.c:26`.
+It runs at `GL2_SetupEntityLighting`'s single call site rather than inside
+it, because the GL rule set returns early for `EF_ROTATE` and the `MLS`
+light styles, and the software renderer applies its floor after *all* of
+those paths have resolved.
 
 ## Coloured light
 
@@ -277,6 +308,10 @@ Shared client cvars that WebGlide actually honours include `gl_overbright`,
 `r_slimealpha`, `r_telealpha`, `r_turbalpha`) and the light policy cvars
 (`gl_missile_glows`, `gl_torch_dlight`, `gl_flashintensity`,
 `gl_extra_dynamic_lights`).
+
+`r_ambient` is registered by the WebGlide build too, but with a default of
+`16` rather than the software renderer's `0`, and it is not archived. See
+[Light floors](#light-floors).
 
 `gl_coloredlight` defaults to `1`, matching the software renderer and the
 desktop GL renderer. In WebGlide it currently only gates `.lit` loading

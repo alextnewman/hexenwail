@@ -392,13 +392,29 @@ void Draw_RedString (int x, int y, const char *text)
 }
 void Draw_SmallCharacter (int x, int y, int num)
 {
+	int row, col;
 	float sl, tl;
+
+	/* The tinyfont atlas is 128x32: 16 columns of 8x8 over 4 rows, and it
+	 * only covers ' '..'_'.  Lower case folds onto upper case.  Same
+	 * folding as gl_draw.c:968 and draw.c. */
 	if (num < 32)
+		num = 0;
+	else if (num >= 'a' && num <= 'z')
+		num -= 64;
+	else if (num > '_')
+		num = 0;
+	else
+		num -= 32;
+
+	if (num == 0)
 		return;
-	num -= 32;
-	sl = (num & 31) / 32.0f;
-	tl = (num >> 5) / 4.0f;
-	Draw_Quad(smallfont_texture, x, y, 4, 5, sl, tl, sl + 1.0f / 32.0f,
+
+	row = num >> 4;
+	col = num & 15;
+	sl = col / 16.0f;
+	tl = row / 4.0f;
+	Draw_Quad(smallfont_texture, x, y, 8, 8, sl, tl, sl + 1.0f / 16.0f,
 		tl + 1.0f / 4.0f, 1, 1, 1, character_alpha);
 }
 void Draw_SmallString (int x, int y, const char *text)
@@ -408,9 +424,10 @@ void Draw_SmallString (int x, int y, const char *text)
 void Draw_BigCharacter (int x, int y, int num)
 {
 	float sl, tl;
-	if (num < 'A' || num > 'Z')
-		return;
-	num -= 'A';
+	/* num is a glyph index, not an ASCII code: M_DrawBigCharacter has
+	 * already mapped '/' to 26 and 'A'..'Z' to 0..25, and rejects
+	 * anything else.  The bigfont atlas is 160x80, 8 columns of 20x20
+	 * over 4 rows.  Same contract as gl_draw.c:1029 and draw.c. */
 	sl = (num % 8) / 8.0f;
 	tl = (num / 8) / 4.0f;
 	Draw_Quad(bigfont_texture, x, y, 20, 20, sl, tl, sl + 0.125f,
