@@ -190,9 +190,11 @@ Consequences, in the order they matter:
   reads as period rather than muddy.
 * **Two floors were missing — both are now closed.** WebGlide had no
   `r_ambient` equivalent (`GL2_BuildLightmapBlock` zeroed its accumulator
-  where `r_surf.c:202` seeds it) and no `LIGHT_MIN` (`gl2_alias.c` clamped
-  ambient to `0.0f`, so models could reach black where software guarantees
-  they cannot). See [Light floors](#light-floors) below.
+  where `r_surf.c:202` seeds it, and `GL2_LightPoint` returned an unfloored
+  sample where `r_light.c:307` floors it) and no view model floor
+  (`r_main.c:806`). `LIGHT_MIN` alone does not substitute for either: it is
+  a floor on the colormap *row*, not on brightness. See
+  [Light floors](#light-floors) below.
 * **One function blocks the faithful path.** `GL2_ExpandPalette`
   (`gl2_texture.c:197`) resolves every texel to RGBA at load and discards the
   index, so nothing downstream has an index to shade with.
@@ -226,6 +228,46 @@ It runs at `GL2_SetupEntityLighting`'s single call site rather than inside
 it, because the GL rule set returns early for `EF_ROTATE` and the `MLS`
 light styles, and the software renderer applies its floor after *all* of
 those paths have resolved.
+
+`LIGHT_MIN` is a backstop, not the model floor, and reading it as one is
+the mistake that made trees and the view model render as black silhouettes
+against a correctly lit world. In software it floors the *colormap row* —
+`(255 - 5) << VID_CBITS` is row 62 of 64, and the difference between row 62
+and row 63 is hue, not brightness. Transcribed into WebGlide's linear
+multiply it is `5 / 200` of the albedo, about 2.5%: five times darker than
+the `r_ambient` floor the same commit gave the walls, and visually
+indistinguishable from black.
+
+**Models — `r_ambient`.** The real model floor is the same cvar the world
+uses, applied where the software renderer applies it. `R_LightPoint`
+(`r_light.c:307`) ends with
+
+```c
+if (r < r_refdef.ambientlight)
+    r = r_refdef.ambientlight;
+```
+
+so a software model bottoms out at exactly the value `R_BuildLightMap`
+seeds the surrounding walls with. `GL2_LightPoint` now floors its returned
+intensity and all three colour channels the same way. The floor is applied
+to the sample, *before* dynamic lights, so a dark dlight can still pull a
+model under it — again as in software, where `LIGHT_MIN` then catches the
+bottom.
+
+Models and walls do not land on identical numbers even so, and are not
+meant to: the world is `r_ambient / 255 * u_overbright` while a model is
+`r_ambient / 200 * shadedots[normal]`, with `shadedots` running `0.70`
+to `2.0`. At `r_ambient 16` that is 12.5% for a wall against 5.6–16% across
+a model's facets. That spread is the Gouraud term, and both the software
+and desktop GL renderers have it.
+
+**The view model — 24.** `R_DrawViewModel` in both renderers
+(`r_main.c:806`, `gl_rmain.c:3837`) samples the world at the entity origin
+rather than the model's mid-point, and floors the result at `24` —
+"always give some light on gun" is the comment in each. WebGlide had
+neither, so the player's hands were floored at `LIGHT_MIN` like anything
+else and went black in any room that was not brightly lit.
+`GL2_SetupEntityLighting` now special-cases `cl.viewent` for both.
 
 ## Coloured light
 
@@ -310,7 +352,8 @@ Shared client cvars that WebGlide actually honours include `gl_overbright`,
 `gl_extra_dynamic_lights`).
 
 `r_ambient` is registered by the WebGlide build too, but with a default of
-`16` rather than the software renderer's `0`, and it is not archived. See
+`16` rather than the software renderer's `0`, and it is not archived. It
+floors both the world lightmap and the model light samples. See
 [Light floors](#light-floors).
 
 `gl_coloredlight` defaults to `1`, matching the software renderer and the

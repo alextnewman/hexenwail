@@ -41,8 +41,25 @@
 /* r_alias.c:26.  The software renderer floors a model's ambient light at
  * this before inverting it into a colormap row, so a software model's
  * darkness index caps at (255 - LIGHT_MIN) << VID_CBITS and can never reach
- * the darkest row.  Models are always at least faintly readable. */
+ * the darkest row.
+ *
+ * Do not mistake it for the floor that keeps software models readable.  It
+ * is a floor in *colormap row* space -- row 62 of 64 -- and the rows below
+ * it are hue, not brightness.  Carried across to WebGlide's linear multiply
+ * it is 5/200 of the albedo, about 2.5%, five times darker than the world's
+ * r_ambient floor and indistinguishable from black.  The real model floor
+ * is r_ambient, applied in GL2_LightPoint where r_light.c:307 applies it;
+ * this remains as the backstop for the light-style paths above, which never
+ * consult the world at all. */
 #define LIGHT_MIN		5.0f
+
+/* r_main.c:806 and gl_rmain.c:3837, both of which say "always give some
+ * light on gun".  The view model is the one thing on screen the player
+ * cannot walk away from, so both renderers sample it at the entity origin
+ * rather than the model's mid-point and floor it far above the world's
+ * floor.  Neither number is negotiable art direction; they are what the
+ * shipped game does. */
+#define VIEWMODEL_LIGHT_MIN	24.0f
 
 static const float	gl2_avertexnormal_dots[SHADEDOT_QUANT][256] =
 {
@@ -436,6 +453,10 @@ The Hexen II model light styles come first -- they override the world
 outright -- then the sampled lightmap colour, then every dynamic light in
 range.  This is the GL renderer's rule set, kept because it is the one
 Raven's own GL build shipped with.
+
+The view model is the one exception both renderers make: it samples the
+world at its own origin, not the model's mid-point, and floors the result
+well above the world's floor.
 ================
 */
 static void GL2_SetupEntityLighting (entity_t *entity)
@@ -469,11 +490,22 @@ static void GL2_SetupEntityLighting (entity_t *entity)
 	}
 
 	VectorCopy (entity->origin, adjust);
-	if (entity->model)
+	if (entity != &cl.viewent && entity->model)
 		adjust[2] += (entity->model->mins[2] + entity->model->maxs[2]) * 0.5f;
 
 	intensity = (float) GL2_LightPoint (adjust, gl2_lightcolor);
 	gl2_ambientlight = gl2_shadelight = intensity;
+
+	if (entity == &cl.viewent)
+	{
+		if (gl2_ambientlight < VIEWMODEL_LIGHT_MIN)
+			gl2_ambientlight = gl2_shadelight = VIEWMODEL_LIGHT_MIN;
+		for (i = 0; i < 3; i++)
+		{
+			if (gl2_lightcolor[i] < VIEWMODEL_LIGHT_MIN)
+				gl2_lightcolor[i] = VIEWMODEL_LIGHT_MIN;
+		}
+	}
 
 	if (r_dynamic.integer)
 	{

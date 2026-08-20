@@ -1677,12 +1677,20 @@ GL2_LightPoint
 
 Returns the average intensity at a point and, in colour, the RGB the
 lightmap -- or the map's .lit -- says it should be.
+
+Floored at r_ambient, exactly where r_light.c:307 floors it.  That floor is
+the whole reason a software model standing in an unlit corner is no darker
+than the wall behind it: R_BuildLightMap seeds the wall with the same
+value, so the two bottom out together.  GL2_BuildLightmapBlock already
+copies the wall half; without this the model half is missing and every
+unlit model reads as a silhouette against a visibly lit world.
 ================
 */
 int GL2_LightPoint (const vec3_t point, vec3_t color)
 {
 	vec3_t	end;
-	int	r;
+	float	ambient;
+	int	i, r;
 
 	if (!cl.worldmodel || !cl.worldmodel->lightdata)
 	{
@@ -1702,6 +1710,15 @@ int GL2_LightPoint (const vec3_t point, vec3_t color)
 	color[0] = gl2_lightspot_color[0];
 	color[1] = gl2_lightspot_color[1];
 	color[2] = gl2_lightspot_color[2];
+
+	ambient = GL2_AmbientLight ();
+	if ((float)r < ambient)
+		r = (int)ambient;
+	for (i = 0; i < 3; i++)
+	{
+		if (color[i] < ambient)
+			color[i] = ambient;
+	}
 	return r;
 }
 
