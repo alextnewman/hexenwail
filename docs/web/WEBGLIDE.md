@@ -13,6 +13,18 @@ way it looked on the back of a 3Dfx box — filtered textures, coloured
 light, translucent water, fog you can see the world through — with as much
 of the actual GPU under it as the browser will give us.
 
+Put another way: **what if Raven had targeted Glide and shipped a reference
+renderer for it?** That framing has two consequences worth stating plainly,
+because they are what keeps this from drifting back into a generic GL port:
+
+* The **specification is Hexen II's own software renderer**
+  (`engine/h2shared/r_surf.c`, `d_*.c`), not GLQuake and not the desktop
+  `gl_*.c` tree. Where the two disagree about what the game should look like,
+  the software renderer wins. A GL renderer answers to the card; the software
+  renderer answers to the art.
+* The period effects are the **product**, not a nostalgia filter bolted on
+  afterwards, so they ship enabled. See [Cvars](#cvars).
+
 The rules that follow from that brief:
 
 * The CPU does all transform, lighting and clipping for models, sprites and
@@ -29,8 +41,8 @@ The rules that follow from that brief:
   scan-out. The 2D HUD, menus and console are drawn on the canvas afterwards,
   at panel resolution, so text stays crisp.
 * The period look is a set of scan-out *choices*, not a limitation: the 16bpp
-  ordered dither, the 2×2 "22-bit" postfilter, the T-buffer blur and the
-  optional CRT are all cvars.
+  ordered dither, the 2×2 "22-bit" postfilter, the T-buffer blur and the CRT
+  are all cvars, and all default to on.
 
 ## Naming
 
@@ -101,6 +113,120 @@ Because `gl_texturemode` is archived, a `config.cfg` written by a build from
 before this was wired up pins the old `GL_NEAREST` default. If the walls still
 crawl, set the cvar once — it will stick.
 
+## How the software renderer lights the world
+
+WebGlide's specification for lighting is `engine/h2shared/r_surf.c` plus the
+`d_*.c` rasterisers, so it is worth writing the transfer function down. It is
+**not** a multiply, and that is the single biggest reason a faithful GL port
+of Hexen II reads as crushed to black next to the software renderer.
+
+### World surfaces
+
+`R_BuildLightMap` (`r_surf.c:167`) produces one value per luxel:
+
+1. **Seed with ambient** — `blocklights[i] = r_refdef.ambientlight << 8`, from
+   the `r_ambient` cvar (`r_main.c:156`, default `0`).
+2. **Accumulate styles** — `blocklights[i] += lightmap[i] * scale`, where
+   `scale` is `r_drawsurf.lightadj[maps]`, an 8.8 fraction derived from
+   `d_lightstylevalue`.
+3. **Add dynamic lights** — `R_AddDynamicLights` (`r_surf.c:68`), greyscale,
+   with Quake's `max + min/2` distance approximation.
+4. **Invert to a darkness index** —
+   `t = (255*256 - blocklights) >> (8 - VID_CBITS)`, with `VID_CBITS 6`, so
+   `t` runs `0` (fully lit) … `16320` (fully dark).
+5. **Clamp** — `if (t < (1 << 6)) t = (1 << 6)`. This is *not* a light floor:
+   it is headroom so the interpolator below cannot drive the index negative
+   and read outside the colormap.
+
+`R_DrawSurfaceBlock8_mip0` (`r_surf.c:367`) then interpolates `t` bilinearly
+across each 16×16 block and shades every texel with one table lookup:
+
+```c
+prowdest[b] = ((unsigned char *)vid.colormap)[(light & 0xFF00) + pix];
+```
+
+`light & 0xFF00` selects one of `VID_GRADES` (64) colormap rows; `pix` is the
+texture's **palette index**. The result is another palette index, resolved to
+RGB only at scan-out.
+
+### Models
+
+`R_AliasSetupLighting` (`r_alias.c:845`) lands in the same index space:
+
+* `r_ambientlight` is floored at `LIGHT_MIN` (5) **before** inversion, then
+  `(255 - ambient) << VID_CBITS`. Because the floor is applied pre-inversion,
+  a model's darkness index can never exceed `250 << 6 = 16000` — row 62.
+  **Models in the software renderer never reach the darkest colormap row.**
+* `r_shadelight *= VID_GRADES`, and per vertex
+  `temp = r_ambientlight + r_shadelight * lightcos` for `lightcos < 0`. Since
+  `temp` is *darkness*, a face turned toward the light gets a smaller index.
+
+### What this means for WebGlide
+
+WebGlide computes `albedo.rgb * lightmap.rgb * u_overbright` (world fragment
+shader, `gl2_shader.c`) from an atlas built by `GL2_BuildLightmapBlock`
+(`gl2_world.c:327`). That is a faithful GLQuake transcription and it is
+arithmetically correct — the gamma path is identity at the default
+`v_gamma 1` / `v_contrast 1` / `gl_glide_gamma 1`, and the overbright build
+shift and shader multiply agree. It is nonetheless a different function from
+the one above in four ways:
+
+| | software | WebGlide today |
+| --- | --- | --- |
+| shading operation | table lookup `colormap[row][index]` | multiply in linear RGB |
+| light steps | 64, quantised | continuous |
+| output space | snapped to the 256-entry palette | 8 bits per channel |
+| interpolation | linear in **darkness** | linear in **light** |
+
+Consequences, in the order they matter:
+
+* **The colormap is the art direction.** Whatever curve Raven baked into
+  `gfx/colormap.lmp` is applied to every software texel and to none of
+  WebGlide's. It does not need reverse-engineering — the table is already
+  resident as `vid.colormap` (`vid_webgl2.c:180`), alongside `d_8to24table`
+  and `vid.fullbright`.
+* **Palette snapping is a feature.** Colours hop between palette ramps as
+  they darken instead of sliding smoothly to zero, which is most of what
+  reads as period rather than muddy.
+* **Two floors were missing — both are now closed.** WebGlide had no
+  `r_ambient` equivalent (`GL2_BuildLightmapBlock` zeroed its accumulator
+  where `r_surf.c:202` seeds it) and no `LIGHT_MIN` (`gl2_alias.c` clamped
+  ambient to `0.0f`, so models could reach black where software guarantees
+  they cannot). See [Light floors](#light-floors) below.
+* **One function blocks the faithful path.** `GL2_ExpandPalette`
+  (`gl2_texture.c:197`) resolves every texel to RGBA at load and discards the
+  index, so nothing downstream has an index to shade with.
+
+## Light floors
+
+The software renderer never lets geometry reach true black, and it gets
+that for free from the colormap: its darkest row still carries hue, so an
+unlit wall reads as *dark stone*. WebGlide multiplies albedo by the
+lightmap in linear RGB, where unlit means literally zero, so the same map
+data collapses to a black screen. Two floors restore the software
+renderer's guarantee.
+
+**World surfaces — `r_ambient`.** `GL2_BuildLightmapBlock` seeds every
+lightmap block with `r_ambient * 256` before accumulating light styles,
+the same value in the same order as `r_surf.c:202`. The seed is 8.8 fixed
+point, and the shader then applies `u_overbright`, so the albedo floor
+works out to `r_ambient / 255 * 2` — `16` lands at about 12.5%.
+
+This diverges deliberately from software, which defaults `r_ambient` to
+`0` because it does not need the help. It is **not** `CVAR_ARCHIVE`:
+`config.cfg` is shared with the software build, and persisting it would
+silently raise the software renderer's black level too. Put it in
+`autoexec.cfg` to make a tuned value stick. Changing it takes effect
+immediately — `GL2_DrawWorld` polls it and rebuilds, exactly as it already
+does for `gl_overbright`.
+
+**Models — `LIGHT_MIN`.** `GL2_ApplyAliasLightFloor` floors both
+`gl2_ambientlight` and `gl2_lightcolor` at `5`, matching `r_alias.c:26`.
+It runs at `GL2_SetupEntityLighting`'s single call site rather than inside
+it, because the GL rule set returns early for `EF_ROTATE` and the `MLS`
+light styles, and the software renderer applies its floor after *all* of
+those paths have resolved.
+
 ## Coloured light
 
 Colour comes from two places, both already present in the game data:
@@ -141,27 +267,40 @@ what vanilla Hexen II did and what the desktop GL renderer still does.
 
 ## Cvars
 
-All `gl_glide_*` cvars are archived. The defaults are the look the brochure
-promised — full colour, filtered and mipmapped textures, no scanlines — at a
-resolution a phone GPU is happy to sustain.
+All `gl_glide_*` cvars are archived, and they **default to on**. The shipped
+configuration is the period look, not a clean GL image with optional garnish:
+16bpp output through the ordered dither, the 2×2 scan-out filter over it, a
+sharpening LOD bias with Voodoo Graphics mip dithering, a T-buffer trail and a
+CRT — at a resolution a phone GPU is happy to sustain.
 
 | Name | Default | Meaning |
 | --- | --- | --- |
-| `gl_glide_dither` | `1` | 16bpp ordered dither. |
-| `gl_glide_postfilter` | `0` | The 2×2 "22-bit" scan-out filter. |
-| `gl_glide_lodbias` | `0` | `grTexLodBiasValue()`, i.e. mip selection bias. Negative sharpens and sparkles. |
+| `gl_glide_dither` | `1` | 16bpp ordered dither. Requires `gl_glide_colordepth 16` to have any effect. |
+| `gl_glide_postfilter` | `1` | The 2×2 "22-bit" scan-out filter. |
+| `gl_glide_lodbias` | `-0.5` | `grTexLodBiasValue()`, i.e. mip selection bias. Negative sharpens and sparkles. |
 | `gl_glide_gamma` | `1` | The Voodoo gamma ramp, multiplied into `v_gamma`. |
 | `gl_glide_tbuffer` | `1` | VSA-100 T-buffer accumulation. Disabled automatically if the buffer is unavailable. |
-| `gl_glide_motionblur` | `0` | T-buffer temporal blend, 0…0.9. |
+| `gl_glide_motionblur` | `0.25` | T-buffer temporal blend, 0…0.9. Values under `0.02` skip the pass. |
 | `gl_glide_fogtable` | `1` | `GR_FOG_WITH_TABLE` emulation. |
-| `gl_glide_colordepth` | `32` | `16` = dithered, `32` = straight RGBA8. |
-| `gl_glide_mipmapdither` | `0` | Voodoo Graphics mip dithering. |
+| `gl_glide_colordepth` | `16` | `16` = dithered, `32` = straight RGBA8. This is the gate on `gl_glide_dither`. |
+| `gl_glide_mipmapdither` | `1` | Voodoo Graphics mip dithering. |
 | `gl_glide_scenescale` | `0.5` | Scene buffer scale per axis, 0.25…2. `0.5` is quarter resolution; above `1` supersamples. |
 | `gl_glide_anisotropy` | `8` | Max anisotropy; `1` = off. |
-| `gl_glide_crt` | `0` | Scanline strength; `0` = off. |
-| `gl_glide_crt_mask` | `0` | Aperture grille strength. |
-| `gl_glide_crt_curve` | `0` | Barrel distortion. |
-| `gl_glide_crt_vignette` | `0` | Corner falloff. |
+| `gl_glide_crt` | `0.35` | Scanline strength; `0` = off. One scanline per line of `vid.height`, i.e. per UI-ladder row rather than per device pixel. |
+| `gl_glide_crt_mask` | `0.35` | Aperture grille strength, in output pixels. |
+| `gl_glide_crt_curve` | `0.15` | Barrel distortion. |
+| `gl_glide_crt_vignette` | `0.2` | Corner falloff. |
+
+The CRT group is a *display* simulation rather than a renderer simulation, so
+it is the first thing to turn off if it fights the panel:
+`gl_glide_crt 0; gl_glide_crt_mask 0; gl_glide_crt_curve 0; gl_glide_crt_vignette 0`.
+
+Because these are archived, a `config.cfg` written by an **older build** wins
+over the defaults above — the engine writes every archived cvar on shutdown
+(`Host_WriteConfiguration`), and the launcher syncs `/persistent` to browser
+storage. A returning install therefore keeps whatever it last saved, and has
+to set the period cvars explicitly once (or clear its stored data) to pick up
+the new look.
 
 Shared client cvars that WebGlide actually honours include `gl_overbright`,
 `gl_fullbrights`, `gl_overbright_models`, `gl_texturemode`, `gl_coloredlight`,
@@ -169,6 +308,15 @@ Shared client cvars that WebGlide actually honours include `gl_overbright`,
 `r_slimealpha`, `r_telealpha`, `r_turbalpha`) and the light policy cvars
 (`gl_missile_glows`, `gl_torch_dlight`, `gl_flashintensity`,
 `gl_extra_dynamic_lights`).
+
+`r_ambient` is registered by the WebGlide build too, but with a default of
+`16` rather than the software renderer's `0`, and it is not archived. See
+[Light floors](#light-floors).
+
+`gl_coloredlight` defaults to `1`, matching the software renderer and the
+desktop GL renderer. In WebGlide it currently only gates `.lit` loading
+(`GL2_LoadLitFile`), so with stock Hexen II data — which ships no `.lit`
+files — it changes nothing on its own.
 
 `v_gamma` is an exponent, not a multiplier, exactly as in the rest of the
 engine: the software renderer bakes `pow(c, v_gamma)` into the palette, so

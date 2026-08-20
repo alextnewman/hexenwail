@@ -23,6 +23,7 @@ extern cvar_t r_waterwarp;
 extern cvar_t r_fullbright;
 extern cvar_t r_lightmap;
 extern cvar_t r_dynamic;
+extern cvar_t r_ambient;
 extern cvar_t r_novis;
 extern cvar_t r_lerpmodels;
 extern cvar_t r_lerp_viewmodel;

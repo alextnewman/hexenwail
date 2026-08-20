@@ -88,6 +88,7 @@ static byte		*gl2_litdata;		/* .lit samples, or NULL */
 static qboolean		gl2_lit_loaded;
 static int		gl2_lightmap_shift;
 static int		gl2_lightmap_overbright;
+static float		gl2_lightmap_ambient;
 
 static gl2texture_t	*gl2_solidsky;
 static gl2texture_t	*gl2_alphasky;
@@ -318,6 +319,26 @@ static void GL2_AddDynamicLights (const msurface_t *surf, const gl2surf_t *info)
 
 /*
 ================
+GL2_AmbientLight
+
+r_ambient, clamped once so the seed below and the rebuild poll in
+GL2_DrawWorld always agree -- otherwise an out-of-range value would rebuild
+every lightmap every frame.
+================
+*/
+static float GL2_AmbientLight (void)
+{
+	float	ambient = r_ambient.value;
+
+	if (!(ambient > 0.0f))		/* also catches NaN */
+		return 0.0f;
+	if (ambient > 255.0f)
+		return 255.0f;
+	return ambient;
+}
+
+/*
+================
 GL2_BuildLightmapBlock
 
 Accumulates every light style and dynamic light for one surface and writes
@@ -330,6 +351,7 @@ static void GL2_BuildLightmapBlock (msurface_t *surf, gl2surf_t *info)
 	int		tmax = info->tmax;
 	int		size = smax * tmax;
 	int		i, maps;
+	float		ambient;
 	const byte	*colored = GL2_SurfaceSamples (surf);
 	const byte	*white = surf->samples;
 	byte		*dest;
@@ -349,6 +371,18 @@ static void GL2_BuildLightmapBlock (msurface_t *surf, gl2surf_t *info)
 	}
 	else
 	{
+		/* Seed the block with r_ambient before accumulating styles, the
+		 * same order as r_surf.c:202.  Values here are 8.8 fixed point
+		 * (see the >> gl2_lightmap_shift below), so one unit of
+		 * r_ambient is 256. */
+		ambient = GL2_AmbientLight ();
+		if (ambient > 0.0f)
+		{
+			ambient *= 256.0f;
+			for (i = 0; i < size * 3; i++)
+				gl2_blocklights[i] = ambient;
+		}
+
 		for (maps = 0; maps < MAXLIGHTMAPS && surf->styles[maps] != 255; maps++)
 		{
 			float	scale = (float)d_lightstylevalue[surf->styles[maps]];
@@ -478,6 +512,7 @@ void GL2_BuildLightmaps (void)
 
 	gl2_lightmap_overbright = gl_overbright.integer ? 1 : 0;
 	gl2_lightmap_shift = 7 + gl2_lightmap_overbright;
+	gl2_lightmap_ambient = GL2_AmbientLight ();
 
 	for (surfnum = 0; surfnum < gl2_numsurfaces; surfnum++)
 	{
@@ -1321,7 +1356,8 @@ void GL2_DrawWorld (void)
 	if (!cl.worldmodel || !gl2_surfaces || !gl2_world_vao || !GL2_ShadersReady ())
 		return;
 
-	if (gl2_lightmap_overbright != (gl_overbright.integer ? 1 : 0))
+	if (gl2_lightmap_overbright != (gl_overbright.integer ? 1 : 0) ||
+	    gl2_lightmap_ambient != GL2_AmbientLight ())
 		GL2_BuildLightmaps ();
 
 	VectorCopy (r_origin, gl2_modelorg);
@@ -1852,6 +1888,7 @@ void GL2_WorldNewMap (void)
 	gl2_numlightmaps = 0;
 	gl2_lightmap_overbright = gl_overbright.integer ? 1 : 0;
 	gl2_lightmap_shift = 7 + gl2_lightmap_overbright;
+	gl2_lightmap_ambient = GL2_AmbientLight ();
 
 	GL2_LoadLitFile (world);
 	GL2_LoadWorldTextures (world);
