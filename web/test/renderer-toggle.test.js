@@ -16,12 +16,22 @@ test('renderer preference defaults to the shipping software bundle', () => {
     'renderer preference must default to the shipping software bundle');
 });
 
-test('loadPreferences accepts only the two known renderer values', () => {
+test('loadPreferences accepts only the known renderer values and perf levels', () => {
   const load = app.match(/function loadPreferences\(\) \{([\s\S]*?)\n\}/)?.[1];
   assert.ok(load, 'loadPreferences is defined');
   assert.match(load, /\['software', 'webglide'\]\.includes\(saved\.renderer\)/,
     'unknown renderer strings must fall back to the default');
+  assert.match(load, /Number\.isInteger\(perfOverlay\) && perfOverlay >= 0 && perfOverlay <= 3/,
+    'the perf toggle must only accept the supported overlay levels');
   assert.match(load, /state\.preferences\.renderer = saved\.renderer/);
+});
+
+test('launcher passes the configured perf overlay to the engine on startup', () => {
+  const engineArgs = app.match(/function getEngineArguments\(\) \{([\s\S]*?)\n\}/)?.[1];
+  assert.ok(engineArgs, 'engine arguments are assembled from launcher preferences');
+  assert.match(engineArgs, /\+scr_perf/,
+    'the launch args must set the archived scr_perf cvar when the overlay is enabled');
+  assert.match(engineArgs, /String\(state\.preferences\.perfOverlay\)/);
 });
 
 test('ensureEngineScriptLoaded routes the WebGlide preference to the GPU bundle URL', () => {
@@ -47,6 +57,14 @@ test('a missing WebGlide bundle fails loudly and names the toggle', () => {
   // renderer.
   assert.match(loader, /Renderer \(experimental\)/);
   assert.match(loader, /Software \(default, stable\)/);
+});
+
+test('the launcher exposes a perf overlay toggle', () => {
+  assert.match(html, /id="perf-setting"/);
+  assert.match(html, /<option value="0">Off<\/option>/);
+  assert.match(html, /<option value="1">FPS \+ frame time<\/option>/);
+  assert.match(html, /<option value="2">Detailed breakdown<\/option>/);
+  assert.match(html, /<option value="3">Frame-time graph<\/option>/);
 });
 
 test('the launcher exposes an experimental, non-default WebGlide toggle', () => {
