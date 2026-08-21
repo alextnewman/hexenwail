@@ -283,7 +283,7 @@ assets and saves.
 
 Default mappings reuse existing engine input bindings:
 
-- left virtual stick: `W` / `S` forward and back, `A` / `D` strafe left and right
+- left virtual stick: `W` / `S` forward and back, `A` / `D` strafe left and right; while a menu is open it becomes the menu D-pad so the touch stick can navigate lists and submenus
 - right look region: relative mouse-look deltas through a small JS-to-C bridge
 - **Atk**: primary attack (`MOUSE1`)
 - **Jump**: jump (`SPACE`)

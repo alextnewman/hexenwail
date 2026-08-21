@@ -45,11 +45,35 @@ static int	mouse_x, mouse_y, old_mouse_x, old_mouse_y;
 #ifdef __EMSCRIPTEN__
 static float	touch_look_x, touch_look_y;
 
+static int Hexenwail_TouchKeyForMenu (int key)
+{
+	if (!(Key_GetDest() & key_menu))
+		return key;
+
+	switch (key)
+	{
+	case 'w':
+	case 'W':
+		return K_GP_DPAD_UP;
+	case 's':
+	case 'S':
+		return K_GP_DPAD_DOWN;
+	case 'a':
+	case 'A':
+		return K_GP_DPAD_LEFT;
+	case 'd':
+	case 'D':
+		return K_GP_DPAD_RIGHT;
+	default:
+		return key;
+	}
+}
+
 EMSCRIPTEN_KEEPALIVE int Hexenwail_TouchKey (int key, int down)
 {
 	if (key <= 0 || key > K_GP_DPAD_RIGHT)
 		return 0;
-	Key_Event(key, down ? true : false);
+	Key_Event(Hexenwail_TouchKeyForMenu(key), down ? true : false);
 	return 1;
 }
 
