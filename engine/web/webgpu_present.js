@@ -11,7 +11,7 @@ const HexenwailWebGPULibrary = {
     shader: `
 struct Params {
   sourceSize: vec2f,
-  smooth: u32,
+  useSmoothing: u32,
   _pad: u32,
 }
 
@@ -43,7 +43,7 @@ fn lookup(texel: vec2i) -> vec3f {
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
   let pixel = input.uv * params.sourceSize;
-  if (params.smooth == 0u) {
+  if (params.useSmoothing == 0u) {
     return vec4f(lookup(vec2i(floor(pixel))), 1.0);
   }
 
@@ -80,32 +80,46 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
     if (!handoff?.device || !handoff.context || handoff.lost) return 0;
 
     const { device, context, format } = handoff;
-    const module = device.createShaderModule({
-      label: 'Hexenwail indexed presenter',
-      code: WebGPUCanvas.shader,
-    });
-    const pipeline = device.createRenderPipeline({
-      label: 'Hexenwail indexed presenter',
-      layout: 'auto',
-      vertex: { module, entryPoint: 'vertexMain' },
-      fragment: {
-        module,
-        entryPoint: 'fragmentMain',
-        targets: [{ format }],
-      },
-      primitive: { topology: 'triangle-list' },
-    });
-    const paramsBuffer = device.createBuffer({
-      label: 'Hexenwail presenter parameters',
-      size: 16,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-    const paletteTexture = device.createTexture({
-      label: 'Hexenwail palette',
-      size: { width: 256, height: 1 },
-      format: 'rgba8unorm',
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-    });
+    let pipeline;
+    let paramsBuffer;
+    let paletteTexture;
+    try {
+      device.pushErrorScope('validation');
+      const module = device.createShaderModule({
+        label: 'Hexenwail indexed presenter',
+        code: WebGPUCanvas.shader,
+      });
+      pipeline = device.createRenderPipeline({
+        label: 'Hexenwail indexed presenter',
+        layout: 'auto',
+        vertex: { module, entryPoint: 'vertexMain' },
+        fragment: {
+          module,
+          entryPoint: 'fragmentMain',
+          targets: [{ format }],
+        },
+        primitive: { topology: 'triangle-list' },
+      });
+      paramsBuffer = device.createBuffer({
+        label: 'Hexenwail presenter parameters',
+        size: 16,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+      paletteTexture = device.createTexture({
+        label: 'Hexenwail palette',
+        size: { width: 256, height: 1 },
+        format: 'rgba8unorm',
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+      device.popErrorScope().then((error) => {
+        if (!error) return;
+        handoff.validationError = error.message;
+        console.error(`Hexenwail WebGPU presenter validation failed: ${error.message}`);
+      });
+    } catch (error) {
+      console.error(`Hexenwail WebGPU presenter initialization failed: ${error.message}`);
+      return 0;
+    }
     WebGPUCanvas.state = {
       device, context, pipeline, paramsBuffer, paletteTexture,
       indexedTexture: null, bindGroup: null,
@@ -166,10 +180,16 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
   },
 
   WebGPUCanvas_Present__deps: ['$WebGPUCanvas'],
-  WebGPUCanvas_Present: function(pixels, rowbytes, canvasWidth, canvasHeight,
+  WebGPUCanvas_Present: function(pixels, rowbytes, _canvasWidth, _canvasHeight,
     dstX, dstY, dstWidth, dstHeight) {
     const state = WebGPUCanvas.state;
-    if (!state?.bindGroup || Module.hexenwailWebGPU?.lost) return;
+    if (Module.hexenwailWebGPU?.lost) {
+      abort('WebGPU device lost');
+    }
+    if (Module.hexenwailWebGPU?.validationError) {
+      abort(`WebGPU presenter validation failed: ${Module.hexenwailWebGPU.validationError}`);
+    }
+    if (!state?.bindGroup) return;
 
     const source = HEAPU8.subarray(
       pixels, pixels + rowbytes * state.height);
@@ -199,8 +219,7 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
         storeOp: 'store',
       }],
     });
-    pass.setViewport(dstX, canvasHeight - dstY - dstHeight,
-      dstWidth, dstHeight, 0, 1);
+    pass.setViewport(dstX, dstY, dstWidth, dstHeight, 0, 1);
     pass.setPipeline(state.pipeline);
     pass.setBindGroup(0, state.bindGroup);
     pass.draw(3);

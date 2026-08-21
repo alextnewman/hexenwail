@@ -270,6 +270,9 @@ if(WEB_PRESENTER STREQUAL "webgpu")
     target_link_options(uhexen2_web PRIVATE
         --js-library=${CMAKE_CURRENT_SOURCE_DIR}/web/webgpu_present.js
     )
+    set_property(TARGET uhexen2_web APPEND PROPERTY LINK_DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/web/webgpu_present.js
+    )
 endif()
 
 if(USE_SOUND AND USE_CODEC_VORBIS)

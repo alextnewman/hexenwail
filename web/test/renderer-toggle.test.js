@@ -9,6 +9,8 @@ const html = readFileSync(join(repoRoot, 'web/index.html'), 'utf8');
 const assembleScript = readFileSync(join(repoRoot, 'scripts/wasm-assemble-artifact.sh'), 'utf8');
 const validateScript = readFileSync(join(repoRoot, 'scripts/wasm-validate-artifact.sh'), 'utf8');
 const cmake = readFileSync(join(repoRoot, 'engine/CMakeLists.txt'), 'utf8');
+const webgpuPresenter = readFileSync(join(repoRoot, 'engine/web/webgpu_present.js'), 'utf8');
+const wasmAction = readFileSync(join(repoRoot, '.github/actions/wasm-build/action.yml'), 'utf8');
 
 test('renderer preference defaults to the shipping software bundle', () => {
   const prefsBlock = app.match(/preferences: \{([\s\S]*?)\},\n {2}touchOnlyEnvironment/)?.[1];
@@ -153,4 +155,7 @@ test('WebGPU is an isolated software presenter, not a renamed Nitro renderer', (
   assert.match(cmake, /webgpu_present\.js/);
   assert.doesNotMatch(cmake, /add_compile_definitions\(WEBGPUQUAKE\)/,
     'the presenter feasibility build must not claim to be the Nitro renderer');
+  assert.match(wasmAction, /wasm-build\.sh webgpu engine\/build-webgpu/);
+  assert.doesNotMatch(webgpuPresenter, /\bsmooth:\s*u32/,
+    'WGSL reserves the word smooth');
 });

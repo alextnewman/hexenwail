@@ -147,6 +147,14 @@ runs:
         source "$PWD/emsdk/emsdk_env.sh"
         ./scripts/wasm-build.sh webgl2 engine/build-webgl2
 
+    # Target-feasibility bundle: the unchanged software rasterizer presented
+    # through WebGPU. This is deliberately not the gated WebGlideNitro renderer.
+    - name: Build WebAssembly client (WebGPU presenter preview)
+      shell: bash
+      run: |
+        source "$PWD/emsdk/emsdk_env.sh"
+        ./scripts/wasm-build.sh webgpu engine/build-webgpu
+
     - name: Assemble PWA artifact
       shell: bash
       run: ./scripts/wasm-assemble-artifact.sh "${{ inputs.dist-dir }}"
@@ -170,3 +178,11 @@ runs:
           fi
         done
         echo "WebGlide GPU bundle present in $dist."
+
+        for required in hexenwail-webgpu.js hexenwail-webgpu.wasm; do
+          if [ ! -s "$dist/$required" ]; then
+            echo "::error::CI artefact is missing the WebGPU presenter preview: $dist/$required"
+            exit 1
+          fi
+        done
+        echo "WebGPU presenter preview present in $dist."

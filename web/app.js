@@ -1571,8 +1571,10 @@ async function init() {
       savePreferences();
       applyPreferences();
       logToConsole('[renderer:warn]',
-        `${report.reason} Falling back to the WebGL2 software presenter.`);
-      state.rendererReady = true;
+        `${report.reason} Reloading with the WebGL2 software presenter.`);
+      setStatus(`${report.reason} Reloading with the shipping renderer…`, 'warn');
+      setTimeout(() => location.reload(), 60);
+      return;
     }
   } else {
     try {
