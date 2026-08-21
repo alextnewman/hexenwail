@@ -156,8 +156,11 @@ not work: Ogg Vorbis will not play in the installed iOS PWA (MP3 will), and
 Vorbis-in-Ogg only reached Safari at all in 18.4. Decoding in-engine costs a few
 percent of a core in `BGM_UpdateStream` and works on every device. Audio
 glitching during long frames is a *separate* problem — the mixer runs in a
-main-thread `ScriptProcessorNode` — and needs the AudioWorklet work, not a
-different music path.
+main-thread `ScriptProcessorNode`. The current backend uses a 2048-frame
+callback to tolerate ordinary frame variance and catches every asynchronous
+AudioContext transition so a closed context cannot flood the launcher with
+unhandled promise rejections. Moving the callback off the main thread still
+needs the AudioWorklet work, not a different music path.
 
 Which music formats exist is a build-time decision, because `bgmusic.c` only
 offers a format whose codec registered itself in `S_CodecInit`. A codec that is

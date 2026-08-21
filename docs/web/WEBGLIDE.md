@@ -36,6 +36,10 @@ The rules that follow from that brief:
 * Everything expensive that depends only on the assets — mip chains, alpha
   fringe repair, lightmap atlases, `.lit` colour — happens once at load time,
   never per frame.
+* Alias model skin coordinates are converted from the loader's 16.16 fixed
+  point to normalized GPU coordinates before batching. Passing the stored
+  integers through directly collapses every repeating sample onto the same
+  texel, producing lit but apparently untextured hands and objects.
 * The scene is rendered into an offscreen buffer sized as a fraction of the
   view (`gl_glide_scenescale`, default quarter resolution) and resolved on
   scan-out. The 2D HUD, menus and console are drawn on the canvas afterwards,

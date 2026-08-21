@@ -935,8 +935,12 @@ void GL2_DrawAliasModel (entity_t *entity)
 			out->x = world[0];
 			out->y = world[1];
 			out->z = world[2];
-			out->s = st->s * iw;
-			out->t = st->t * ih;
+			/* The model loader stores alias UVs as 16.16 fixed point.
+			 * Normalise both the fixed-point scale and the skin size;
+			 * omitting the former leaves integer coordinates whose
+			 * fractional part is always zero in the indexed sampler. */
+			out->s = st->s * (1.0f / 65536.0f) * iw;
+			out->t = st->t * (1.0f / 65536.0f) * ih;
 
 			lightcos = DotProduct (gl2_avertexnormals[vert->lightnormalindex],
 						plightvec);
