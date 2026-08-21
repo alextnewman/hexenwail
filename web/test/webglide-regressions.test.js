@@ -48,7 +48,8 @@ test('WebGlide streams dynamic geometry through non-overlapping buffer ranges', 
     /glBufferSubData \(GL_ELEMENT_ARRAY_BUFFER,\s*\n\s*\(GLintptr\)gl2_world_ibo_offset/);
   assert.match(worldRenderer, /gl2_world_ibo_offset \+= count/);
 
-  assert.match(aliasRenderer, /gl2_model_vbo_offset \+ gl2_batch_count > gl2_model_vbo_verts/);
+  assert.match(aliasRenderer,
+    /gl2_model_vbo_offset \+ gl2_batch_count > GL2_MAX_BATCH_VERTS/);
   assert.match(aliasRenderer,
     /glBufferSubData \(GL_ARRAY_BUFFER,\s*\n\s*\(GLintptr\)gl2_model_vbo_offset/);
   assert.match(aliasRenderer,

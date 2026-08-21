@@ -74,8 +74,8 @@ static gl2vertex_t	*gl2_batch_verts;
 static int		gl2_batch_count;
 static GLuint		gl2_model_vao;
 static GLuint		gl2_model_vbo;
-static int		gl2_model_vbo_verts;
 static int		gl2_model_vbo_offset;
+static qboolean		gl2_model_vbo_orphaned;
 
 static gl2texture_t	*gl2_batch_texture;
 static unsigned int	gl2_batch_flags;
@@ -125,8 +125,8 @@ void GL2_ModelInit (void)
 	glVertexAttribPointer (3, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(gl2vertex_t),
 			(const void *)(uintptr_t)offsetof(gl2vertex_t, color));
 	glBindVertexArray (0);
-	gl2_model_vbo_verts = 0;
 	gl2_model_vbo_offset = 0;
+	gl2_model_vbo_orphaned = false;
 }
 
 void GL2_ModelShutdown (void)
@@ -145,8 +145,8 @@ void GL2_ModelShutdown (void)
 	gl2_batch_verts = NULL;
 	gl2_batch_count = 0;
 	gl2_batch_open = false;
-	gl2_model_vbo_verts = 0;
 	gl2_model_vbo_offset = 0;
+	gl2_model_vbo_orphaned = false;
 }
 
 static void GL2_ApplyBlendMode (int blend)
@@ -194,12 +194,14 @@ void GL2_FlushModelBatch (void)
 	glBindVertexArray (gl2_model_vao);
 	glBindBuffer (GL_ARRAY_BUFFER, gl2_model_vbo);
 
-	if (gl2_model_vbo_offset + gl2_batch_count > gl2_model_vbo_verts)
+	if (!gl2_model_vbo_orphaned ||
+	    gl2_model_vbo_offset + gl2_batch_count > GL2_MAX_BATCH_VERTS)
 	{
 		glBufferData (GL_ARRAY_BUFFER,
-			(GLsizeiptr)gl2_model_vbo_verts * sizeof(gl2vertex_t),
+			(GLsizeiptr)GL2_MAX_BATCH_VERTS * sizeof(gl2vertex_t),
 			NULL, GL_STREAM_DRAW);
 		gl2_model_vbo_offset = 0;
+		gl2_model_vbo_orphaned = true;
 	}
 	glBufferSubData (GL_ARRAY_BUFFER,
 		(GLintptr)gl2_model_vbo_offset * sizeof(gl2vertex_t),
@@ -283,12 +285,9 @@ void GL2_BeginModelFrame (void)
 	gl2_batch_count = 0;
 	gl2_batch_open = false;
 	gl2_batch_texture = NULL;
-	gl2_model_vbo_verts = GL2_MAX_BATCH_VERTS;
 	gl2_model_vbo_offset = 0;
-	glBindBuffer (GL_ARRAY_BUFFER, gl2_model_vbo);
-	glBufferData (GL_ARRAY_BUFFER,
-		(GLsizeiptr)gl2_model_vbo_verts * sizeof(gl2vertex_t),
-		NULL, GL_STREAM_DRAW);
+	/* Defer the orphan until the first upload; empty frames need no VBO work. */
+	gl2_model_vbo_orphaned = false;
 }
 
 void GL2_EndModelFrame (void)

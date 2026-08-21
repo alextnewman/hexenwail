@@ -1015,7 +1015,7 @@ static void GL2_DrawIndices (int count)
 			(GLsizeiptr)count * sizeof(GLuint), gl2_frame_indices);
 	glDrawElements (GL_TRIANGLES, count, GL_UNSIGNED_INT,
 			(const void *)(uintptr_t)
-			((size_t)gl2_world_ibo_offset * sizeof(GLuint)));
+			(gl2_world_ibo_offset * sizeof(GLuint)));
 	gl2_world_ibo_offset += count;
 	gl2_frame_polys += count / 3;
 	gl2_frame_batches++;
@@ -1357,7 +1357,6 @@ orphans it again before wrapping.
 */
 void GL2_BeginWorldFrame (void)
 {
-	gl2_world_ibo_offset = 0;
 	if (!gl2_world_ibo || gl2_total_indices <= 0)
 		return;
 
@@ -1366,6 +1365,7 @@ void GL2_BeginWorldFrame (void)
 	glBufferData (GL_ELEMENT_ARRAY_BUFFER,
 			(GLsizeiptr)gl2_total_indices * sizeof(GLuint),
 			NULL, GL_STREAM_DRAW);
+	gl2_world_ibo_offset = 0;
 	glBindVertexArray (0);
 }
 
