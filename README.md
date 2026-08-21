@@ -172,8 +172,9 @@ nix build       # best-effort WASM build -> installable PWA tree
 ```
 
 Design documents: [docs/web/ARCHITECTURE.md](docs/web/ARCHITECTURE.md),
-[docs/web/SOFTWARE_RENDERER.md](docs/web/SOFTWARE_RENDERER.md) and
-[docs/web/WEBGLIDE.md](docs/web/WEBGLIDE.md).
+[docs/web/SOFTWARE_RENDERER.md](docs/web/SOFTWARE_RENDERER.md),
+[docs/web/WEBGLIDE.md](docs/web/WEBGLIDE.md) and
+[docs/web/PERF_OVERLAY.md](docs/web/PERF_OVERLAY.md).
 
 ## Contributing
 
