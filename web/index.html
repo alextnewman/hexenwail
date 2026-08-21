@@ -178,6 +178,13 @@
       -webkit-user-select: text;
       user-select: text;
     }
+    .perf-output {
+      width: 100%;
+      min-height: 14rem;
+      box-sizing: border-box;
+      resize: vertical;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
     .viewport {
       position: relative;
       min-width: 0;
@@ -506,17 +513,19 @@
           <small id="renderer-message" class="muted">The engine bundle is chosen once at launcher load. Changing this reloads the launcher; changes made during play take effect on the next launch.</small>
         </section>
         <section class="card">
-          <h2>Performance overlay</h2>
-          <p>Shows live frame stats and stage timings while the game runs. This is helpful on mobile devices where no desktop profiler is available.</p>
-          <label class="setting">Display level
+          <h2>Performance capture</h2>
+          <p>Collects 128 raw frames without drawing over the game. Show the launcher after a few seconds, then copy the report for analysis.</p>
+          <label class="setting">Capture
             <select id="perf-setting">
               <option value="0">Off</option>
-              <option value="1">FPS + frame time</option>
-              <option value="2">Detailed breakdown</option>
-              <option value="3">Frame-time graph</option>
+              <option value="1">On (128-frame windows)</option>
             </select>
           </label>
-          <small id="perf-message" class="muted">The choice is stored with the engine config and applies on the next launch.</small>
+          <div class="buttons">
+            <button id="perf-copy-button" type="button">Copy latest report</button>
+          </div>
+          <textarea id="perf-output" class="runtime-log perf-output" readonly spellcheck="false" aria-label="Latest performance report">No performance capture yet.</textarea>
+          <small id="perf-message" class="muted">The choice applies on the next launch. Reports update once per 128 rendered frames.</small>
         </section>
         <section class="card">
           <h2>Phone controls</h2>

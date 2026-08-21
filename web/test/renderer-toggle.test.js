@@ -16,22 +16,23 @@ test('renderer preference defaults to the shipping software bundle', () => {
     'renderer preference must default to the shipping software bundle');
 });
 
-test('loadPreferences accepts only the known renderer values and perf levels', () => {
+test('loadPreferences accepts renderer values and migrates the perf preference', () => {
   const load = app.match(/function loadPreferences\(\) \{([\s\S]*?)\n\}/)?.[1];
   assert.ok(load, 'loadPreferences is defined');
   assert.match(load, /\['software', 'webglide'\]\.includes\(saved\.renderer\)/,
     'unknown renderer strings must fall back to the default');
-  assert.match(load, /Number\.isInteger\(perfOverlay\) && perfOverlay >= 0 && perfOverlay <= 3/,
-    'the perf toggle must only accept the supported overlay levels');
+  assert.match(load, /typeof saved\.perfCapture === 'boolean'/);
+  assert.match(load, /Number\(saved\.perfOverlay\) > 0/,
+    'an enabled legacy overlay preference should migrate to capture');
   assert.match(load, /state\.preferences\.renderer = saved\.renderer/);
 });
 
-test('launcher passes the configured perf overlay to the engine on startup', () => {
+test('launcher passes the configured perf capture to the engine on startup', () => {
   const engineArgs = app.match(/function getEngineArguments\(\) \{([\s\S]*?)\n\}/)?.[1];
   assert.ok(engineArgs, 'engine arguments are assembled from launcher preferences');
   assert.match(engineArgs, /\+scr_perf/,
-    'the launch args must set the archived scr_perf cvar when the overlay is enabled');
-  assert.match(engineArgs, /String\(state\.preferences\.perfOverlay\)/);
+    'the launch args must enable the engine capture cvar');
+  assert.match(engineArgs, /state\.preferences\.perfCapture/);
 });
 
 test('ensureEngineScriptLoaded routes the WebGlide preference to the GPU bundle URL', () => {
@@ -59,12 +60,13 @@ test('a missing WebGlide bundle fails loudly and names the toggle', () => {
   assert.match(loader, /Software \(default, stable\)/);
 });
 
-test('the launcher exposes a perf overlay toggle', () => {
+test('the launcher exposes copyable raw performance capture', () => {
   assert.match(html, /id="perf-setting"/);
   assert.match(html, /<option value="0">Off<\/option>/);
-  assert.match(html, /<option value="1">FPS \+ frame time<\/option>/);
-  assert.match(html, /<option value="2">Detailed breakdown<\/option>/);
-  assert.match(html, /<option value="3">Frame-time graph<\/option>/);
+  assert.match(html, /<option value="1">On \(128-frame windows\)<\/option>/);
+  assert.match(html, /id="perf-output"/);
+  assert.match(html, /id="perf-copy-button"/);
+  assert.doesNotMatch(html, /Frame-time graph/);
 });
 
 test('the launcher exposes an experimental, non-default WebGlide toggle', () => {

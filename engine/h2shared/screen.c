@@ -71,13 +71,11 @@
 #define SCR_PERF_FRAME_END()	WebPerf_EndFrame()
 #define SCR_PERF_BEGIN(stage)	WebPerf_BeginStage(stage)
 #define SCR_PERF_END(stage)	WebPerf_EndStage(stage)
-#define SCR_PERF_DRAW()		WebPerf_Draw()
 #else
 #define SCR_PERF_FRAME_BEGIN()
 #define SCR_PERF_FRAME_END()
 #define SCR_PERF_BEGIN(stage)
 #define SCR_PERF_END(stage)
-#define SCR_PERF_DRAW()
 #endif
 #ifdef PLATFORM_WINDOWS
 #include "winquake.h"
@@ -1456,7 +1454,6 @@ void SCR_UpdateScreen (void)
 #endif	/* H2W */
 	}
 
-	SCR_PERF_DRAW();
 	SCR_PERF_END(WEBPERF_2D);
 
 	D_DisableBackBufferAccess ();	// for adapters that can't stay mapped

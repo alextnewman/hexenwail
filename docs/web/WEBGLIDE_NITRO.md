@@ -37,7 +37,7 @@ Do not start Nitro until all of these are true:
 2. Its known gaps are closed or explicitly accepted, in particular the ones
    listed in [`WEBGLIDE.md`](WEBGLIDE.md) (glow settings, the cvars registered
    only so the client links).
-3. Frame cost is *measured*, not guessed, with the performance overlay
+3. Frame cost is *measured*, not guessed, with the raw performance capture
    ([`PERF_OVERLAY.md`](PERF_OVERLAY.md)) on the actual iPad target, and a
    baseline is written down.
 
