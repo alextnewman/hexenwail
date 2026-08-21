@@ -116,7 +116,9 @@ static void WebAudio_Unblock (void)
 {
 	EM_ASM({
 		const context = Module.webAudioContext;
-		if (context && context.state !== 'closed')
+		const controller = Module.webAudioResumeController;
+		if (context && context.state === 'suspended' &&
+		    controller && !controller.signal.aborted)
 			context.resume().catch(error => {
 				if (context.state !== 'closed') console.warn('WebAudio resume failed', error);
 			});
