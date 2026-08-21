@@ -185,7 +185,6 @@ typedef struct
 	GLint	u_filter;
 	GLint	u_debug;
 	GLint	u_alpha;
-	GLint	u_overbright;
 	GLint	u_light;
 	GLint	u_turbtime;
 	GLint	u_turbscale;
@@ -231,6 +230,7 @@ qboolean GL2_ShadersReady (void);
 #define GL2_MODELFLAG_NOFOG	2
 #define GL2_MODELFLAG_INDEXED	4
 #define GL2_MODELFLAG_HOLEY	8
+#define GL2_MODELFLAG_ALPHA255	16
 
 /*
 =============================================================================

@@ -36,7 +36,7 @@
 #include "quakedef.h"
 #include "gl2_glide.h"
 
-#define SHADEDOT_QUANT		16
+#define GL2_NUMVERTEXNORMALS	162
 
 /* r_alias.c:26.  The software renderer floors a model's ambient light at
  * this before inverting it into a colormap row, so a software model's
@@ -61,7 +61,7 @@
  * shipped game does. */
 #define VIEWMODEL_LIGHT_MIN	24.0f
 
-static const float	gl2_avertexnormals[NUMVERTEXNORMALS][3] =
+static const float	gl2_avertexnormals[GL2_NUMVERTEXNORMALS][3] =
 {
 #include "anorms.h"
 };
@@ -221,7 +221,9 @@ void GL2_FlushModelBatch (void)
 		glUniform1i (program->u_flags,
 			(GLint)(gl2_batch_flags | GL2_MODELFLAG_INDEXED |
 				((gl2_batch_texture->flags & GL2TEX_HOLEY) ?
-				 GL2_MODELFLAG_HOLEY : 0)));
+				 GL2_MODELFLAG_HOLEY : 0) |
+				((gl2_batch_texture->flags & GL2TEX_ALPHA) ?
+				 GL2_MODELFLAG_ALPHA255 : 0)));
 	}
 	else
 	{
@@ -399,7 +401,7 @@ static gl2texture_t *GL2_AliasSkin (entity_t *entity, const aliashdr_t *paliashd
 	if (entity->model->flags & EF_HOLEY)
 		flags |= GL2TEX_HOLEY;
 	if (entity->model->flags & (EF_TRANSPARENT | EF_SPECIAL_TRANS))
-		flags |= GL2TEX_ALPHA;
+		flags |= GL2TEX_HOLEY;
 
 	entnum = (int)(entity - cl_entities) - 1;
 	if (entity->colormap && entity->colormap != vid.colormap &&
@@ -564,14 +566,15 @@ static void GL2_SetupEntityLighting (entity_t *entity)
 			gl2_lightcolor[i] = 0.0f;
 	}
 
-	/* Without overbright, clamp the way the software renderer does so
-	 * models do not float away from the world's brightness. */
+	/* The darkness row always follows the software renderer's clamp. The
+	 * overbright cvar may retain extra coloured-light chroma, but must not
+	 * bypass the authored colormap transfer function. */
+	if (gl2_ambientlight > 128.0f)
+		gl2_ambientlight = 128.0f;
+	if (gl2_ambientlight + gl2_shadelight > 192.0f)
+		gl2_shadelight = 192.0f - gl2_ambientlight;
 	if (!gl_overbright_models.integer)
 	{
-		if (gl2_ambientlight > 128.0f)
-			gl2_ambientlight = 128.0f;
-		if (gl2_ambientlight + gl2_shadelight > 192.0f)
-			gl2_shadelight = 192.0f - gl2_ambientlight;
 		for (i = 0; i < 3; i++)
 		{
 			if (gl2_lightcolor[i] > 192.0f)
