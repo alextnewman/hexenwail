@@ -285,6 +285,7 @@ void GL2_SetupSceneUniforms (const gl2program_t *program);
 void GL2_WorldNewMap (void);
 void GL2_WorldShutdown (void);
 void GL2_BuildLightmaps (void);
+void GL2_BeginWorldFrame (void);
 void GL2_DrawWorld (void);
 void GL2_DrawWorldWater (void);
 void GL2_DrawBrushEntity (entity_t *entity);

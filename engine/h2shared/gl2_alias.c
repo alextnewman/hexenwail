@@ -74,7 +74,8 @@ static gl2vertex_t	*gl2_batch_verts;
 static int		gl2_batch_count;
 static GLuint		gl2_model_vao;
 static GLuint		gl2_model_vbo;
-static int		gl2_model_vbo_verts;
+static int		gl2_model_vbo_offset;
+static qboolean		gl2_model_vbo_orphaned;
 
 static gl2texture_t	*gl2_batch_texture;
 static unsigned int	gl2_batch_flags;
@@ -124,7 +125,8 @@ void GL2_ModelInit (void)
 	glVertexAttribPointer (3, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(gl2vertex_t),
 			(const void *)(uintptr_t)offsetof(gl2vertex_t, color));
 	glBindVertexArray (0);
-	gl2_model_vbo_verts = 0;
+	gl2_model_vbo_offset = 0;
+	gl2_model_vbo_orphaned = false;
 }
 
 void GL2_ModelShutdown (void)
@@ -143,7 +145,8 @@ void GL2_ModelShutdown (void)
 	gl2_batch_verts = NULL;
 	gl2_batch_count = 0;
 	gl2_batch_open = false;
-	gl2_model_vbo_verts = 0;
+	gl2_model_vbo_offset = 0;
+	gl2_model_vbo_orphaned = false;
 }
 
 static void GL2_ApplyBlendMode (int blend)
@@ -172,9 +175,9 @@ static void GL2_ApplyBlendMode (int blend)
 ================
 GL2_FlushModelBatch
 
-One orphaned upload and one draw call per state change.  Orphaning
-(glBufferData with NULL first) is what keeps the driver from stalling on
-the buffer we drew from last time.
+One upload into the frame's streaming buffer and one draw call per state
+change.  Each batch gets a distinct range so the driver never has to wait
+for a previous draw before accepting the next upload.
 ================
 */
 void GL2_FlushModelBatch (void)
@@ -191,22 +194,19 @@ void GL2_FlushModelBatch (void)
 	glBindVertexArray (gl2_model_vao);
 	glBindBuffer (GL_ARRAY_BUFFER, gl2_model_vbo);
 
-	if (gl2_batch_count > gl2_model_vbo_verts)
+	if (!gl2_model_vbo_orphaned ||
+	    gl2_model_vbo_offset + gl2_batch_count > GL2_MAX_BATCH_VERTS)
 	{
 		glBufferData (GL_ARRAY_BUFFER,
-			(GLsizeiptr)gl2_batch_count * sizeof(gl2vertex_t),
-			gl2_batch_verts, GL_STREAM_DRAW);
-		gl2_model_vbo_verts = gl2_batch_count;
-	}
-	else
-	{
-		glBufferData (GL_ARRAY_BUFFER,
-			(GLsizeiptr)gl2_model_vbo_verts * sizeof(gl2vertex_t),
+			(GLsizeiptr)GL2_MAX_BATCH_VERTS * sizeof(gl2vertex_t),
 			NULL, GL_STREAM_DRAW);
-		glBufferSubData (GL_ARRAY_BUFFER, 0,
-			(GLsizeiptr)gl2_batch_count * sizeof(gl2vertex_t),
-			gl2_batch_verts);
+		gl2_model_vbo_offset = 0;
+		gl2_model_vbo_orphaned = true;
 	}
+	glBufferSubData (GL_ARRAY_BUFFER,
+		(GLintptr)gl2_model_vbo_offset * sizeof(gl2vertex_t),
+		(GLsizeiptr)gl2_batch_count * sizeof(gl2vertex_t),
+		gl2_batch_verts);
 
 	GL2_UseProgram (program);
 	glUniformMatrix4fv (program->u_mvp, 1, GL_FALSE, gl2_view_projection.m);
@@ -232,9 +232,10 @@ void GL2_FlushModelBatch (void)
 	}
 	GL2_ApplyBlendMode (gl2_batch_blend);
 
-	glDrawArrays (GL_TRIANGLES, 0, gl2_batch_count);
+	glDrawArrays (GL_TRIANGLES, gl2_model_vbo_offset, gl2_batch_count);
 	gl2_frame_polys += gl2_batch_count / 3;
 	gl2_frame_batches++;
+	gl2_model_vbo_offset += gl2_batch_count;
 
 	glBindVertexArray (0);
 	gl2_batch_count = 0;
@@ -284,6 +285,9 @@ void GL2_BeginModelFrame (void)
 	gl2_batch_count = 0;
 	gl2_batch_open = false;
 	gl2_batch_texture = NULL;
+	gl2_model_vbo_offset = 0;
+	/* Defer the orphan until the first upload; empty frames need no VBO work. */
+	gl2_model_vbo_orphaned = false;
 }
 
 void GL2_EndModelFrame (void)
@@ -1111,10 +1115,13 @@ void GL2_DrawSpriteModel (entity_t *entity)
 	static const float	corner_s[6] = { 0, 0, 1, 0, 1, 1 };
 	static const float	corner_t[6] = { 1, 0, 0, 1, 0, 1 };
 
-	if (!model || !GL2_ShadersReady ())
+	if (!model || model->type != mod_sprite || !GL2_ShadersReady ())
 		return;
 
-	psprite = (const msprite_t *) Mod_Extradata (model);
+	/* Sprite payloads are hunk-owned, despite occupying cache.data.  Sending
+	 * one through Mod_Extradata would interpret the preceding hunk bytes as a
+	 * cache header and corrupt the cache LRU. */
+	psprite = (const msprite_t *) model->cache.data;
 	if (!psprite)
 		return;
 	frame = GL2_SpriteFrame (entity, psprite, &framenum, &subframe);

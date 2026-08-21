@@ -660,6 +660,7 @@ void R_RenderView (void)
 	}
 
 	GL2_BeginModelFrame();
+	GL2_BeginWorldFrame();
 
 	if (r_drawworld.integer)
 		GL2_DrawWorld();

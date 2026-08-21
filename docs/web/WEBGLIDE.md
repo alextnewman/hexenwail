@@ -33,6 +33,9 @@ The rules that follow from that brief:
   that works.
 * The world is the exception: its geometry never moves, so it lives in a
   static vertex buffer drawn as per-texture index batches.
+* Dynamic world indices and CPU-transformed model vertices stream through
+  non-overlapping buffer ranges within a frame. Reusing offset zero after
+  every draw can serialize WebGL's Metal backend and starve the game loop.
 * Everything expensive that depends only on the assets — mip chains, alpha
   fringe repair, lightmap atlases, `.lit` colour — happens once at load time,
   never per frame.
@@ -74,6 +77,10 @@ toggle, the console messages and the shipped bundle basename
 `gl_fog.c` and `gl_refrag.c` are the only files shared with the old desktop
 GL renderer. The rest of the `gl_*.c` desktop tree is still in-tree but is
 **not compiled** by any configuration.
+
+Sprite payloads are hunk-owned even though the model structure stores their
+pointer in `cache.data`. Only alias models use the cache allocator;
+`Mod_Extradata` must therefore never be used to retrieve a sprite.
 
 ## Shader programs
 

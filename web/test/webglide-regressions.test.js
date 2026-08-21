@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 const repoRoot = process.cwd();
 const aliasRenderer = readFileSync(join(repoRoot, 'engine/h2shared/gl2_alias.c'), 'utf8');
+const worldRenderer = readFileSync(join(repoRoot, 'engine/h2shared/gl2_world.c'), 'utf8');
 const audioBackend = readFileSync(join(repoRoot, 'engine/h2shared/snd_web.c'), 'utf8');
 
 test('WebGlide converts alias 16.16 skin coordinates to normalized UVs', () => {
@@ -29,4 +30,28 @@ test('WebAudio lifecycle promises cannot escape as unhandled rejections', () => 
   assert.match(audioBackend, /context\.suspend\(\)\.catch/);
   assert.match(audioBackend, /Module\.webAudioContext\.close\(\)\.catch/);
   assert.match(audioBackend, /Module\.webAudioResumeController\.abort\(\)/);
+});
+
+test('WebGlide never treats hunk-owned sprite payloads as cache allocations', () => {
+  const spriteDraw = aliasRenderer.match(
+    /void GL2_DrawSpriteModel \(entity_t \*entity\)([\s\S]*?)\n\}/,
+  )?.[1];
+  assert.ok(spriteDraw, 'sprite draw function is present');
+  assert.match(spriteDraw, /model->type != mod_sprite/);
+  assert.match(spriteDraw, /psprite\s*=\s*\(const msprite_t \*\)\s*model->cache\.data/);
+  assert.doesNotMatch(spriteDraw, /Mod_Extradata\s*\(/);
+});
+
+test('WebGlide streams dynamic geometry through non-overlapping buffer ranges', () => {
+  assert.match(worldRenderer, /gl2_world_ibo_offset \+ count > gl2_total_indices/);
+  assert.match(worldRenderer,
+    /glBufferSubData \(GL_ELEMENT_ARRAY_BUFFER,\s*\n\s*\(GLintptr\)gl2_world_ibo_offset/);
+  assert.match(worldRenderer, /gl2_world_ibo_offset \+= count/);
+
+  assert.match(aliasRenderer,
+    /gl2_model_vbo_offset \+ gl2_batch_count > GL2_MAX_BATCH_VERTS/);
+  assert.match(aliasRenderer,
+    /glBufferSubData \(GL_ARRAY_BUFFER,\s*\n\s*\(GLintptr\)gl2_model_vbo_offset/);
+  assert.match(aliasRenderer,
+    /glDrawArrays \(GL_TRIANGLES, gl2_model_vbo_offset, gl2_batch_count\)/);
 });
