@@ -9,6 +9,14 @@ import { runWebGLDiagnostics } from './lib/webgl-diagnostics.js';
 const BASE_DIR = '/persistent';
 const ENGINE_ARGUMENTS = ['-basedir', BASE_DIR];
 const STORAGE_ROOT = 'hexenwail';
+
+function getEngineArguments() {
+  const args = [...ENGINE_ARGUMENTS];
+  if (state.preferences.perfOverlay > 0) {
+    args.push('+scr_perf', String(state.preferences.perfOverlay));
+  }
+  return args;
+}
 const PREFERENCES_KEY = 'hexenwail-pwa-preferences-v1';
 const SAVE_SYNC_INTERVAL_MS = 10000;
 const MAX_IMPORT_BYTES = 2 * 1024 * 1024 * 1024;
@@ -47,6 +55,7 @@ const state = {
     touchControls: 'auto',
     handedness: 'right',
     lookSensitivity: 1,
+    perfOverlay: 0,
     phoneHintSeen: false,
     /* Which WebAssembly bundle to load at launcher startup:
      *   'software' -> ./hexenwail.js            (shipping, supported default)
@@ -77,7 +86,7 @@ function getModule() {
     globalThis.Module = {
       preRun: [],
       postRun: [],
-      arguments: [...ENGINE_ARGUMENTS],
+      arguments: getEngineArguments(),
       noInitialRun: true,
       locateFile: (path) => new URL(path, document.baseURI).toString(),
     };
@@ -651,6 +660,8 @@ function loadPreferences() {
     if (['right', 'left'].includes(saved.handedness)) state.preferences.handedness = saved.handedness;
     const sensitivity = Number(saved.lookSensitivity);
     if (Number.isFinite(sensitivity) && sensitivity >= 0.5 && sensitivity <= 2) state.preferences.lookSensitivity = sensitivity;
+    const perfOverlay = Number(saved.perfOverlay);
+    if (Number.isInteger(perfOverlay) && perfOverlay >= 0 && perfOverlay <= 3) state.preferences.perfOverlay = perfOverlay;
     state.preferences.phoneHintSeen = Boolean(saved.phoneHintSeen);
     if (['software', 'webglide'].includes(saved.renderer)) state.preferences.renderer = saved.renderer;
   } catch (error) {
@@ -681,6 +692,7 @@ function applyPreferences() {
   if (ui.touchControlsSetting) ui.touchControlsSetting.value = state.preferences.touchControls;
   if (ui.handednessSetting) ui.handednessSetting.value = state.preferences.handedness;
   if (ui.lookSensitivitySetting) ui.lookSensitivitySetting.value = String(state.preferences.lookSensitivity);
+  if (ui.perfSetting) ui.perfSetting.value = String(state.preferences.perfOverlay);
   if (ui.rendererSetting) ui.rendererSetting.value = state.preferences.renderer;
   if (ui.phoneHint && state.preferences.phoneHintSeen) {
     ui.phoneHint.textContent = 'Touch controls are available during play. Landscape remains recommended.';
@@ -858,7 +870,7 @@ async function startEngineFromUserAction() {
     if (typeof Module.callMain !== 'function') {
       throw new Error('Engine runtime did not expose callMain.');
     }
-    const exitStatus = Module.callMain([...ENGINE_ARGUMENTS]);
+    const exitStatus = Module.callMain(getEngineArguments());
     if (state.quitInProgress || state.runtimeExited) return;
     if (typeof exitStatus === 'number' && exitStatus !== 0) {
       throw new Error(`Engine exited during startup with status ${exitStatus}.`);
@@ -1296,6 +1308,8 @@ function bindUi() {
     touchControlsSetting: document.getElementById('touch-controls-setting'),
     handednessSetting: document.getElementById('handedness-setting'),
     lookSensitivitySetting: document.getElementById('look-sensitivity-setting'),
+    perfSetting: document.getElementById('perf-setting'),
+    perfMessage: document.getElementById('perf-message'),
     rendererSetting: document.getElementById('renderer-setting'),
     rendererMessage: document.getElementById('renderer-message'),
     phoneHint: document.getElementById('phone-hint'),
@@ -1404,6 +1418,22 @@ function bindUi() {
      * navigation blows the launcher DOM away. */
     setTimeout(() => location.reload(), 60);
   });
+  ui.perfSetting?.addEventListener('change', () => {
+    const next = Number(ui.perfSetting.value);
+    if (!Number.isInteger(next) || next < 0 || next > 3) {
+      return;
+    }
+    state.preferences.perfOverlay = next;
+    savePreferences();
+    applyPreferences();
+    const labels = ['Off', 'FPS + frame time', 'Detailed breakdown', 'Frame-time graph'];
+    appendRuntimeLog('[launcher]', `Performance overlay set to ${next} (${labels[next]}).`);
+    if (ui.perfMessage) {
+      ui.perfMessage.textContent = next > 0
+        ? `Performance overlay enabled at level ${next} (${labels[next]}). It applies on the next launch.`
+        : 'Performance overlay disabled.';
+    }
+  });
 
   for (const query of [
     PHONE_VIEWPORT_QUERY,
@@ -1459,7 +1489,7 @@ function bindBootCallbacks() {
   const Module = getModule();
   const previousOnRuntimeInitialized = Module.onRuntimeInitialized;
   Module.canvas = ui.canvas;
-  Module.arguments = [...ENGINE_ARGUMENTS];
+  Module.arguments = getEngineArguments();
   Module.noInitialRun = true;
   Module.locateFile = (path) => new URL(path, document.baseURI).toString();
   Module.print = (text) => {
