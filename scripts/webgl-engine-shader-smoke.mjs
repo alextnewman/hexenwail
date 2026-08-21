@@ -39,6 +39,7 @@ const WEBGLIDE_MACROS = [
   'GLIDE_FOG_FN',
   'GLIDE_DITHER_FN',
   'GLIDE_LOD_FN',
+  'GLIDE_PALETTE_FN',
 ];
 
 function tokenize(expression) {
@@ -191,10 +192,101 @@ function compile(gl, type, source, family, stage) {
   }
   return shader;
 }
+function texture(gl, unit, internalFormat, width, height, format, data) {
+  const value = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0 + unit);
+  gl.bindTexture(gl.TEXTURE_2D, value);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+  gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, width, height, 0, format, gl.UNSIGNED_BYTE, data);
+  return value;
+}
+function uniform(gl, program, name, setter, ...values) {
+  const location = gl.getUniformLocation(program, name);
+  if (location !== null) gl[setter](location, ...values);
+}
+function testWebGlidePaletteShading(gl, program) {
+  const palette = new Uint8Array(256 * 4);
+  for (let index = 0; index < 256; index += 1) palette[index * 4 + 3] = 255;
+  palette.set([200, 40, 20, 255], 10 * 4);
+  palette.set([32, 8, 4, 255], 11 * 4);
+  palette.set([12, 240, 24, 255], 224 * 4);
+
+  const colormap = new Uint8Array(256 * 64);
+  for (let row = 0; row < 64; row += 1) {
+    for (let index = 0; index < 256; index += 1) colormap[row * 256 + index] = index;
+  }
+  colormap[63 * 256 + 10] = 11;
+
+  texture(gl, 0, gl.R8UI, 2, 1, gl.RED_INTEGER, new Uint8Array([10, 224]));
+  texture(gl, 1, gl.RGBA8, 1, 1, gl.RGBA, new Uint8Array([0, 0, 0, 0]));
+  texture(gl, 3, gl.RGBA8, 256, 1, gl.RGBA, palette);
+  texture(gl, 4, gl.R8UI, 256, 64, gl.RED_INTEGER, colormap);
+
+  const target = texture(gl, 5, gl.RGBA8, 2, 1, gl.RGBA, null);
+  const framebuffer = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, target, 0);
+  if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+    throw new Error('WebGlide palette test framebuffer is incomplete');
+  }
+
+  const vertices = new Float32Array([
+    -1, -1, 0, 0, 0, 0.5, 0.5,
+     3, -1, 0, 2, 0, 0.5, 0.5,
+    -1,  3, 0, 0, 2, 0.5, 0.5,
+  ]);
+  const vao = gl.createVertexArray();
+  const buffer = gl.createBuffer();
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+  for (const [location, size, offset] of [[0, 3, 0], [1, 2, 12], [2, 2, 20]]) {
+    gl.enableVertexAttribArray(location);
+    gl.vertexAttribPointer(location, size, gl.FLOAT, false, 28, offset);
+  }
+
+  gl.useProgram(program);
+  uniform(gl, program, 'u_mvp', 'uniformMatrix4fv', false, new Float32Array([
+    1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+  ]));
+  uniform(gl, program, 'u_indices', 'uniform1i', 0);
+  uniform(gl, program, 'u_lightmap', 'uniform1i', 1);
+  uniform(gl, program, 'u_palette', 'uniform1i', 3);
+  uniform(gl, program, 'u_colormap', 'uniform1i', 4);
+  uniform(gl, program, 'u_scroll', 'uniform2f', 0, 0);
+  uniform(gl, program, 'u_turbscale', 'uniform2f', 1, 1);
+  uniform(gl, program, 'u_turbtime', 'uniform1f', 0);
+  uniform(gl, program, 'u_alpha', 'uniform1f', 1);
+  uniform(gl, program, 'u_light', 'uniform1f', 1);
+  uniform(gl, program, 'u_flags', 'uniform1i', 10);
+  uniform(gl, program, 'u_fullbright', 'uniform1i', 224);
+  uniform(gl, program, 'u_filter', 'uniform1i', 0);
+  uniform(gl, program, 'u_debug', 'uniform1i', 0);
+  uniform(gl, program, 'u_fogdensity', 'uniform1f', 0);
+  uniform(gl, program, 'u_fogcolor', 'uniform3f', 0, 0, 0);
+  uniform(gl, program, 'u_dither', 'uniform3f', 0, 0, 0);
+  uniform(gl, program, 'u_lodbias', 'uniform1f', 0);
+  uniform(gl, program, 'u_mipdither', 'uniform1f', 0);
+  gl.viewport(0, 0, 2, 1);
+  gl.disable(gl.BLEND);
+  gl.disable(gl.DEPTH_TEST);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  const pixels = new Uint8Array(8);
+  gl.readPixels(0, 0, 2, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  const expected = [32, 8, 4, 255, 12, 240, 24, 255];
+  if (!expected.every((value, index) => Math.abs(value - pixels[index]) <= 1)) {
+    throw new Error('WebGlide palette shading mismatch: expected ' + expected + ', got ' + [...pixels]);
+  }
+}
 try {
   const canvas = document.createElement('canvas');
   const gl = canvas.getContext('webgl2', { antialias: false });
   if (!gl) throw new Error('WebGL2 context creation failed');
+  let webglideWorld = null;
   for (const source of sources) {
     const vertex = compile(gl, gl.VERTEX_SHADER, source.vertex, source.name, 'vertex');
     const fragment = compile(gl, gl.FRAGMENT_SHADER, source.fragment, source.name, 'fragment');
@@ -213,8 +305,12 @@ try {
       gl.deleteProgram(program);
       throw new Error(source.name + ' shader link failed: ' + message);
     }
-    gl.deleteProgram(program);
+    if (source.name === 'webglide_world') webglideWorld = program;
+    else gl.deleteProgram(program);
   }
+  if (!webglideWorld) throw new Error('missing WebGlide world shader');
+  testWebGlidePaletteShading(gl, webglideWorld);
+  gl.deleteProgram(webglideWorld);
   const error = gl.getError();
   if (error !== gl.NO_ERROR) throw new Error('WebGL2 error after engine shader test: 0x' + error.toString(16));
   document.body.dataset.result = 'pass';

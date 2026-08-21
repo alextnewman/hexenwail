@@ -86,8 +86,6 @@ static float		gl2_blocklights[LMBLOCK_WIDTH * LMBLOCK_HEIGHT * 3];
 
 static byte		*gl2_litdata;		/* .lit samples, or NULL */
 static qboolean		gl2_lit_loaded;
-static int		gl2_lightmap_shift;
-static int		gl2_lightmap_overbright;
 static float		gl2_lightmap_ambient;
 
 static gl2texture_t	*gl2_solidsky;
@@ -372,9 +370,8 @@ static void GL2_BuildLightmapBlock (msurface_t *surf, gl2surf_t *info)
 	else
 	{
 		/* Seed the block with r_ambient before accumulating styles, the
-		 * same order as r_surf.c:202.  Values here are 8.8 fixed point
-		 * (see the >> gl2_lightmap_shift below), so one unit of
-		 * r_ambient is 256. */
+		 * same order as r_surf.c:202. Values here are 8.8 fixed point,
+		 * so one unit of r_ambient is 256. */
 		ambient = GL2_AmbientLight ();
 		if (ambient > 0.0f)
 		{
@@ -419,9 +416,8 @@ static void GL2_BuildLightmapBlock (msurface_t *surf, gl2surf_t *info)
 		}
 	}
 
-	/* gl_overbright halves what we store and the shader doubles it back,
-	 * which is what the period's multitexture combiners did and buys a
-	 * stop of headroom for bright dynamic lights. */
+	/* RGB retains coloured-light chroma. Alpha carries the neutral intensity
+	 * that selects the software renderer's colormap darkness row. */
 	dest = gl2_lightmap_data[info->lightmap] +
 		((size_t)info->light_t * LMBLOCK_WIDTH + info->light_s) * 4;
 
@@ -438,14 +434,15 @@ static void GL2_BuildLightmapBlock (msurface_t *surf, gl2surf_t *info)
 			{
 				int	value = (int)gl2_blocklights[(i * smax + s) * 3 + c];
 
-				value >>= gl2_lightmap_shift;
+				value >>= 8;
 				if (value < 0)
 					value = 0;
 				else if (value > 255)
 					value = 255;
 				row[s * 4 + c] = (byte)value;
 			}
-			row[s * 4 + 3] = 255;
+			row[s * 4 + 3] = q_max(row[s * 4 + 0],
+				q_max(row[s * 4 + 1], row[s * 4 + 2]));
 		}
 	}
 }
@@ -510,8 +507,6 @@ void GL2_BuildLightmaps (void)
 	if (!gl2_surfaces || !cl.worldmodel)
 		return;
 
-	gl2_lightmap_overbright = gl_overbright.integer ? 1 : 0;
-	gl2_lightmap_shift = 7 + gl2_lightmap_overbright;
 	gl2_lightmap_ambient = GL2_AmbientLight ();
 
 	for (surfnum = 0; surfnum < gl2_numsurfaces; surfnum++)
@@ -621,7 +616,7 @@ static void GL2_LoadWorldTextures (qmodel_t *world)
 	for (i = 0; i < gl2_numtexchains; i++)
 	{
 		texture_t	*texture = world->textures[i];
-		unsigned int	flags = GL2TEX_MIPMAP;
+		unsigned int	flags = GL2TEX_MIPMAP | GL2TEX_INDEXED;
 
 		gl2_texchain[i] = -1;
 		if (!texture || !texture->offsets[0])
@@ -634,10 +629,6 @@ static void GL2_LoadWorldTextures (qmodel_t *world)
 		}
 		if (texture->name[0] == '{')
 			flags |= GL2TEX_HOLEY;
-		/* Liquids and fences never take the additive self-lit pass --
-		 * the same exclusions the desktop renderer makes. */
-		else if (texture->name[0] != '*')
-			flags |= GL2TEX_FULLBRIGHT;
 
 		gl2_textures_by_index[i] = GL2_LoadTexture (texture->name,
 				(int)texture->width, (int)texture->height,
@@ -1099,9 +1090,8 @@ static void GL2_DrawChainUnlit (int head)
 ================
 GL2_BindSurfaceTexture
 
-Binds a chain's diffuse and self-lit textures and returns the matching
-shader flags.  The two belong together: the fullbright bit must never be
-set without a mask bound, and unit 2 must always hold something complete.
+Binds a chain's indexed diffuse texture and returns the matching shader
+flags.
 
 '{' textures keep their cut-out through a shader discard, because the
 opaque world chains run with blending off and depth writes on.
@@ -1109,13 +1099,12 @@ opaque world chains run with blending off and depth writes on.
 */
 static GLint GL2_BindSurfaceTexture (gl2texture_t *texture, qboolean lightmapped)
 {
-	GLint	flags = lightmapped ? GL2_WORLDFLAG_LIGHTMAP : 0;
+	GLint	flags = (lightmapped ? GL2_WORLDFLAG_LIGHTMAP : 0) |
+			GL2_WORLDFLAG_INDEXED;
 
 	GL2_Bind (0, texture);
 	if (texture && (texture->flags & GL2TEX_HOLEY))
 		flags |= GL2_WORLDFLAG_ALPHATEST;
-	if (GL2_BindFullbright (2, texture))
-		flags |= GL2_WORLDFLAG_FULLBRIGHT;
 	return flags;
 }
 
@@ -1132,7 +1121,6 @@ static void GL2_DrawTextureChains (void)
 	GL2_UseProgram (program);
 	glUniformMatrix4fv (program->u_mvp, 1, GL_FALSE, gl2_view_projection.m);
 	glUniform2f (program->u_scroll, 0.0f, 0.0f);
-	glUniform1f (program->u_overbright, gl2_lightmap_overbright ? 2.0f : 1.0f);
 	glUniform1f (program->u_alpha, 1.0f);
 	glUniform1f (program->u_turbtime, gl2_time);
 	glUniform2f (program->u_turbscale, 1.0f, 1.0f);
@@ -1221,16 +1209,11 @@ static void GL2_DrawWaterChain (const gl2matrix_t *mvp, msurface_t *surfaces, fl
 	GL2_UseProgram (program);
 	glUniformMatrix4fv (program->u_mvp, 1, GL_FALSE, mvp->m);
 	glUniform2f (program->u_scroll, 0.0f, 0.0f);
-	glUniform1f (program->u_overbright, 1.0f);
 	glUniform1f (program->u_alpha, 1.0f);
 	glUniform1f (program->u_turbtime, gl2_time);
 	glUniform1f (program->u_light, light);
 	glUniform1i (program->u_flags, GL2_WORLDFLAG_TURB);
 	GL2_SetupSceneUniforms (program);
-
-	/* Liquids carry no self-lit mask, but unit 2 still has to hold a
-	 * texture the shader can legally sample. */
-	GL2_BindFullbright (2, NULL);
 
 	/* Re-bucket the chain by texture: the same lmchain field, reused. */
 	for (i = 0; i < gl2_numtexchains; i++)
@@ -1287,6 +1270,8 @@ static void GL2_DrawWaterChain (const gl2matrix_t *mvp, msurface_t *surfaces, fl
 				(texture && texture->width) ? 1.0f / (float)texture->width : 1.0f,
 				(texture && texture->height) ? 1.0f / (float)texture->height : 1.0f);
 			GL2_Bind (0, gl2_textures_by_index[i]);
+			glUniform1i (program->u_flags,
+				GL2_WORLDFLAG_TURB | GL2_WORLDFLAG_INDEXED);
 
 			for (surfnum = gl2_texchain[i]; surfnum >= 0;
 			     surfnum = gl2_surfaces[surfnum].lmchain)
@@ -1356,8 +1341,7 @@ void GL2_DrawWorld (void)
 	if (!cl.worldmodel || !gl2_surfaces || !gl2_world_vao || !GL2_ShadersReady ())
 		return;
 
-	if (gl2_lightmap_overbright != (gl_overbright.integer ? 1 : 0) ||
-	    gl2_lightmap_ambient != GL2_AmbientLight ())
+	if (gl2_lightmap_ambient != GL2_AmbientLight ())
 		GL2_BuildLightmaps ();
 
 	VectorCopy (r_origin, gl2_modelorg);
@@ -1526,7 +1510,6 @@ void GL2_DrawBrushEntity (entity_t *entity)
 	GL2_UseProgram (program);
 	glUniformMatrix4fv (program->u_mvp, 1, GL_FALSE, mvp.m);
 	glUniform2f (program->u_scroll, 0.0f, 0.0f);
-	glUniform1f (program->u_overbright, gl2_lightmap_overbright ? 2.0f : 1.0f);
 	glUniform1f (program->u_alpha, alpha);
 	glUniform1f (program->u_turbtime, gl2_time);
 	glUniform2f (program->u_turbscale, 1.0f, 1.0f);
@@ -1903,8 +1886,6 @@ void GL2_WorldNewMap (void)
 
 	memset (gl2_lightmap_allocated, 0, sizeof(gl2_lightmap_allocated));
 	gl2_numlightmaps = 0;
-	gl2_lightmap_overbright = gl_overbright.integer ? 1 : 0;
-	gl2_lightmap_shift = 7 + gl2_lightmap_overbright;
 	gl2_lightmap_ambient = GL2_AmbientLight ();
 
 	GL2_LoadLitFile (world);

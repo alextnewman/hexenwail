@@ -36,7 +36,7 @@
 #include "quakedef.h"
 #include "gl2_glide.h"
 
-#define SHADEDOT_QUANT		16
+#define GL2_NUMVERTEXNORMALS	162
 
 /* r_alias.c:26.  The software renderer floors a model's ambient light at
  * this before inverting it into a colormap row, so a software model's
@@ -61,9 +61,9 @@
  * shipped game does. */
 #define VIEWMODEL_LIGHT_MIN	24.0f
 
-static const float	gl2_avertexnormal_dots[SHADEDOT_QUANT][256] =
+static const float	gl2_avertexnormals[GL2_NUMVERTEXNORMALS][3] =
 {
-#include "anorm_dots.h"
+#include "anorms.h"
 };
 
 /* Batch capacity: a comfortable multiple of the biggest model in the game
@@ -86,7 +86,6 @@ static qboolean		gl2_batch_open;
 static float		gl2_lightcolor[3];
 static float		gl2_ambientlight;
 static float		gl2_shadelight;
-static const float	*gl2_shadedots = gl2_avertexnormal_dots[0];
 
 /*
 =============================================================================
@@ -215,10 +214,22 @@ void GL2_FlushModelBatch (void)
 	glUniform1i (program->u_flags, (GLint)gl2_batch_flags);
 	GL2_SetupSceneUniforms (program);
 
-	GL2_Bind (0, gl2_batch_texture);
-	if (GL2_BindFullbright (2, gl2_batch_texture))
+	if (gl2_batch_texture && (gl2_batch_texture->flags & GL2TEX_INDEXED))
+	{
+		GL2_Bind (0, GL2_WhiteTexture ());
+		GL2_BindIndexed (2, gl2_batch_texture);
 		glUniform1i (program->u_flags,
-			(GLint)(gl2_batch_flags | GL2_MODELFLAG_FULLBRIGHT));
+			(GLint)(gl2_batch_flags | GL2_MODELFLAG_INDEXED |
+				((gl2_batch_texture->flags & GL2TEX_HOLEY) ?
+				 GL2_MODELFLAG_HOLEY : 0) |
+				((gl2_batch_texture->flags & GL2TEX_ALPHA) ?
+				 GL2_MODELFLAG_ALPHA255 : 0)));
+	}
+	else
+	{
+		GL2_Bind (0, gl2_batch_texture);
+		GL2_BindIndexed (2, NULL);
+	}
 	GL2_ApplyBlendMode (gl2_batch_blend);
 
 	glDrawArrays (GL_TRIANGLES, 0, gl2_batch_count);
@@ -378,7 +389,7 @@ static gl2texture_t *GL2_AliasSkin (entity_t *entity, const aliashdr_t *paliashd
 	const maliasskindesc_t	*pskindesc;
 	const byte		*pixels;
 	gl2texture_t		*texture;
-	unsigned int		flags = GL2TEX_MIPMAP | GL2TEX_FULLBRIGHT;
+	unsigned int		flags = GL2TEX_MIPMAP | GL2TEX_INDEXED;
 	int			skinnum, size, entnum;
 
 	pskindesc = GL2_AliasSkinDesc (paliashdr, pmdl, entity, &skinnum);
@@ -390,7 +401,7 @@ static gl2texture_t *GL2_AliasSkin (entity_t *entity, const aliashdr_t *paliashd
 	if (entity->model->flags & EF_HOLEY)
 		flags |= GL2TEX_HOLEY;
 	if (entity->model->flags & (EF_TRANSPARENT | EF_SPECIAL_TRANS))
-		flags |= GL2TEX_ALPHA;
+		flags |= GL2TEX_HOLEY;
 
 	entnum = (int)(entity - cl_entities) - 1;
 	if (entity->colormap && entity->colormap != vid.colormap &&
@@ -555,14 +566,15 @@ static void GL2_SetupEntityLighting (entity_t *entity)
 			gl2_lightcolor[i] = 0.0f;
 	}
 
-	/* Without overbright, clamp the way the software renderer does so
-	 * models do not float away from the world's brightness. */
+	/* The darkness row always follows the software renderer's clamp. The
+	 * overbright cvar may retain extra coloured-light chroma, but must not
+	 * bypass the authored colormap transfer function. */
+	if (gl2_ambientlight > 128.0f)
+		gl2_ambientlight = 128.0f;
+	if (gl2_ambientlight + gl2_shadelight > 192.0f)
+		gl2_shadelight = 192.0f - gl2_ambientlight;
 	if (!gl_overbright_models.integer)
 	{
-		if (gl2_ambientlight > 128.0f)
-			gl2_ambientlight = 128.0f;
-		if (gl2_ambientlight + gl2_shadelight > 192.0f)
-			gl2_shadelight = 192.0f - gl2_ambientlight;
 		for (i = 0; i < 3; i++)
 		{
 			if (gl2_lightcolor[i] > 192.0f)
@@ -807,13 +819,13 @@ void GL2_DrawAliasModel (entity_t *entity)
 	gl2texture_t		*skin;
 	gl2vertex_t		*out;
 	vec3_t			mins, maxs, scale, offset, angles;
-	vec3_t			forward, right, up;
+	vec3_t			forward, right, up, plightvec;
 	float			alpha = 1.0f;
 	float			iw, ih;
 	unsigned int		shaderflags = 0;
 	int			blend = GL2_BLEND_OPAQUE;
 	int			i, pose, numtris;
-	float			tint[3];
+	float			tint[3], tintmax;
 
 	if (!model || !GL2_ShadersReady ())
 		return;
@@ -839,13 +851,13 @@ void GL2_DrawAliasModel (entity_t *entity)
 	VectorCopy (gl2_lightcolor, tint);
 	GL2_ApplyColorShade (entity, tint);
 
-	/* Quantised normal-dot row for this yaw, the GLQuake Gouraud model.
-	 * tint already carries the sampled intensity per channel, so the only
-	 * per-vertex term is the normal dot; the GL renderer's /200 scale
-	 * becomes /200*255 because these are bytes, not floats. */
-	gl2_shadedots = gl2_avertexnormal_dots
-		[((int)(entity->angles[1] * (SHADEDOT_QUANT / 360.0f))) & (SHADEDOT_QUANT - 1)];
-	VectorScale (tint, 255.0f / 200.0f, tint);
+	/* Colour is layered around the colormap result in the shader. Keep only
+	 * chroma here so a neutral light leaves the authored ramp untouched. */
+	tintmax = q_max(tint[0], q_max(tint[1], tint[2]));
+	if (tintmax > 0.0f)
+		VectorScale (tint, 1.0f / tintmax, tint);
+	else
+		VectorSet (tint, 1.0f, 1.0f, 1.0f);
 
 	if (entity->drawflags & DRF_TRANSLUCENT)
 	{
@@ -880,6 +892,14 @@ void GL2_DrawAliasModel (entity_t *entity)
 	GL2_AliasAngles (entity, angles);
 	AngleVectors (angles, forward, right, up);
 	VectorInverse (right);	/* local +Y is left, as in R_AliasSetUpTransform */
+	/* R_AliasSetupLighting uses the fixed world light vector {-1,0,0}
+	 * transformed into model space. right is already inverted above. */
+	plightvec[0] = -forward[0];
+	plightvec[1] = -right[0];
+	plightvec[2] = -up[0];
+	if ((model->flags & EF_ROTATE) ||
+	    ((entity->drawflags & MLS_MASKIN) == MLS_ABSLIGHT))
+		VectorClear (plightvec);
 
 	iw = 1.0f / (float)pmdl->skinwidth;
 	ih = 1.0f / (float)pmdl->skinheight;
@@ -898,7 +918,7 @@ void GL2_DrawAliasModel (entity_t *entity)
 			const trivertx_t	*vert = &poseverts[ptri->vertindex[j]];
 			const stvert_t		*st = &pstverts[ptri->stindex[j]];
 			vec3_t			local, world;
-			float			light;
+			float			lightcos, darkness;
 			int			c;
 
 			local[0] = vert->v[0] * scale[0] + offset[0];
@@ -918,10 +938,18 @@ void GL2_DrawAliasModel (entity_t *entity)
 			out->s = st->s * iw;
 			out->t = st->t * ih;
 
-			light = gl2_shadedots[vert->lightnormalindex];
+			lightcos = DotProduct (gl2_avertexnormals[vert->lightnormalindex],
+						plightvec);
+			darkness = (255.0f - gl2_ambientlight) * VID_GRADES;
+			if (lightcos < 0.0f)
+				darkness += gl2_shadelight * VID_GRADES * lightcos;
+			if (darkness < 0.0f)
+				darkness = 0.0f;
+			else if (darkness > 255.0f * VID_GRADES)
+				darkness = 255.0f * VID_GRADES;
 			for (c = 0; c < 3; c++)
 			{
-				int	value = (int)(tint[c] * light);
+				int	value = (int)(tint[c] * 255.0f);
 
 				if (value < 0)
 					value = 0;
@@ -929,7 +957,7 @@ void GL2_DrawAliasModel (entity_t *entity)
 					value = 255;
 				out->color[c] = (byte)value;
 			}
-			out->color[3] = 255;
+			out->color[3] = (byte)((int)darkness >> VID_CBITS);
 			out++;
 		}
 	}

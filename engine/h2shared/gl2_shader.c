@@ -117,6 +117,86 @@
 	"}\n"
 
 /*
+ * Indexed textures are integer textures and therefore cannot use hardware
+ * filtering. Resolve each tap through colormap[row][index] and the palette,
+ * then filter RGB results. This avoids interpolating unrelated palette indices.
+ */
+#define GLIDE_PALETTE_FN \
+	"uniform highp usampler2D u_indices;\n" \
+	"uniform sampler2D u_palette;\n" \
+	"uniform highp usampler2D u_colormap;\n" \
+	"uniform int u_fullbright;\n" \
+	"uniform int u_filter;\n" \
+	"uniform int u_debug;\n" \
+	"ivec2 GlideWrap (ivec2 p, ivec2 size)\n" \
+	"{\n" \
+	" return ivec2 ((p.x % size.x + size.x) % size.x,\n" \
+	"                (p.y % size.y + size.y) % size.y);\n" \
+	"}\n" \
+	"uint GlideIndex (highp vec2 uv, int level)\n" \
+	"{\n" \
+	" ivec2 size = textureSize (u_indices, level);\n" \
+	" ivec2 p = ivec2 (floor (fract (uv) * vec2 (size)));\n" \
+	" return texelFetch (u_indices, GlideWrap (p, size), level).r;\n" \
+	"}\n" \
+	"vec3 GlideChroma (vec3 color, vec3 chroma)\n" \
+	"{\n" \
+	" vec3 tinted = color * chroma;\n" \
+	" float source_luma = dot (color, vec3 (0.299, 0.587, 0.114));\n" \
+	" float tinted_luma = dot (tinted, vec3 (0.299, 0.587, 0.114));\n" \
+	" return (tinted_luma > 0.0001) ? tinted * (source_luma / tinted_luma) : color;\n" \
+	"}\n" \
+	"vec4 GlideShadeIndex (uint index, float darkness, vec3 chroma, bool holey, bool alpha255)\n" \
+	"{\n" \
+	" bool fullbright = int (index) >= u_fullbright && index != 255u;\n" \
+	" int row = clamp (int (floor (darkness)), 0, 63);\n" \
+	" uint shaded = fullbright ? index : texelFetch (u_colormap, ivec2 (int (index), row), 0).r;\n" \
+	" vec4 source = texelFetch (u_palette, ivec2 (int (index), 0), 0);\n" \
+	" source.a = 1.0;\n" \
+	" vec3 color = texelFetch (u_palette, ivec2 (int (shaded), 0), 0).rgb;\n" \
+	" if (!fullbright) color = GlideChroma (color, chroma);\n" \
+	" if ((holey && index == 0u) || (alpha255 && index == 255u)) source.a = 0.0;\n" \
+	" return vec4 (color, source.a);\n" \
+	"}\n" \
+	"vec4 GlideIndexedLevel (highp vec2 uv, int level, float darkness, vec3 chroma, bool holey, bool alpha255, bool linear)\n" \
+	"{\n" \
+	" ivec2 size = textureSize (u_indices, level);\n" \
+	" if (!linear) return GlideShadeIndex (GlideIndex (uv, level), darkness, chroma, holey, alpha255);\n" \
+	" highp vec2 p = fract (uv) * vec2 (size) - 0.5;\n" \
+	" ivec2 base = ivec2 (floor (p));\n" \
+	" vec2 f = fract (p);\n" \
+	" uint i00 = texelFetch (u_indices, GlideWrap (base, size), level).r;\n" \
+	" uint i10 = texelFetch (u_indices, GlideWrap (base + ivec2 (1, 0), size), level).r;\n" \
+	" uint i01 = texelFetch (u_indices, GlideWrap (base + ivec2 (0, 1), size), level).r;\n" \
+	" uint i11 = texelFetch (u_indices, GlideWrap (base + ivec2 (1, 1), size), level).r;\n" \
+	" vec4 top = mix (GlideShadeIndex (i00, darkness, chroma, holey, alpha255),\n" \
+	"                 GlideShadeIndex (i10, darkness, chroma, holey, alpha255), f.x);\n" \
+	" vec4 bottom = mix (GlideShadeIndex (i01, darkness, chroma, holey, alpha255),\n" \
+	"                    GlideShadeIndex (i11, darkness, chroma, holey, alpha255), f.x);\n" \
+	" return mix (top, bottom, f.y);\n" \
+	"}\n" \
+	"vec4 GlideIndexed (highp vec2 uv, float darkness, vec3 chroma, bool holey, bool alpha255)\n" \
+	"{\n" \
+	" ivec2 base_size = textureSize (u_indices, 0);\n" \
+	" highp vec2 footprint = max (abs (dFdx (uv * vec2 (base_size))),\n" \
+	"                             abs (dFdy (uv * vec2 (base_size))));\n" \
+	" float max_lod = floor (log2 (float (max (base_size.x, base_size.y))));\n" \
+	" float lod = clamp (log2 (max (max (footprint.x, footprint.y), 1.0)) + GlideLod (), 0.0, max_lod);\n" \
+	" bool linear = u_filter >= 3;\n" \
+	" if (u_filter == 0 || u_filter == 3) lod = 0.0;\n" \
+	" if (u_filter == 1 || u_filter == 4)\n" \
+	"  return GlideIndexedLevel (uv, int (floor (lod + 0.5)), darkness, chroma, holey, alpha255, linear);\n" \
+	" if (u_filter == 2 || u_filter == 5)\n" \
+	" {\n" \
+	"  int lo = int (floor (lod));\n" \
+	"  int hi = min (lo + 1, int (max_lod));\n" \
+	"  return mix (GlideIndexedLevel (uv, lo, darkness, chroma, holey, alpha255, linear),\n" \
+	"              GlideIndexedLevel (uv, hi, darkness, chroma, holey, alpha255, linear), fract (lod));\n" \
+	" }\n" \
+	" return GlideIndexedLevel (uv, 0, darkness, chroma, holey, alpha255, linear);\n" \
+	"}\n"
+
+/*
 =============================================================================
 
 	world
@@ -152,13 +232,11 @@ static const char glide_world_frag[] =
 	GLIDE_FOG_FN
 	GLIDE_DITHER_FN
 	GLIDE_LOD_FN
-	"uniform sampler2D u_diffuse;\n"
+	GLIDE_PALETTE_FN
 	"uniform sampler2D u_lightmap;\n"
-	"uniform sampler2D u_texture2;\n"
 	"uniform highp vec2 u_turbscale;\n"
 	"uniform highp float u_turbtime;\n"
 	"uniform float u_alpha;\n"
-	"uniform float u_overbright;\n"
 	"uniform float u_light;\n"
 	"uniform int u_flags;\n"
 	"out vec4 frag_color;\n"
@@ -171,25 +249,23 @@ static const char glide_world_frag[] =
 	 * coordinates, so u_turbscale is the only difference. */
 	" if ((u_flags & 1) != 0)\n"
 	"  uv = (uv + 8.0 * sin (uv.yx * 0.125 + u_turbtime)) * u_turbscale;\n"
-	" vec4 albedo = texture (u_diffuse, uv, GlideLod ());\n"
+	" vec4 lightmap = ((u_flags & 2) != 0) ? texture (u_lightmap, v_lmcoord) : vec4 (u_light);\n"
+	" float intensity = ((u_flags & 2) != 0) ? lightmap.a : u_light;\n"
+	" vec3 chroma = lightmap.rgb / max (max (lightmap.r, lightmap.g), max (lightmap.b, 0.0001));\n"
+	" float darkness = floor (clamp ((255.0 - intensity * 255.0) * 0.25, 0.0, 63.0));\n"
+	" uint source_index = GlideIndex (uv, 0);\n"
+	" vec4 albedo = GlideIndexed (uv, darkness, chroma, (u_flags & 4) != 0, false);\n"
 	/* '{' textures -- fences, grates, foliage -- are drawn in the opaque
 	 * chains with blending off, so the cut-out has to be a discard. */
 	" if ((u_flags & 4) != 0 && albedo.a < 0.666)\n"
 	"  discard;\n"
 	" vec3 color = albedo.rgb;\n"
-	/* Lightmapped surfaces take the atlas; everything else -- liquids,
-	 * and brush entities carrying an MLS/abslight value, which have no
-	 * baked samples to look up -- takes the flat entity light. */
-	" if ((u_flags & 2) != 0)\n"
-	"  color *= texture (u_lightmap, v_lmcoord).rgb * u_overbright;\n"
-	" else\n"
-	"  color *= u_light;\n"
-	/* Self-lit texels (torches, lava, runes) are added on top of the
-	 * lit surface, so they stay bright in an unlit room. The mask is
-	 * black wherever the texture has no fullbright palette indices. */
-	" if ((u_flags & 8) != 0)\n"
-	"  color += texture (u_texture2, uv, GlideLod ()).rgb;\n"
-	" frag_color = vec4 (GlideDither (GlideFog (color)), albedo.a * u_alpha);\n"
+	" if (u_debug == 1) color = vec3 (float (source_index) / 255.0);\n"
+	" else if (u_debug == 2) color = (int (source_index) >= u_fullbright && source_index != 255u) ? vec3 (1.0, 0.0, 1.0) : vec3 (0.0);\n"
+	" else if (u_debug == 3) color = vec3 (intensity);\n"
+	" else if (u_debug == 4) color = vec3 (darkness / 63.0);\n"
+	" frag_color = (u_debug != 0) ? vec4 (color, 1.0) :\n"
+	"  vec4 (GlideDither (GlideFog (color)), albedo.a * u_alpha);\n"
 	"}\n";
 
 /*
@@ -279,26 +355,33 @@ static const char glide_model_frag[] =
 	GLIDE_FOG_FN
 	GLIDE_DITHER_FN
 	GLIDE_LOD_FN
+	GLIDE_PALETTE_FN
 	"uniform sampler2D u_diffuse;\n"
-	"uniform sampler2D u_texture2;\n"
 	"uniform float u_alpha;\n"
 	"uniform int u_flags;\n"
 	"out vec4 frag_color;\n"
 	"void main ()\n"
 	"{\n"
-	" vec4 texel = texture (u_diffuse, v_texcoord, GlideLod ());\n"
+	" float darkness = v_color.a * 255.0 * 0.25;\n"
+	" uint source_index = ((u_flags & 4) != 0) ? GlideIndex (v_texcoord, 0) : 0u;\n"
+	" vec4 texel = ((u_flags & 4) != 0) ?\n"
+	"  GlideIndexed (v_texcoord, darkness, v_color.rgb, (u_flags & 8) != 0,\n"
+	"                (u_flags & 16) != 0) :\n"
+	"  texture (u_diffuse, v_texcoord, GlideLod ());\n"
 	" if ((u_flags & 1) != 0 && texel.a < 0.666)\n"
 	"  discard;\n"
-	" vec3 color = texel.rgb * v_color.rgb;\n"
-	/* Fullbright skin texels ignore the entity's light, exactly as the
-	 * software renderer's colormap row 0 does for indices >= 224. */
-	" if ((u_flags & 4) != 0)\n"
-	"  color += texture (u_texture2, v_texcoord, GlideLod ()).rgb;\n"
+	" vec3 color = ((u_flags & 4) != 0) ? texel.rgb : texel.rgb * v_color.rgb;\n"
+	" if ((u_flags & 4) != 0 && u_debug == 1) color = vec3 (float (source_index) / 255.0);\n"
+	" else if ((u_flags & 4) != 0 && u_debug == 2) color = (int (source_index) >= u_fullbright && source_index != 255u) ? vec3 (1.0, 0.0, 1.0) : vec3 (0.0);\n"
+	" else if ((u_flags & 4) != 0 && u_debug == 3) color = vec3 (1.0 - darkness / 63.0);\n"
+	" else if ((u_flags & 4) != 0 && u_debug == 4) color = vec3 (darkness / 63.0);\n"
 	/* Additive passes (glow orbs, particle flares) are light, not
 	 * surface: fogging them would tint the light source itself. */
-	" if ((u_flags & 2) == 0)\n"
+	" if ((u_flags & 2) == 0 && u_debug == 0)\n"
 	"  color = GlideFog (color);\n"
-	" frag_color = vec4 (GlideDither (color), texel.a * v_color.a * u_alpha);\n"
+	" float vertex_alpha = ((u_flags & 4) != 0) ? 1.0 : v_color.a;\n"
+	" frag_color = (u_debug != 0) ? vec4 (color, 1.0) :\n"
+	"  vec4 (GlideDither (color), texel.a * vertex_alpha * u_alpha);\n"
 	"}\n";
 
 /*
@@ -482,10 +565,15 @@ static qboolean GL2_LinkProgram (gl2program_t *out, const char *name,
 	out->program = program;
 	out->u_mvp = glGetUniformLocation (program, "u_mvp");
 	out->u_diffuse = glGetUniformLocation (program, "u_diffuse");
+	out->u_indices = glGetUniformLocation (program, "u_indices");
 	out->u_lightmap = glGetUniformLocation (program, "u_lightmap");
 	out->u_texture2 = glGetUniformLocation (program, "u_texture2");
+	out->u_palette = glGetUniformLocation (program, "u_palette");
+	out->u_colormap = glGetUniformLocation (program, "u_colormap");
+	out->u_fullbright = glGetUniformLocation (program, "u_fullbright");
+	out->u_filter = glGetUniformLocation (program, "u_filter");
+	out->u_debug = glGetUniformLocation (program, "u_debug");
 	out->u_alpha = glGetUniformLocation (program, "u_alpha");
-	out->u_overbright = glGetUniformLocation (program, "u_overbright");
 	out->u_light = glGetUniformLocation (program, "u_light");
 	out->u_turbtime = glGetUniformLocation (program, "u_turbtime");
 	out->u_turbscale = glGetUniformLocation (program, "u_turbscale");
@@ -534,15 +622,18 @@ void GL2_ShaderInit (void)
 
 	/* Sampler units are fixed for the life of the process. */
 	glUseProgram (gl2_world_program.program);
-	glUniform1i (gl2_world_program.u_diffuse, 0);
+	glUniform1i (gl2_world_program.u_indices, 0);
 	glUniform1i (gl2_world_program.u_lightmap, 1);
-	glUniform1i (gl2_world_program.u_texture2, 2);
+	glUniform1i (gl2_world_program.u_palette, 3);
+	glUniform1i (gl2_world_program.u_colormap, 4);
 	glUseProgram (gl2_sky_program.program);
 	glUniform1i (gl2_sky_program.u_diffuse, 0);
 	glUniform1i (gl2_sky_program.u_texture2, 2);
 	glUseProgram (gl2_model_program.program);
 	glUniform1i (gl2_model_program.u_diffuse, 0);
-	glUniform1i (gl2_model_program.u_texture2, 2);
+	glUniform1i (gl2_model_program.u_indices, 2);
+	glUniform1i (gl2_model_program.u_palette, 3);
+	glUniform1i (gl2_model_program.u_colormap, 4);
 	glUseProgram (gl2_post_program.program);
 	glUniform1i (gl2_post_program.u_source, 0);
 	glUniform1i (gl2_post_program.u_history, 1);

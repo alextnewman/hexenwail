@@ -21,17 +21,9 @@ cvar_t r_waterwarp = {"r_waterwarp", "1", CVAR_NONE};
 cvar_t r_fullbright = {"r_fullbright", "0", CVAR_NONE};
 cvar_t r_lightmap = {"r_lightmap", "0", CVAR_NONE};
 cvar_t r_dynamic = {"r_dynamic", "1", CVAR_NONE};
-/* Minimum world light, seeded into every lightmap block exactly as
- * r_surf.c:202 does.  The software renderer defaults this to 0 because it
- * does not need it: it resolves light through the colormap, whose darkest
- * rows still carry recognisable hue, so an unlit surface reads as "dark
- * stone" rather than "off".  WebGlide multiplies albedo by the lightmap in
- * linear RGB, where unlit means literally zero, so the same map data
- * collapses to black.  Deliberately not CVAR_ARCHIVE: config.cfg is shared
- * with the software build, and persisting this would silently raise the
- * software renderer's black level too.  Put it in autoexec.cfg to make a
- * tuned value stick. */
-cvar_t r_ambient = {"r_ambient", "16", CVAR_NONE};
+/* Shared with software and deliberately not archived: both renderers feed
+ * this value into the same authored colormap darkness-row calculation. */
+cvar_t r_ambient = {"r_ambient", "0", CVAR_NONE};
 cvar_t r_novis = {"r_novis", "0", CVAR_NONE};
 cvar_t r_lerpmodels = {"r_lerpmodels", "1", CVAR_NONE};
 cvar_t r_lerp_viewmodel = {"r_lerp_viewmodel", "1", CVAR_NONE};
@@ -161,6 +153,7 @@ cvar_t gl_glide_crt = {"gl_glide_crt", "0.35", CVAR_ARCHIVE};
 cvar_t gl_glide_crt_mask = {"gl_glide_crt_mask", "0.35", CVAR_ARCHIVE};
 cvar_t gl_glide_crt_curve = {"gl_glide_crt_curve", "0.15", CVAR_ARCHIVE};
 cvar_t gl_glide_crt_vignette = {"gl_glide_crt_vignette", "0.2", CVAR_ARCHIVE};
+cvar_t gl_glide_debug = {"gl_glide_debug", "0", CVAR_NONE};
 
 /*
 =============================================================================
@@ -259,6 +252,7 @@ static void Web_RegisterRendererCvars (void)
 	Cvar_RegisterVariable(&gl_glide_crt_mask);
 	Cvar_RegisterVariable(&gl_glide_crt_curve);
 	Cvar_RegisterVariable(&gl_glide_crt_vignette);
+	Cvar_RegisterVariable(&gl_glide_debug);
 
 	Cvar_SetCallback(&gl_texturemode, GL2_FilterChanged);
 	Cvar_SetCallback(&gl_glide_anisotropy, GL2_FilterChanged);

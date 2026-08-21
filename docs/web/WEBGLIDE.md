@@ -61,7 +61,7 @@ toggle, the console messages and the shipped bundle basename
 | `engine/h2shared/gl2_glide.c` | Matrices, the offscreen scene buffer, T-buffer accumulation and scan-out. |
 | `engine/h2shared/gl2_world.c` | World geometry, lightmap atlases (128 × 128 RGBA), `.lit` colour, sky. |
 | `engine/h2shared/gl2_alias.c` | Alias models, sprites and particles — CPU transformed and lit. |
-| `engine/h2shared/gl2_texture.c` | Texture manager: palette expansion, alpha fringe repair, mip generation. |
+| `engine/h2shared/gl2_texture.c` | Texture manager: indexed game textures, palette/colormap tables, palette-aware mip generation, RGBA utility textures. |
 | `engine/h2shared/gl2_shader.c` | The four shader programs. Sources are extracted and compiled for real by the smoke test, so keep them as `static const char <name>[] = ...` literals. |
 | `engine/h2shared/gl2_glide.h` | Internal interface and the `gl_glide_*` cvar declarations. |
 | `engine/h2shared/vid_webgl2.c` | VID backend: WebGL2 context creation, canvas sizing, presentation. |
@@ -98,13 +98,13 @@ which reads as static crawling over every wall.
 
 ## Texture filtering
 
-Textures are filtered and mipmapped by default. `gl_texturemode` defaults to
-`GL_LINEAR_MIPMAP_LINEAR` and is applied to every resident texture when it
-changes, as is `gl_glide_anisotropy` — which needs
-`EXT_texture_filter_anisotropic`, probed once at texture-manager init.
-Unfiltered mip chains are the other half of the static: a minified wall
-sampled `GL_NEAREST` from level 0 picks a different texel every time the
-camera twitches.
+Textures are filtered and mipmapped by default. Indexed world textures and
+alias skins are uploaded as `R8UI`; WebGlide resolves each sample through
+`colormap[row][index]` and then the palette before manually filtering the RGB
+results. Palette indices are never interpolated. Mips are generated at load
+time by averaging palette colours and selecting the nearest palette entry.
+`gl_texturemode` still selects nearest/bilinear and nearest/trilinear mip
+behaviour. RGBA utility textures retain hardware filtering and anisotropy.
 
 Set `gl_texturemode GL_NEAREST` if you want the unfiltered look back; it is a
 console command away and the mip chains are already there.
@@ -163,20 +163,18 @@ RGB only at scan-out.
 
 ### What this means for WebGlide
 
-WebGlide computes `albedo.rgb * lightmap.rgb * u_overbright` (world fragment
-shader, `gl2_shader.c`) from an atlas built by `GL2_BuildLightmapBlock`
-(`gl2_world.c:327`). That is a faithful GLQuake transcription and it is
-arithmetically correct — the gamma path is identity at the default
-`v_gamma 1` / `v_contrast 1` / `gl_glide_gamma 1`, and the overbright build
-shift and shader multiply agree. It is nonetheless a different function from
-the one above in four ways:
+WebGlide keeps indexed world textures and alias skins on the GPU. The world
+shader converts lightmap intensity into the same 0…63 darkness row as
+`R_BuildLightMap`, looks up `colormap[row][index]`, then resolves that result
+through the palette. Alias vertices carry the software darkness value derived
+from `ambientlight`, `shadelight`, the fixed light vector and the model normal.
 
-| | software | WebGlide today |
+| | software | WebGlide |
 | --- | --- | --- |
-| shading operation | table lookup `colormap[row][index]` | multiply in linear RGB |
-| light steps | 64, quantised | continuous |
-| output space | snapped to the 256-entry palette | 8 bits per channel |
-| interpolation | linear in **darkness** | linear in **light** |
+| shading operation | table lookup `colormap[row][index]` | the same table lookup |
+| light steps | 64, quantised | 64, quantised |
+| output space | snapped to the 256-entry palette | palette RGB, filtered after lookup |
+| interpolation | linear in **darkness** | linear in darkness, then RGB filtering |
 
 Consequences, in the order they matter:
 
@@ -188,39 +186,26 @@ Consequences, in the order they matter:
 * **Palette snapping is a feature.** Colours hop between palette ramps as
   they darken instead of sliding smoothly to zero, which is most of what
   reads as period rather than muddy.
-* **Two floors were missing — both are now closed.** WebGlide had no
-  `r_ambient` equivalent (`GL2_BuildLightmapBlock` zeroed its accumulator
-  where `r_surf.c:202` seeds it, and `GL2_LightPoint` returned an unfloored
-  sample where `r_light.c:307` floors it) and no view model floor
-  (`r_main.c:806`). `LIGHT_MIN` alone does not substitute for either: it is
-  a floor on the colormap *row*, not on brightness. See
-  [Light floors](#light-floors) below.
-* **One function blocks the faithful path.** `GL2_ExpandPalette`
-  (`gl2_texture.c:197`) resolves every texel to RGBA at load and discards the
-  index, so nothing downstream has an index to shade with.
+* Fullbright source indices bypass the darkness lookup. They replace the lit
+  result rather than being added to it, so bright texture detail cannot clip
+  into repeated white patches.
+* `.lit` and dynamic-light RGB is reduced to a neutral scalar for the darkness
+  row, then reapplied as luminance-preserving chroma. Stock greyscale BSP
+  lighting therefore follows the software reference while coloured light
+  remains a WebGlide feature.
 
 ## Light floors
 
-The software renderer never lets geometry reach true black, and it gets
-that for free from the colormap: its darkest row still carries hue, so an
-unlit wall reads as *dark stone*. WebGlide multiplies albedo by the
-lightmap in linear RGB, where unlit means literally zero, so the same map
-data collapses to a black screen. Two floors restore the software
-renderer's guarantee.
+The colormap's darkest rows still carry hue, so an unlit surface reads as
+dark material rather than as a black silhouette. WebGlide now gets that
+property from the same table instead of approximating it with a linear-light
+floor.
 
 **World surfaces — `r_ambient`.** `GL2_BuildLightmapBlock` seeds every
 lightmap block with `r_ambient * 256` before accumulating light styles,
-the same value in the same order as `r_surf.c:202`. The seed is 8.8 fixed
-point, and the shader then applies `u_overbright`, so the albedo floor
-works out to `r_ambient / 255 * 2` — `16` lands at about 12.5%.
-
-This diverges deliberately from software, which defaults `r_ambient` to
-`0` because it does not need the help. It is **not** `CVAR_ARCHIVE`:
-`config.cfg` is shared with the software build, and persisting it would
-silently raise the software renderer's black level too. Put it in
-`autoexec.cfg` to make a tuned value stick. Changing it takes effect
-immediately — `GL2_DrawWorld` polls it and rebuilds, exactly as it already
-does for `gl_overbright`.
+the same value in the same order as `r_surf.c:202`. Its default is `0`, as
+in software; the colormap makes an artificial linear-light floor unnecessary.
+It remains `CVAR_NONE` because both builds share `config.cfg`.
 
 **Models — `LIGHT_MIN`.** `GL2_ApplyAliasLightFloor` floors both
 `gl2_ambientlight` and `gl2_lightcolor` at `5`, matching `r_alias.c:26`.
@@ -229,14 +214,9 @@ it, because the GL rule set returns early for `EF_ROTATE` and the `MLS`
 light styles, and the software renderer applies its floor after *all* of
 those paths have resolved.
 
-`LIGHT_MIN` is a backstop, not the model floor, and reading it as one is
-the mistake that made trees and the view model render as black silhouettes
-against a correctly lit world. In software it floors the *colormap row* —
-`(255 - 5) << VID_CBITS` is row 62 of 64, and the difference between row 62
-and row 63 is hue, not brightness. Transcribed into WebGlide's linear
-multiply it is `5 / 200` of the albedo, about 2.5%: five times darker than
-the `r_ambient` floor the same commit gave the walls, and visually
-indistinguishable from black.
+`LIGHT_MIN` is a backstop in colormap-row space. `(255 - 5) << VID_CBITS`
+is row 62 of 64, and the difference between row 62 and row 63 is authored
+hue rather than an arbitrary linear brightness floor.
 
 **Models — `r_ambient`.** The real model floor is the same cvar the world
 uses, applied where the software renderer applies it. `R_LightPoint`
@@ -254,12 +234,9 @@ to the sample, *before* dynamic lights, so a dark dlight can still pull a
 model under it — again as in software, where `LIGHT_MIN` then catches the
 bottom.
 
-Models and walls do not land on identical numbers even so, and are not
-meant to: the world is `r_ambient / 255 * u_overbright` while a model is
-`r_ambient / 200 * shadedots[normal]`, with `shadedots` running `0.70`
-to `2.0`. At `r_ambient 16` that is 12.5% for a wall against 5.6–16% across
-a model's facets. That spread is the Gouraud term, and both the software
-and desktop GL renderers have it.
+Models and walls do not land on identical rows and are not meant to: alias
+models use the software renderer's per-vertex normal-dot darkness calculation,
+while world surfaces interpolate darkness across lightmap luxels.
 
 **The view model — 24.** `R_DrawViewModel` in both renderers
 (`r_main.c:806`, `gl_rmain.c:3837`) samples the world at the entity origin
@@ -289,14 +266,11 @@ both have to be reproduced or the world reads as far darker than the
 software renderer draws it.
 
 **Self-lit texels.** Palette indices at or above `vid.fullbright` (224 in the
-stock colormap) are the colours the colormap never shades: torch flames,
-lava crust, rune glow, lamp glass. `gl2_texture.c` builds a companion mask
-texture for every palette texture that contains any of them — the fullbright
-texels at full colour, everything else black — and the `world` and `model`
-shaders add it on top of the lit surface. Textures without such texels get
-no mask and no cost; `*` liquids and `{` fences are excluded, as they are in
-the desktop renderer. `gl_fullbrights 0` turns the mask off at bind time, so
-it takes effect immediately rather than at the next map load.
+stock colormap) bypass the darkness row and resolve directly through the
+palette. There is no companion additive mask, so a fullbright texel replaces
+the lit result instead of being added to it. `gl_fullbrights 0` disables the
+explicit bypass for diagnosis; stock colormaps may still leave those authored
+columns unchanged.
 
 **Model light styles.** A brush entity's `drawflags & MLS_MASKIN` carries
 either an absolute light value (`MLS_ABSLIGHT`, from `entity_t::abslight`) or
@@ -309,8 +283,9 @@ what vanilla Hexen II did and what the desktop GL renderer still does.
 
 ## Cvars
 
-All `gl_glide_*` cvars are archived, and they **default to on**. The shipped
-configuration is the period look, not a clean GL image with optional garnish:
+The visual-effect `gl_glide_*` cvars are archived and **default to on**. The
+diagnostic cvar is deliberately transient. The shipped configuration is the
+period look, not a clean GL image with optional garnish:
 16bpp output through the ordered dither, the 2×2 scan-out filter over it, a
 sharpening LOD bias with Voodoo Graphics mip dithering, a T-buffer trail and a
 CRT — at a resolution a phone GPU is happy to sustain.
@@ -332,6 +307,7 @@ CRT — at a resolution a phone GPU is happy to sustain.
 | `gl_glide_crt_mask` | `0.35` | Aperture grille strength, in output pixels. |
 | `gl_glide_crt_curve` | `0.15` | Barrel distortion. |
 | `gl_glide_crt_vignette` | `0.2` | Corner falloff. |
+| `gl_glide_debug` | `0` | `1` source index, `2` fullbright classification, `3` light intensity, `4` darkness row; `0` is final shading. Not archived. |
 
 The CRT group is a *display* simulation rather than a renderer simulation, so
 it is the first thing to turn off if it fights the panel:
@@ -344,15 +320,15 @@ storage. A returning install therefore keeps whatever it last saved, and has
 to set the period cvars explicitly once (or clear its stored data) to pick up
 the new look.
 
-Shared client cvars that WebGlide actually honours include `gl_overbright`,
-`gl_fullbrights`, `gl_overbright_models`, `gl_texturemode`, `gl_coloredlight`,
+Shared client cvars that WebGlide actually honours include `gl_fullbrights`,
+`gl_overbright_models`, `gl_texturemode`, `gl_coloredlight`,
 `v_gamma`, `v_contrast`, the liquid alphas (`r_wateralpha`, `r_lavaalpha`,
 `r_slimealpha`, `r_telealpha`, `r_turbalpha`) and the light policy cvars
 (`gl_missile_glows`, `gl_torch_dlight`, `gl_flashintensity`,
 `gl_extra_dynamic_lights`).
 
-`r_ambient` is registered by the WebGlide build too, but with a default of
-`16` rather than the software renderer's `0`, and it is not archived. It
+`r_ambient` is registered by the WebGlide build with the software default of
+`0`, and it is not archived. It
 floors both the world lightmap and the model light samples. See
 [Light floors](#light-floors).
 
@@ -380,6 +356,7 @@ opaque entities so that entities behind water are not drawn over it.
 
 A second set is registered only so the shared client links and the menus have
 something to bind to; they currently do nothing here: `r_scale`, `r_softemu`,
+`gl_overbright`,
 `r_dither`, `r_hdr`, `r_hdr_exposure`, `gl_fxaa`, `r_motionblur`,
 `r_lightmap_bicubic`, `gl_flashblend`, `gl_texture_anisotropy` (use
 `gl_glide_anisotropy`), `r_waterwarp`, `r_texture_external`,
@@ -391,8 +368,9 @@ One known gap behind that last group: the model path does not consume
 ## Diagnostics
 
 WebGlide reports through the console and the launcher's **Runtime log** card.
-There are no `renderer_status` / `renderer_safe` commands and no
-`r_world_debug` — those belong to the desktop GL renderer, which is not built.
+`gl_glide_debug` exposes the indexed shading stages in both world and alias
+draws. There are no `renderer_status` / `renderer_safe` commands or desktop
+`r_world_debug`; those belong to the desktop GL renderer, which is not built.
 
 | Message | Meaning |
 | --- | --- |

@@ -18,9 +18,9 @@
  *     thread it is also simply the cheapest thing that works.
  *   - The world is the exception: its geometry never moves, so it lives in
  *     a static vertex buffer and is drawn with per-texture index batches.
- *   - Everything expensive that only depends on the assets -- mip chains,
- *     alpha fringe repair, fullbright masks, lightmap atlases, .lit
- *     colour -- is done once at load time, never per frame.
+ *   - Everything expensive that only depends on the assets -- palette-aware
+ *     mip chains, lightmap atlases and .lit colour -- is done once at load
+ *     time, never per frame.
  *   - The scene is rendered into an offscreen buffer whose size is a
  *     fraction of the view (gl_glide_scenescale), resolved on scan-out.
  *     The default is a quarter of the view's pixels -- half on each axis --
@@ -79,6 +79,7 @@ extern cvar_t	gl_glide_crt;		/* scanline strength, 0 = off */
 extern cvar_t	gl_glide_crt_mask;	/* aperture grille strength */
 extern cvar_t	gl_glide_crt_curve;	/* barrel distortion */
 extern cvar_t	gl_glide_crt_vignette;	/* corner falloff */
+extern cvar_t	gl_glide_debug;		/* palette-shading diagnostic view */
 
 /*
 =============================================================================
@@ -133,12 +134,11 @@ void GL2_MatrixScale (gl2matrix_t *out, float x, float y, float z);
 #define GL2TEX_DYNAMIC		(1u << 5)	/* content changes under a fixed name */
 #define GL2TEX_PERSIST		(1u << 6)	/* survives a map change */
 #define GL2TEX_RGBA		(1u << 7)	/* source is already 32bpp */
-#define GL2TEX_FULLBRIGHT	(1u << 8)	/* build the self-lit companion mask */
+#define GL2TEX_INDEXED		(1u << 8)	/* retain palette indices on the GPU */
 
 typedef struct gl2texture_s
 {
 	GLuint			id;
-	GLuint			fullbright;	/* self-lit mask, 0 when the texture has none */
 	int			width, height;
 	unsigned int		flags;
 	unsigned int		content_tag;	/* GL2TEX_DYNAMIC: identifies the uploaded content */
@@ -152,12 +152,13 @@ gl2texture_t *GL2_LoadTexture (const char *name, int width, int height,
 gl2texture_t *GL2_FindTexture (const char *name);
 void GL2_FreeMapTextures (void);
 void GL2_Bind (int unit, gl2texture_t *texture);
+void GL2_BindIndexed (int unit, gl2texture_t *texture);
 void GL2_BindName (int unit, GLuint texture);
 void GL2_InvalidateBindings (void);
 void GL2_ApplyTextureMode (void);
+void GL2_BindPaletteTables (void);
 gl2texture_t *GL2_ParticleTexture (void);
 gl2texture_t *GL2_WhiteTexture (void);
-qboolean GL2_BindFullbright (int unit, gl2texture_t *texture);
 
 /*
 =============================================================================
@@ -175,10 +176,15 @@ typedef struct
 	GLuint	program;
 	GLint	u_mvp;
 	GLint	u_diffuse;
+	GLint	u_indices;
 	GLint	u_lightmap;
 	GLint	u_texture2;
+	GLint	u_palette;
+	GLint	u_colormap;
+	GLint	u_fullbright;
+	GLint	u_filter;
+	GLint	u_debug;
 	GLint	u_alpha;
-	GLint	u_overbright;
 	GLint	u_light;
 	GLint	u_turbtime;
 	GLint	u_turbscale;
@@ -217,12 +223,14 @@ qboolean GL2_ShadersReady (void);
 #define GL2_WORLDFLAG_TURB	1
 #define GL2_WORLDFLAG_LIGHTMAP	2
 #define GL2_WORLDFLAG_ALPHATEST	4
-#define GL2_WORLDFLAG_FULLBRIGHT	8
+#define GL2_WORLDFLAG_INDEXED	8
 
 /* Model shader feature bits. */
 #define GL2_MODELFLAG_ALPHATEST	1
 #define GL2_MODELFLAG_NOFOG	2
-#define GL2_MODELFLAG_FULLBRIGHT	4
+#define GL2_MODELFLAG_INDEXED	4
+#define GL2_MODELFLAG_HOLEY	8
+#define GL2_MODELFLAG_ALPHA255	16
 
 /*
 =============================================================================
