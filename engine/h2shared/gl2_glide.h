@@ -18,9 +18,9 @@
  *     thread it is also simply the cheapest thing that works.
  *   - The world is the exception: its geometry never moves, so it lives in
  *     a static vertex buffer and is drawn with per-texture index batches.
- *   - Everything expensive that only depends on the assets -- mip chains,
- *     alpha fringe repair, fullbright masks, lightmap atlases, .lit
- *     colour -- is done once at load time, never per frame.
+ *   - Everything expensive that only depends on the assets -- palette-aware
+ *     mip chains, lightmap atlases and .lit colour -- is done once at load
+ *     time, never per frame.
  *   - The scene is rendered into an offscreen buffer whose size is a
  *     fraction of the view (gl_glide_scenescale), resolved on scan-out.
  *     The default is a quarter of the view's pixels -- half on each axis --
