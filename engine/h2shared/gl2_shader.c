@@ -264,7 +264,8 @@ static const char glide_world_frag[] =
 	" else if (u_debug == 2) color = (int (source_index) >= u_fullbright && source_index != 255u) ? vec3 (1.0, 0.0, 1.0) : vec3 (0.0);\n"
 	" else if (u_debug == 3) color = vec3 (intensity);\n"
 	" else if (u_debug == 4) color = vec3 (darkness / 63.0);\n"
-	" frag_color = vec4 (GlideDither (GlideFog (color)), albedo.a * u_alpha);\n"
+	" frag_color = (u_debug != 0) ? vec4 (color, 1.0) :\n"
+	"  vec4 (GlideDither (GlideFog (color)), albedo.a * u_alpha);\n"
 	"}\n";
 
 /*
@@ -376,9 +377,11 @@ static const char glide_model_frag[] =
 	" else if ((u_flags & 4) != 0 && u_debug == 4) color = vec3 (darkness / 63.0);\n"
 	/* Additive passes (glow orbs, particle flares) are light, not
 	 * surface: fogging them would tint the light source itself. */
-	" if ((u_flags & 2) == 0)\n"
+	" if ((u_flags & 2) == 0 && u_debug == 0)\n"
 	"  color = GlideFog (color);\n"
-	" frag_color = vec4 (GlideDither (color), texel.a * v_color.a * u_alpha);\n"
+	" float vertex_alpha = ((u_flags & 4) != 0) ? 1.0 : v_color.a;\n"
+	" frag_color = (u_debug != 0) ? vec4 (color, 1.0) :\n"
+	"  vec4 (GlideDither (color), texel.a * vertex_alpha * u_alpha);\n"
 	"}\n";
 
 /*
