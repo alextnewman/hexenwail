@@ -68,6 +68,8 @@ agreed design; they exist so sessions stop re-deriving context from scratch.
 | [`docs/web/ARCHITECTURE.md`](docs/web/ARCHITECTURE.md) | What the web port is, its non-goals, layering, the `WEBQUAKE` / `WEBGL2QUAKE` macro contract, ownership boundaries |
 | [`docs/web/SOFTWARE_RENDERER.md`](docs/web/SOFTWARE_RENDERER.md) | The **default** renderer: classic 8bpp rasteriser presented on an accelerated canvas, resolution ladder, iPad Pro panel math, cvars |
 | [`docs/web/WEBGLIDE.md`](docs/web/WEBGLIDE.md) | The experimental WebGlide GPU renderer (`-DWEB_RENDERER=webgl2`) |
+| [`docs/web/PERF_OVERLAY.md`](docs/web/PERF_OVERLAY.md) | The in-game performance overlay (`scr_perf`), shared by both renderers |
+| [`docs/web/WEBGLIDE_NITRO.md`](docs/web/WEBGLIDE_NITRO.md) | **Idea only, gated:** console-style tricks layered on a finished WebGlide |
 | [`docs/PWA.md`](docs/PWA.md) | PWA shell, asset import, deployment |
 
 **Settled decisions — do not reopen without an explicit instruction:**

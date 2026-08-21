@@ -233,6 +233,16 @@ assembling `dist/`:
 CI builds both configurations on every run, so a deployed Pages artifact
 always ships both bundles regardless of the launcher's default.
 
+## Performance overlay
+
+Both renderers carry the same in-game overlay, off by default. Open the
+console and set `scr_perf` to `1` (fps and frame time), `2` (adds the
+view/2D/present/other breakdown, renderer counters, worst frame and 1% low)
+or `3` (adds a frame-time graph). The setting is archived and shared by both
+bundles. This is the only profiler an installed PWA has, since iOS offers no
+developer tools to an installed app — see
+[`web/PERF_OVERLAY.md`](web/PERF_OVERLAY.md).
+
 ## Keyboard
 
 `in_web.c` owns the browser keyboard mapping. Two web-specific rules:

@@ -65,6 +65,20 @@
 
 #include "quakedef.h"
 //#include "r_local.h"
+#if defined(WEBQUAKE)
+#include "web_perf.h"
+#define SCR_PERF_FRAME_BEGIN()	WebPerf_BeginFrame()
+#define SCR_PERF_FRAME_END()	WebPerf_EndFrame()
+#define SCR_PERF_BEGIN(stage)	WebPerf_BeginStage(stage)
+#define SCR_PERF_END(stage)	WebPerf_EndStage(stage)
+#define SCR_PERF_DRAW()		WebPerf_Draw()
+#else
+#define SCR_PERF_FRAME_BEGIN()
+#define SCR_PERF_FRAME_END()
+#define SCR_PERF_BEGIN(stage)
+#define SCR_PERF_END(stage)
+#define SCR_PERF_DRAW()
+#endif
 #ifdef PLATFORM_WINDOWS
 #include "winquake.h"
 #endif
@@ -496,6 +510,9 @@ void SCR_Init (void)
 	Cvar_RegisterVariable (&scr_menubgstyle);
 #endif
 	Cvar_RegisterVariable (&scr_centertime);
+#if defined(WEBQUAKE)
+	WebPerf_Init ();
+#endif
 
 	Cmd_AddCommand ("screenshot",SCR_ScreenShot_f);
 	Cmd_AddCommand ("sizeup",SCR_SizeUp_f);
@@ -1325,6 +1342,8 @@ void SCR_UpdateScreen (void)
 	if (!scr_initialized || !con_initialized)
 		return;		// not initialized yet
 
+	SCR_PERF_FRAME_BEGIN();
+
 //
 // check for vid changes
 //
@@ -1368,12 +1387,15 @@ void SCR_UpdateScreen (void)
 	if (!cl.intermission)
 #endif
 	{
+		SCR_PERF_BEGIN(WEBPERF_REFRESH);
 		VID_LockBuffer ();
 		V_RenderView ();
 		VID_UnlockBuffer ();
+		SCR_PERF_END(WEBPERF_REFRESH);
 	}
 
 	D_EnableBackBufferAccess ();	// of all overlay stuff if drawing directly
+	SCR_PERF_BEGIN(WEBPERF_2D);
 
 	if (scr_drawdialog)
 	{
@@ -1434,6 +1456,9 @@ void SCR_UpdateScreen (void)
 #endif	/* H2W */
 	}
 
+	SCR_PERF_DRAW();
+	SCR_PERF_END(WEBPERF_2D);
+
 	D_DisableBackBufferAccess ();	// for adapters that can't stay mapped
 					// in for linear writes all the time
 	//if (pconupdate)
@@ -1444,6 +1469,8 @@ void SCR_UpdateScreen (void)
 //
 // update one of three areas
 //
+	SCR_PERF_BEGIN(WEBPERF_PRESENT);
+
 	if (scr_copyeverything)
 	{
 		vrect.x = 0;
@@ -1474,6 +1501,9 @@ void SCR_UpdateScreen (void)
 
 		VID_Update (&vrect);
 	}
+
+	SCR_PERF_END(WEBPERF_PRESENT);
+	SCR_PERF_FRAME_END();
 }
 
 

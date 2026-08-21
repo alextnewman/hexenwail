@@ -34,6 +34,7 @@
  */
 
 #include "quakedef.h"
+#include "web_perf.h"
 #include "gl2_glide.h"
 
 #define GL2_NUMVERTEXNORMALS	162
@@ -233,6 +234,7 @@ void GL2_FlushModelBatch (void)
 	GL2_ApplyBlendMode (gl2_batch_blend);
 
 	glDrawArrays (GL_TRIANGLES, gl2_model_vbo_offset, gl2_batch_count);
+	WebPerf_CountDraw (gl2_batch_count / 3);
 	gl2_frame_polys += gl2_batch_count / 3;
 	gl2_frame_batches++;
 	gl2_model_vbo_offset += gl2_batch_count;

@@ -1,4 +1,5 @@
 #include "quakedef.h"
+#include "web_perf.h"
 #include "gl2_glide.h"
 
 #define WEB_MAX_CACHED_PICS	256
@@ -183,6 +184,7 @@ static void Draw_Quad (GLuint texture, float x, float y, float width, float heig
 	glBindBuffer(GL_ARRAY_BUFFER, ui_vbo);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
+	WebPerf_CountDraw (2);
 	glBindVertexArray(0);
 	glEnable(GL_DEPTH_TEST);
 }
