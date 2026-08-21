@@ -141,9 +141,33 @@ static EM_BOOL Web_WheelCallback (int event_type,
 	return EM_TRUE;
 }
 
+static int Web_TouchKeyForMenu (int key)
+{
+	if (!(Key_GetDest() & key_menu))
+		return key;
+
+	switch (key)
+	{
+	case 'w':
+	case 'W':
+		return K_GP_DPAD_UP;
+	case 's':
+	case 'S':
+		return K_GP_DPAD_DOWN;
+	case 'a':
+	case 'A':
+		return K_GP_DPAD_LEFT;
+	case 'd':
+	case 'D':
+		return K_GP_DPAD_RIGHT;
+	default:
+		return key;
+	}
+}
+
 EMSCRIPTEN_KEEPALIVE int Web_TouchKey (int key, int down)
 {
-	Key_Event(key, down ? true : false);
+	Key_Event(Web_TouchKeyForMenu(key), down ? true : false);
 	return 1;
 }
 
