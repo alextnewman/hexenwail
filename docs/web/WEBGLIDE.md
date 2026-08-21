@@ -426,7 +426,7 @@ goal — there is no desktop build.
 
 * [`ARCHITECTURE.md`](ARCHITECTURE.md) — layering, the macro contract, non-goals.
 * [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md) — the default renderer.
-* [`PERF_OVERLAY.md`](PERF_OVERLAY.md) — copyable raw capture used to measure this renderer.
+* [`PERF_CAPTURE.md`](PERF_CAPTURE.md) — copyable raw capture used to measure this renderer.
 * [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md) — an idea for what comes *after* this
   renderer is correct. It is gated; do not start it early.
 * [`../PWA.md`](../PWA.md) — the launcher's renderer toggle and deployment.

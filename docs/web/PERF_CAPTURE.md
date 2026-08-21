@@ -1,4 +1,4 @@
-# Web performance capture
+# Raw web performance capture
 
 **Status:** shipping, off by default. Shared by the software renderer and
 WebGlide.
@@ -43,6 +43,9 @@ back to the launcher.
 Intervals of one second or more are treated as loading/background stalls and
 excluded. Collection and integer counters are the only per-frame overhead;
 formatting and DOM updates happen once per completed 128-frame window.
+Rows describe host callbacks; a callback that intentionally skips drawing has
+zero rendering-stage times and its work appears in `engine_other_ms`. Report
+delivery is excluded from the following frame's timing baseline.
 
 ## Implementation
 

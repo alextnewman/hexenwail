@@ -60,9 +60,9 @@ static void WebPerf_EmitReport (void)
 {
 	static char	report[PERF_REPORT_BYTES];
 	size_t		used;
-	int		i;
+	int		i, written;
 
-	q_snprintf (report, sizeof(report),
+	written = q_snprintf (report, sizeof(report),
 		"hexenwail_perf_v1\n"
 		"renderer=%s\n"
 		"resolution=%dx%d\n"
@@ -70,13 +70,15 @@ static void WebPerf_EmitReport (void)
 		"frame,interval_ms,host_ms,callback_wait_ms,view_ms,ui_ms,"
 		"present_ms,engine_other_ms,draws,tris,uploads,upload_kb\n",
 		WebPerf_RendererName (), vid.width, vid.height, perf.frame_count);
-	used = strlen (report);
+	if (written < 0)
+		return;
+	used = ((size_t)written < sizeof(report)) ? (size_t)written : sizeof(report) - 1;
 
 	for (i = 0; i < perf.frame_count && used < sizeof(report) - 1; i++)
 	{
 		const webperf_frame_t *frame = &perf.frames[i];
 
-		q_snprintf (report + used, sizeof(report) - used,
+		written = q_snprintf (report + used, sizeof(report) - used,
 			"%u,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%d,%d\n",
 			frame->sequence, frame->interval_ms, frame->host_ms,
 			frame->wait_ms, frame->stage_ms[WEBPERF_REFRESH],
@@ -84,7 +86,14 @@ static void WebPerf_EmitReport (void)
 			frame->stage_ms[WEBPERF_PRESENT], frame->other_ms,
 			frame->counters.drawcalls, frame->counters.tris,
 			frame->counters.uploads, frame->counters.uploadkb);
-		used = strlen (report);
+		if (written < 0)
+			break;
+		if ((size_t)written >= sizeof(report) - used)
+		{
+			used = sizeof(report) - 1;
+			break;
+		}
+		used += (size_t)written;
 	}
 
 	EM_ASM({
@@ -94,18 +103,18 @@ static void WebPerf_EmitReport (void)
 	perf.frame_count = 0;
 }
 
-static void WebPerf_StorePreviousFrame (double now)
+static qboolean WebPerf_StorePreviousFrame (double now)
 {
 	webperf_frame_t	*frame;
 	double		interval, measured;
 	int		i;
 
 	if (!perf.active || !perf.host_complete || perf.prev_host_begin <= 0)
-		return;
+		return false;
 
 	interval = (now - perf.prev_host_begin) * 1000.0;
 	if (interval <= 0 || interval >= PERF_HITCH_MS)
-		return;
+		return false;
 
 	frame = &perf.frames[perf.frame_count++];
 	frame->sequence = ++perf.sequence;
@@ -123,7 +132,11 @@ static void WebPerf_StorePreviousFrame (double now)
 	frame->other_ms = (perf.host_ms > measured) ? perf.host_ms - measured : 0;
 
 	if (perf.frame_count == PERF_CAPTURE_FRAMES)
+	{
 		WebPerf_EmitReport ();
+		return true;
+	}
+	return false;
 }
 
 void WebPerf_Init (void)
@@ -136,7 +149,8 @@ void WebPerf_BeginHostFrame (void)
 	double	now = Sys_DoubleTime ();
 	int	i;
 
-	WebPerf_StorePreviousFrame (now);
+	if (WebPerf_StorePreviousFrame (now))
+		now = Sys_DoubleTime ();
 	perf.active = (scr_perf.integer > 0);
 	perf.host_begin = now;
 	perf.prev_host_begin = now;
@@ -158,10 +172,6 @@ void WebPerf_EndHostFrame (void)
 	perf.host_complete = true;
 }
 
-void WebPerf_BeginFrame (void)
-{
-}
-
 void WebPerf_BeginStage (webperf_stage_t stage)
 {
 	if (!perf.active)
@@ -175,8 +185,4 @@ void WebPerf_EndStage (webperf_stage_t stage)
 		return;
 	perf.stage_ms[stage] += (Sys_DoubleTime () - perf.stage_begin[stage]) * 1000.0;
 	perf.stage_begin[stage] = 0;
-}
-
-void WebPerf_EndFrame (void)
-{
 }

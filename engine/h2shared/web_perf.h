@@ -54,9 +54,7 @@ void WebPerf_Init (void);		/* registers scr_perf; call from SCR_Init */
 
 void WebPerf_BeginHostFrame (void);
 void WebPerf_EndHostFrame (void);
-void WebPerf_BeginFrame (void);
 void WebPerf_BeginStage (webperf_stage_t stage);
 void WebPerf_EndStage (webperf_stage_t stage);
-void WebPerf_EndFrame (void);
 
 #endif	/* __HX2_WEB_PERF_H */

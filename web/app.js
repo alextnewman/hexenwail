@@ -12,9 +12,7 @@ const STORAGE_ROOT = 'hexenwail';
 
 function getEngineArguments() {
   const args = [...ENGINE_ARGUMENTS];
-  if (state.preferences.perfCapture) {
-    args.push('+scr_perf', '1');
-  }
+  args.push('+scr_perf', state.preferences.perfCapture ? '1' : '0');
   return args;
 }
 const PREFERENCES_KEY = 'hexenwail-pwa-preferences-v1';

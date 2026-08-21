@@ -33,6 +33,8 @@ test('launcher passes the configured perf capture to the engine on startup', () 
   assert.match(engineArgs, /\+scr_perf/,
     'the launch args must enable the engine capture cvar');
   assert.match(engineArgs, /state\.preferences\.perfCapture/);
+  assert.match(engineArgs, /\? '1' : '0'/,
+    'the launcher must explicitly disable an archived capture setting');
 });
 
 test('ensureEngineScriptLoaded routes the WebGlide preference to the GPU bundle URL', () => {

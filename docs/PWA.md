@@ -241,7 +241,7 @@ the launcher, play for at least 128 frames, then use **Show launcher** and
 rendering stages and renderer counters without drawing an in-game overlay.
 The copied text also contains browser metadata and the bounded runtime log.
 See
-[`web/PERF_OVERLAY.md`](web/PERF_OVERLAY.md).
+[`web/PERF_CAPTURE.md`](web/PERF_CAPTURE.md).
 
 ## Keyboard
 

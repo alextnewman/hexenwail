@@ -67,13 +67,9 @@
 //#include "r_local.h"
 #if defined(WEBQUAKE)
 #include "web_perf.h"
-#define SCR_PERF_FRAME_BEGIN()	WebPerf_BeginFrame()
-#define SCR_PERF_FRAME_END()	WebPerf_EndFrame()
 #define SCR_PERF_BEGIN(stage)	WebPerf_BeginStage(stage)
 #define SCR_PERF_END(stage)	WebPerf_EndStage(stage)
 #else
-#define SCR_PERF_FRAME_BEGIN()
-#define SCR_PERF_FRAME_END()
 #define SCR_PERF_BEGIN(stage)
 #define SCR_PERF_END(stage)
 #endif
@@ -1340,8 +1336,6 @@ void SCR_UpdateScreen (void)
 	if (!scr_initialized || !con_initialized)
 		return;		// not initialized yet
 
-	SCR_PERF_FRAME_BEGIN();
-
 //
 // check for vid changes
 //
@@ -1500,7 +1494,6 @@ void SCR_UpdateScreen (void)
 	}
 
 	SCR_PERF_END(WEBPERF_PRESENT);
-	SCR_PERF_FRAME_END();
 }
 
 
