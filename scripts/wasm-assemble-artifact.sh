@@ -25,6 +25,9 @@ BUILD_BIN="engine/build/bin"
 # up its own .wasm sibling by basename, and a rename here breaks the
 # runtime fetch.
 GL_BUILD_BIN="${GL_BUILD_BIN:-engine/build-webgl2/bin}"
+# Optional WebGPU presenter feasibility bundle. This still contains the
+# software rasterizer; it is not the future WebGlideNitro renderer.
+GPU_BUILD_BIN="${GPU_BUILD_BIN:-engine/build-webgpu/bin}"
 
 if [[ ! "$BUILD_VERSION" =~ ^[A-Za-z0-9._-]+$ ]]; then
 	echo "Invalid PWA build version: $BUILD_VERSION" >&2
@@ -76,6 +79,23 @@ else
 		"assembling a software-only PWA artifact." \
 		"Run './scripts/wasm-build.sh webgl2 engine/build-webgl2' before" \
 		"re-running this script to ship the experimental WebGlide bundle too."
+fi
+
+if [ -d "$GPU_BUILD_BIN" ]; then
+	cp "$GPU_BUILD_BIN/hexenwail-webgpu.js" "$DIST_DIR/"
+	cp "$GPU_BUILD_BIN/hexenwail-webgpu.wasm" "$DIST_DIR/"
+	if [ -f "$GPU_BUILD_BIN/hexenwail-webgpu.data" ]; then
+		cp "$GPU_BUILD_BIN/hexenwail-webgpu.data" "$DIST_DIR/"
+	fi
+	if [ -f "$GPU_BUILD_BIN/hexenwail-webgpu.worker.js" ]; then
+		cp "$GPU_BUILD_BIN/hexenwail-webgpu.worker.js" "$DIST_DIR/"
+	fi
+	if [ -f "$GPU_BUILD_BIN/hexenwail-webgpu.html" ]; then
+		cp "$GPU_BUILD_BIN/hexenwail-webgpu.html" "$DIST_DIR/engine-shell-debug-webgpu.html"
+	fi
+else
+	echo "notice: WebGPU presenter build directory not found at $GPU_BUILD_BIN;" \
+		"continuing without the optional feasibility bundle."
 fi
 
 echo "Assembled PWA artifact in $DIST_DIR:"
