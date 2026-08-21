@@ -68,6 +68,7 @@ static GLuint		gl2_world_vao;
 static GLuint		*gl2_surf_indices;	/* static, one run per surface */
 static int		gl2_total_indices;
 static GLuint		*gl2_frame_indices;	/* staging for one batch */
+static int		gl2_world_ibo_offset;
 
 static int		*gl2_texchain;		/* head per world texture */
 static int		gl2_numtexchains;
@@ -770,6 +771,7 @@ static void GL2_BuildWorldBuffers (qmodel_t *world)
 	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, gl2_world_ibo);
 	glBufferData (GL_ELEMENT_ARRAY_BUFFER,
 			(GLsizeiptr)totalindices * sizeof(GLuint), NULL, GL_STREAM_DRAW);
+	gl2_world_ibo_offset = 0;
 
 	glEnableVertexAttribArray (0);
 	glVertexAttribPointer (0, 3, GL_FLOAT, GL_FALSE,
@@ -999,9 +1001,22 @@ static void GL2_DrawIndices (int count)
 {
 	if (count <= 0)
 		return;
-	glBufferSubData (GL_ELEMENT_ARRAY_BUFFER, 0,
+
+	if (gl2_world_ibo_offset + count > gl2_total_indices)
+	{
+		glBufferData (GL_ELEMENT_ARRAY_BUFFER,
+			(GLsizeiptr)gl2_total_indices * sizeof(GLuint),
+			NULL, GL_STREAM_DRAW);
+		gl2_world_ibo_offset = 0;
+	}
+
+	glBufferSubData (GL_ELEMENT_ARRAY_BUFFER,
+			(GLintptr)gl2_world_ibo_offset * sizeof(GLuint),
 			(GLsizeiptr)count * sizeof(GLuint), gl2_frame_indices);
-	glDrawElements (GL_TRIANGLES, count, GL_UNSIGNED_INT, (const void *)0);
+	glDrawElements (GL_TRIANGLES, count, GL_UNSIGNED_INT,
+			(const void *)(uintptr_t)
+			((size_t)gl2_world_ibo_offset * sizeof(GLuint)));
+	gl2_world_ibo_offset += count;
 	gl2_frame_polys += count / 3;
 	gl2_frame_batches++;
 }
@@ -1329,6 +1344,29 @@ static void GL2_DrawSkyChain (void)
 	GL2_Bind (2, gl2_alphasky);
 
 	GL2_DrawIndices (count);
+}
+
+/*
+================
+GL2_BeginWorldFrame
+
+Orphan the streaming index buffer once per frame.  Draws then append into
+non-overlapping ranges; if brush entities exhaust the store, GL2_DrawIndices
+orphans it again before wrapping.
+================
+*/
+void GL2_BeginWorldFrame (void)
+{
+	gl2_world_ibo_offset = 0;
+	if (!gl2_world_ibo || gl2_total_indices <= 0)
+		return;
+
+	glBindVertexArray (gl2_world_vao);
+	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, gl2_world_ibo);
+	glBufferData (GL_ELEMENT_ARRAY_BUFFER,
+			(GLsizeiptr)gl2_total_indices * sizeof(GLuint),
+			NULL, GL_STREAM_DRAW);
+	glBindVertexArray (0);
 }
 
 /*
@@ -1837,6 +1875,7 @@ void GL2_WorldShutdown (void)
 	free (gl2_frame_indices);
 	gl2_frame_indices = NULL;
 	gl2_total_indices = 0;
+	gl2_world_ibo_offset = 0;
 	free (gl2_texchain);
 	gl2_texchain = NULL;
 	free (gl2_textures_by_index);
