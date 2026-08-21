@@ -33,6 +33,10 @@ const OPTIONAL_ASSETS = [
   './hexenwail-webglide.wasm',
   './hexenwail-webglide.data',
   './hexenwail-webglide.worker.js',
+  './hexenwail-webgpu.js',
+  './hexenwail-webgpu.wasm',
+  './hexenwail-webgpu.data',
+  './hexenwail-webgpu.worker.js',
 ];
 const CORE_ASSET_URLS = CORE_ASSETS.map((asset) => new URL(asset, self.location).href);
 const OPTIONAL_ASSET_URLS = OPTIONAL_ASSETS.map((asset) => new URL(asset, self.location).href);

@@ -32,6 +32,19 @@ if(NOT WEB_RENDERER STREQUAL "software" AND NOT WEB_RENDERER STREQUAL "webgl2")
 endif()
 message(STATUS "Web renderer: ${WEB_RENDERER}")
 
+# The software rasterizer and its accelerated presenter are separate layers.
+# WebGPU is an opt-in feasibility path; WebGlide continues to own its WebGL2
+# context directly and cannot select a presenter.
+set(WEB_PRESENTER "webgl2" CACHE STRING "Software renderer presenter: webgl2 or webgpu")
+set_property(CACHE WEB_PRESENTER PROPERTY STRINGS webgl2 webgpu)
+if(NOT WEB_PRESENTER STREQUAL "webgl2" AND NOT WEB_PRESENTER STREQUAL "webgpu")
+    message(FATAL_ERROR "WEB_PRESENTER must be 'webgl2' or 'webgpu' (got '${WEB_PRESENTER}')")
+endif()
+if(WEB_RENDERER STREQUAL "webgl2" AND NOT WEB_PRESENTER STREQUAL "webgl2")
+    message(FATAL_ERROR "WEB_PRESENTER only applies to WEB_RENDERER=software")
+endif()
+message(STATUS "Software presenter: ${WEB_PRESENTER}")
+
 add_compile_options(
     -Wall
     -Wextra
@@ -82,6 +95,9 @@ if(WEB_RENDERER STREQUAL "webgl2")
     )
 else()
     add_compile_definitions(WEBSOFT)
+    if(WEB_PRESENTER STREQUAL "webgpu")
+        add_compile_definitions(WEBGPU_PRESENT)
+    endif()
     list(APPEND RENDERER_SOURCES
         ${ENGINE_TOP}/hexen2/r_alias.c
         ${ENGINE_TOP}/hexen2/r_main.c
@@ -218,8 +234,12 @@ if(WEB_RENDERER STREQUAL "webgl2")
 else()
     list(APPEND PLATFORM_SOURCES
         ${COMMONDIR}/vid_soft_web.c
-        ${COMMONDIR}/web_canvas_gl2.c
     )
+    if(WEB_PRESENTER STREQUAL "webgpu")
+        list(APPEND PLATFORM_SOURCES ${COMMONDIR}/web_canvas_wgpu.c)
+    else()
+        list(APPEND PLATFORM_SOURCES ${COMMONDIR}/web_canvas_gl2.c)
+    endif()
 endif()
 add_compile_definitions(_NO_MIDIDRV)
 
@@ -246,6 +266,12 @@ target_link_options(uhexen2_web PRIVATE
     --shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html
 )
 
+if(WEB_PRESENTER STREQUAL "webgpu")
+    target_link_options(uhexen2_web PRIVATE
+        --js-library=${CMAKE_CURRENT_SOURCE_DIR}/web/webgpu_present.js
+    )
+endif()
+
 if(USE_SOUND AND USE_CODEC_VORBIS)
     # The Emscripten vorbis port pulls in ogg automatically, but naming both
     # keeps the dependency explicit and lets `embuilder build ogg vorbis`
@@ -265,6 +291,8 @@ if(WEB_RENDERER STREQUAL "webgl2")
     # The experimental WebGlide bundle ships alongside the software one and
     # is picked by the launcher's renderer toggle, so it needs its own name.
     set(WEB_OUTPUT_NAME hexenwail-webglide)
+elseif(WEB_PRESENTER STREQUAL "webgpu")
+    set(WEB_OUTPUT_NAME hexenwail-webgpu)
 else()
     set(WEB_OUTPUT_NAME hexenwail)
 endif()
