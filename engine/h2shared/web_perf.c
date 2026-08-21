@@ -146,6 +146,8 @@ static void WebPerf_HistoryStats (double *worst_ms, double *low_ms, double *avg_
 	if (n <= 0)
 		return;
 
+	/* The ring is copied in storage order, not age order: every statistic
+	 * below is order-independent once the values are sorted. */
 	for (i = 0; i < n; i++)
 	{
 		sorted[i] = perf.history[i];
@@ -163,7 +165,7 @@ static void WebPerf_HistoryStats (double *worst_ms, double *low_ms, double *avg_
 
 	*avg_ms = total / n;
 	*worst_ms = sorted[n - 1];
-	*low_ms = sorted[(n * 99) / 100 >= n ? n - 1 : (n * 99) / 100];
+	*low_ms = sorted[(n * 99) / 100];	/* always < n */
 }
 
 static const char *WebPerf_RendererName (void)
