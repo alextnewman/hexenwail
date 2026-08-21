@@ -15,10 +15,13 @@ test('WebGlide converts alias 16.16 skin coordinates to normalized UVs', () => {
     /out->t\s*=\s*st->t\s*\*\s*\(1\.0f\s*\/\s*([0-9.]+)f\)\s*\*\s*ih\s*;/,
   );
   assert.ok(sScale && tScale, 'both alias UV axes remove the fixed-point scale');
-  const fixedS = 48 * 65536;
-  const fixedT = 24 * 65536;
-  assert.equal(fixedS / Number(sScale[1]) / 96, 0.5);
-  assert.equal(fixedT / Number(tScale[1]) / 96, 0.25);
+  const skinSize = 96;
+  const texelS = 48;
+  const texelT = 24;
+  const fixedS = texelS * 65536;
+  const fixedT = texelT * 65536;
+  assert.equal(fixedS / Number(sScale[1]) / skinSize, texelS / skinSize);
+  assert.equal(fixedT / Number(tScale[1]) / skinSize, texelT / skinSize);
 });
 
 test('WebAudio lifecycle promises cannot escape as unhandled rejections', () => {
