@@ -161,6 +161,7 @@ cvar_t gl_glide_crt = {"gl_glide_crt", "0.35", CVAR_ARCHIVE};
 cvar_t gl_glide_crt_mask = {"gl_glide_crt_mask", "0.35", CVAR_ARCHIVE};
 cvar_t gl_glide_crt_curve = {"gl_glide_crt_curve", "0.15", CVAR_ARCHIVE};
 cvar_t gl_glide_crt_vignette = {"gl_glide_crt_vignette", "0.2", CVAR_ARCHIVE};
+cvar_t gl_glide_debug = {"gl_glide_debug", "0", CVAR_NONE};
 
 /*
 =============================================================================
@@ -259,6 +260,7 @@ static void Web_RegisterRendererCvars (void)
 	Cvar_RegisterVariable(&gl_glide_crt_mask);
 	Cvar_RegisterVariable(&gl_glide_crt_curve);
 	Cvar_RegisterVariable(&gl_glide_crt_vignette);
+	Cvar_RegisterVariable(&gl_glide_debug);
 
 	Cvar_SetCallback(&gl_texturemode, GL2_FilterChanged);
 	Cvar_SetCallback(&gl_glide_anisotropy, GL2_FilterChanged);

@@ -39,6 +39,7 @@ const WEBGLIDE_MACROS = [
   'GLIDE_FOG_FN',
   'GLIDE_DITHER_FN',
   'GLIDE_LOD_FN',
+  'GLIDE_PALETTE_FN',
 ];
 
 function tokenize(expression) {

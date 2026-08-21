@@ -220,6 +220,14 @@ void GL2_SetupSceneUniforms (const gl2program_t *program)
 		glUniform1f (program->u_lodbias, gl_glide_lodbias.value);
 	if (program->u_mipdither >= 0)
 		glUniform1f (program->u_mipdither, gl_glide_mipmapdither.value);
+	if (program->u_filter >= 0)
+		glUniform1i (program->u_filter, gl_filter_idx);
+	if (program->u_debug >= 0)
+		glUniform1i (program->u_debug, (int)gl_glide_debug.value);
+	if (program->u_fullbright >= 0)
+		glUniform1i (program->u_fullbright,
+			gl_fullbrights.integer ? vid.fullbright : 256);
+	GL2_BindPaletteTables ();
 }
 
 /*
