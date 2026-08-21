@@ -897,6 +897,9 @@ void GL2_DrawAliasModel (entity_t *entity)
 	plightvec[0] = -forward[0];
 	plightvec[1] = -right[0];
 	plightvec[2] = -up[0];
+	if ((model->flags & EF_ROTATE) ||
+	    ((entity->drawflags & MLS_MASKIN) == MLS_ABSLIGHT))
+		VectorClear (plightvec);
 
 	iw = 1.0f / (float)pmdl->skinwidth;
 	ih = 1.0f / (float)pmdl->skinheight;
