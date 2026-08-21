@@ -27,6 +27,7 @@
  */
 
 #include "quakedef.h"
+#include "web_perf.h"
 #include "d_local.h"
 #include "web_canvas.h"
 
@@ -550,6 +551,7 @@ void VID_Update (vrect_t *rects)
 	VID_DestRect (vid.width, vid.height, &dx, &dy, &dw, &dh);
 	WebCanvas_Present (vid_framebuffer, vid.rowbytes,
 		canvas_width, canvas_height, dx, dy, dw, dh);
+	WebPerf_CountUpload ((size_t)vid.rowbytes * vid.height);
 }
 
 void VID_SetPalette (const unsigned char *palette)

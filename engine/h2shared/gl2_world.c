@@ -35,6 +35,7 @@
  */
 
 #include "quakedef.h"
+#include "web_perf.h"
 #include "gl2_glide.h"
 
 #define LMBLOCK_WIDTH		128
@@ -1016,6 +1017,7 @@ static void GL2_DrawIndices (int count)
 	glDrawElements (GL_TRIANGLES, count, GL_UNSIGNED_INT,
 			(const void *)(uintptr_t)
 			(gl2_world_ibo_offset * sizeof(GLuint)));
+	WebPerf_CountDraw (count / 3);
 	gl2_world_ibo_offset += count;
 	gl2_frame_polys += count / 3;
 	gl2_frame_batches++;

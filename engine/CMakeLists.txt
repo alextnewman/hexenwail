@@ -64,6 +64,7 @@ set(RENDERER_SOURCES
     ${ENGINE_TOP}/hexen2/r_part.c
     ${COMMONDIR}/model.c
     ${COMMONDIR}/screen.c
+    ${COMMONDIR}/web_perf.c
 )
 
 if(WEB_RENDERER STREQUAL "webgl2")

@@ -27,6 +27,7 @@
  */
 
 #include "quakedef.h"
+#include "web_perf.h"
 #include "gl2_glide.h"
 
 /* An M-series GPU will happily rasterise more than this, but the frame is
@@ -550,6 +551,7 @@ static void GL2_ScanOutPass (GLuint source, GLuint history, int flags, float ble
 
 	glBindVertexArray (gl2_empty_vao);
 	glDrawArrays (GL_TRIANGLES, 0, 3);
+	WebPerf_CountDraw (1);
 	glBindVertexArray (0);
 }
 
