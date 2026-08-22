@@ -1,13 +1,9 @@
 /*
- * web_perf.h -- frame instrumentation and the on-screen performance overlay
- * for the web platform.  Shared by both web renderers (the default software
- * rasteriser and WebGlide).  See docs/web/PERF_OVERLAY.md.
+ * web_perf.h -- low-overhead frame capture for the web platform.
  *
  * The engine runs on one WASM thread, so the interesting question is always
  * "which stage of this frame spent the milliseconds": the 3D refresh, the 2D
- * layer, presentation, or everything outside SCR_UpdateScreen (simulation,
- * sound, and the browser's own time between rAF callbacks).  This module
- * measures those four numbers and draws them.
+ * layer, presentation, other engine work, or time between rAF callbacks.
  *
  * Copyright (C) 2026  Hexenwail contributors
  *
@@ -33,15 +29,12 @@
 typedef enum
 {
 	WEBPERF_REFRESH = 0,	/* V_RenderView: the 3D scene */
-	WEBPERF_2D,		/* HUD, menus, console, this overlay */
+	WEBPERF_2D,		/* HUD, menus and console */
 	WEBPERF_PRESENT,	/* VID_Update: scan-out / framebuffer upload */
 	WEBPERF_STAGE_COUNT
 } webperf_stage_t;
 
-/* Per-frame counters.  Cleared by WebPerf_BeginFrame and snapshotted by
- * WebPerf_EndFrame, so a renderer may bump them from anywhere in the frame.
- * Not every field is meaningful in every renderer: the overlay hides the
- * ones that stayed zero. */
+/* Per-frame counters.  Not every field is meaningful in every renderer. */
 typedef struct
 {
 	int	drawcalls;	/* GPU draw calls (WebGlide) */
@@ -52,8 +45,6 @@ typedef struct
 
 extern webperf_counters_t	webperf;
 
-/* Counting is a couple of integer adds, so it is unconditional: the numbers
- * have to be right the moment the overlay is switched on. */
 #define WebPerf_CountDraw(numtris) \
 	do { webperf.drawcalls++; webperf.tris += (numtris); } while (0)
 #define WebPerf_CountUpload(numbytes) \
@@ -61,12 +52,9 @@ extern webperf_counters_t	webperf;
 
 void WebPerf_Init (void);		/* registers scr_perf; call from SCR_Init */
 
-void WebPerf_BeginFrame (void);
+void WebPerf_BeginHostFrame (void);
+void WebPerf_EndHostFrame (void);
 void WebPerf_BeginStage (webperf_stage_t stage);
 void WebPerf_EndStage (webperf_stage_t stage);
-void WebPerf_EndFrame (void);
-
-/* Draws the overlay in the 2D phase.  No-op unless scr_perf is set. */
-void WebPerf_Draw (void);
 
 #endif	/* __HX2_WEB_PERF_H */

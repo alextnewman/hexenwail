@@ -37,8 +37,8 @@ Do not start Nitro until all of these are true:
 2. Its known gaps are closed or explicitly accepted, in particular the ones
    listed in [`WEBGLIDE.md`](WEBGLIDE.md) (glow settings, the cvars registered
    only so the client links).
-3. Frame cost is *measured*, not guessed, with the performance overlay
-   ([`PERF_OVERLAY.md`](PERF_OVERLAY.md)) on the actual iPad target, and a
+3. Frame cost is *measured*, not guessed, with the raw performance capture
+   ([`PERF_CAPTURE.md`](PERF_CAPTURE.md)) on the actual iPad target, and a
    baseline is written down.
 
 Point 3 is why the overlay was built first. Every idea below is a trade — it
@@ -88,5 +88,5 @@ on one WASM thread and that stay inside the palette/colormap look:
 
 * [`ARCHITECTURE.md`](ARCHITECTURE.md) — layering, the macro contract, non-goals.
 * [`WEBGLIDE.md`](WEBGLIDE.md) — the renderer Nitro would sit on top of.
-* [`PERF_OVERLAY.md`](PERF_OVERLAY.md) — the instrument that gates it.
+* [`PERF_CAPTURE.md`](PERF_CAPTURE.md) — the instrument that gates it.
 * [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md) — the default renderer.

@@ -12,15 +12,14 @@ const STORAGE_ROOT = 'hexenwail';
 
 function getEngineArguments() {
   const args = [...ENGINE_ARGUMENTS];
-  if (state.preferences.perfOverlay > 0) {
-    args.push('+scr_perf', String(state.preferences.perfOverlay));
-  }
+  args.push('+scr_perf', state.preferences.perfCapture ? '1' : '0');
   return args;
 }
 const PREFERENCES_KEY = 'hexenwail-pwa-preferences-v1';
 const SAVE_SYNC_INTERVAL_MS = 10000;
 const MAX_IMPORT_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_RUNTIME_LOG_ENTRIES = 200;
+const PERF_REPORT_KEY = 'hexenwail-latest-perf-report';
 /* Phone mode is about the short side of the panel, not the long one: every
  * phone has a short side well under 500 CSS px in either orientation, while
  * the smallest iPad short side is ~740. The old 820px rule matched iPad
@@ -55,7 +54,7 @@ const state = {
     touchControls: 'auto',
     handedness: 'right',
     lookSensitivity: 1,
-    perfOverlay: 0,
+    perfCapture: false,
     phoneHintSeen: false,
     /* Which WebAssembly bundle to load at launcher startup:
      *   'software' -> ./hexenwail.js            (shipping, supported default)
@@ -70,6 +69,7 @@ const state = {
   phoneMode: false,
   immersive: false,
   canvasResizePending: false,
+  perfReport: '',
 };
 
 const ui = {};
@@ -136,6 +136,42 @@ function appendRuntimeLog(prefix, message) {
     state.runtimeLogEntries.splice(0, state.runtimeLogEntries.length - MAX_RUNTIME_LOG_ENTRIES);
   }
   renderRuntimeLog();
+}
+
+function renderPerfReport() {
+  if (!ui.perfOutput) return;
+  const environment = [
+    'capture_environment',
+    `captured_at=${new Date().toISOString()}`,
+    `user_agent=${navigator.userAgent}`,
+    `device_pixel_ratio=${globalThis.devicePixelRatio || 1}`,
+    `canvas_pixels=${ui.canvas?.width || 0}x${ui.canvas?.height || 0}`,
+    '',
+  ].join('\n');
+  ui.perfOutput.value = `${environment}${state.perfReport}\n\nruntime_log\n${state.runtimeLogEntries.join('\n')}`;
+}
+
+async function copyPerfReport() {
+  renderPerfReport();
+  if (!ui.perfOutput?.value) return;
+  try {
+    await navigator.clipboard.writeText(ui.perfOutput.value);
+    if (ui.perfMessage) ui.perfMessage.textContent = 'Performance report copied.';
+  } catch {
+    ui.perfOutput.focus();
+    ui.perfOutput.select();
+    if (ui.perfMessage) ui.perfMessage.textContent = 'Select all and copy the highlighted report.';
+  }
+}
+
+function handlePerfReport(event) {
+  state.perfReport = String(event.detail ?? '');
+  try {
+    sessionStorage.setItem(PERF_REPORT_KEY, state.perfReport);
+  } catch {
+    // The report remains available for this launcher session.
+  }
+  renderPerfReport();
 }
 
 function logToConsole(prefix, message, error = false) {
@@ -660,8 +696,9 @@ function loadPreferences() {
     if (['right', 'left'].includes(saved.handedness)) state.preferences.handedness = saved.handedness;
     const sensitivity = Number(saved.lookSensitivity);
     if (Number.isFinite(sensitivity) && sensitivity >= 0.5 && sensitivity <= 2) state.preferences.lookSensitivity = sensitivity;
-    const perfOverlay = Number(saved.perfOverlay);
-    if (Number.isInteger(perfOverlay) && perfOverlay >= 0 && perfOverlay <= 3) state.preferences.perfOverlay = perfOverlay;
+    state.preferences.perfCapture = typeof saved.perfCapture === 'boolean'
+      ? saved.perfCapture
+      : Number(saved.perfOverlay) > 0;
     state.preferences.phoneHintSeen = Boolean(saved.phoneHintSeen);
     if (['software', 'webglide'].includes(saved.renderer)) state.preferences.renderer = saved.renderer;
   } catch (error) {
@@ -692,7 +729,7 @@ function applyPreferences() {
   if (ui.touchControlsSetting) ui.touchControlsSetting.value = state.preferences.touchControls;
   if (ui.handednessSetting) ui.handednessSetting.value = state.preferences.handedness;
   if (ui.lookSensitivitySetting) ui.lookSensitivitySetting.value = String(state.preferences.lookSensitivity);
-  if (ui.perfSetting) ui.perfSetting.value = String(state.preferences.perfOverlay);
+  if (ui.perfSetting) ui.perfSetting.value = state.preferences.perfCapture ? '1' : '0';
   if (ui.rendererSetting) ui.rendererSetting.value = state.preferences.renderer;
   if (ui.phoneHint && state.preferences.phoneHintSeen) {
     ui.phoneHint.textContent = 'Touch controls are available during play. Landscape remains recommended.';
@@ -1310,6 +1347,8 @@ function bindUi() {
     lookSensitivitySetting: document.getElementById('look-sensitivity-setting'),
     perfSetting: document.getElementById('perf-setting'),
     perfMessage: document.getElementById('perf-message'),
+    perfOutput: document.getElementById('perf-output'),
+    perfCopyButton: document.getElementById('perf-copy-button'),
     rendererSetting: document.getElementById('renderer-setting'),
     rendererMessage: document.getElementById('renderer-message'),
     phoneHint: document.getElementById('phone-hint'),
@@ -1322,6 +1361,7 @@ function bindUi() {
     windowedButton: document.getElementById('windowed-button'),
   });
   appendRuntimeLog('[launcher]', state.lastStatus);
+  if (state.perfReport) renderPerfReport();
 
   state.phoneControls = new PhoneControls(ui.phoneControlsRoot, {
     key: engineKey,
@@ -1358,6 +1398,7 @@ function bindUi() {
     event.target.value = '';
   });
   ui.fullscreenButton?.addEventListener('click', () => toggleFullscreenPlay());
+  ui.perfCopyButton?.addEventListener('click', () => copyPerfReport());
   ui.canvas?.addEventListener('click', tryCaptureInput);
   ui.phoneMenuButton?.addEventListener('click', openPhoneOverlay);
   ui.phoneResumeButton?.addEventListener('click', closePhoneOverlay);
@@ -1419,19 +1460,14 @@ function bindUi() {
     setTimeout(() => location.reload(), 60);
   });
   ui.perfSetting?.addEventListener('change', () => {
-    const next = Number(ui.perfSetting.value);
-    if (!Number.isInteger(next) || next < 0 || next > 3) {
-      return;
-    }
-    state.preferences.perfOverlay = next;
+    state.preferences.perfCapture = ui.perfSetting.value === '1';
     savePreferences();
     applyPreferences();
-    const labels = ['Off', 'FPS + frame time', 'Detailed breakdown', 'Frame-time graph'];
-    appendRuntimeLog('[launcher]', `Performance overlay set to ${next} (${labels[next]}).`);
+    appendRuntimeLog('[launcher]', `Performance capture ${state.preferences.perfCapture ? 'enabled' : 'disabled'}.`);
     if (ui.perfMessage) {
-      ui.perfMessage.textContent = next > 0
-        ? `Performance overlay enabled at level ${next} (${labels[next]}). It applies on the next launch.`
-        : 'Performance overlay disabled.';
+      ui.perfMessage.textContent = state.preferences.perfCapture
+        ? 'Raw performance capture enabled. It applies on the next launch.'
+        : 'Performance capture disabled.';
     }
   });
 
@@ -1455,6 +1491,7 @@ function bindUi() {
     state.gamepadConnected = false;
     updateTouchOnlyEnvironment();
   });
+  addEventListener('hexenwailperf', handlePerfReport);
   addEventListener('keydown', (event) => {
     if (event.isTrusted !== false) updateTouchOnlyEnvironment(true);
   });
@@ -1536,6 +1573,11 @@ function bindBootCallbacks() {
 
 async function init() {
   loadPreferences();
+  try {
+    state.perfReport = sessionStorage.getItem(PERF_REPORT_KEY) ?? '';
+  } catch {
+    state.perfReport = '';
+  }
   bindUi();
   try {
     const report = runWebGLDiagnostics();

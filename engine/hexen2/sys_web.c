@@ -1,5 +1,6 @@
 #include "quakedef.h"
 #include "debuglog.h"
+#include "web_perf.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -201,7 +202,9 @@ static void Web_MainFrame (void)
 	double delta = now - oldtime;
 	if (delta > 0.5)
 		delta = 0.1;
+	WebPerf_BeginHostFrame();
 	Host_Frame(delta);
+	WebPerf_EndHostFrame();
 	oldtime = now;
 }
 
