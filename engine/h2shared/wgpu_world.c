@@ -1097,9 +1097,6 @@ loc0:
 	if (r >= 0)
 		return r;
 
-	if ((back < 0) == side)
-		return -1;
-
 	surf = cl.worldmodel->surfaces + node->firstsurface;
 	for (i = 0; i < (int)node->numsurfaces; i++, surf++)
 	{
@@ -1137,9 +1134,7 @@ loc0:
 		return r >> 8;
 	}
 
-	node = node->children[!side];
-	VectorCopy (start, mid);
-	goto loc0;
+	return WGPUWorld_RecursiveLightPoint (node->children[!side], mid, end);
 }
 
 int WGPUWorld_LightPoint (const vec3_t point)
