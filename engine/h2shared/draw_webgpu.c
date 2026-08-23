@@ -171,7 +171,7 @@ static void Draw_Quad (int texture, float x, float y, float width, float height,
 		ui_runs[ui_run_count].texture = texture;
 		ui_runs[ui_run_count].first = ui_vertex_count;
 		ui_runs[ui_run_count].count = 6;
-		ui_runs[ui_run_count].reserved = 0;
+		ui_runs[ui_run_count].entity = 0;
 		ui_run_count++;
 	}
 

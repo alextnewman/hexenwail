@@ -106,7 +106,7 @@ most an optional visual and behavioural reference.
 | --- | --- | --- | --- | --- |
 | `software` (default) | `WEBSOFT` | `hexenwail.*` | `make build` | The supported renderer |
 | `webgl2` | `WEBGL2QUAKE` | `hexenwail-webglide.*` | `make build-webgl2` | Abortive experiment, kept buildable |
-| `webgpu` | `WEBGPUQUAKE` | `hexenwail-nitro.*` | `make build-nitro` | Technology preview, static world only |
+| `webgpu` | `WEBGPUQUAKE` | `hexenwail-nitro.*` | `make build-nitro` | Technology preview; world, entities and particles |
 
 The option value is `webgl2` and the macro is `WEBGL2QUAKE`, but the shipped
 bundle basename and every user-facing name are WebGlide — see
@@ -185,7 +185,7 @@ as everything else — the shell owns the page, the engine owns the game:
 | Platform backends | `engine/hexen2/sys_web.c`, `engine/h2shared/in_web.c`, `snd_web.c` | |
 | Music codec set | `engine/CMakeLists.txt` | `bgmusic.c` only offers a format whose codec registered itself in `S_CodecInit`, so the build file is what decides which formats exist at runtime — see below. |
 | VID / presentation | `vid_soft_web.c` + `web_canvas*.c` (software), `vid_webgl2.c` (WebGlide), `vid_webgpu.c` (Nitro) | |
-| Renderer | restored `d_*.c` / `r_*.c` (software), `r_webgl2.c` + `gl2_*.c` (WebGlide), `r_webgpu.c` + `wgpu_world.c` + `draw_webgpu.c` (Nitro) | The three renderers share no backend code. Nitro treats WebGlide as a visual and scene-preparation reference only; it contains no GL call and no `gl2_*` source. |
+| Renderer | restored `d_*.c` / `r_*.c` (software), `r_webgl2.c` + `gl2_*.c` (WebGlide), `r_webgpu.c` + `wgpu_world.c` + `wgpu_entity.c` + `draw_webgpu.c` (Nitro) | The three renderers share no backend code. Nitro treats WebGlide as a visual and scene-preparation reference only; it contains no GL call and no `gl2_*` source. |
 | WebGPU JS libraries | `engine/web/webgpu_present.js` (presenter), `engine/web/webgpu_nitro.js` (Nitro) | Linked with `--js-library`. WebGlide needs no such file because Emscripten already maps GL to WebGL2. `webgpu_nitro.js` is the only file in the Nitro build that touches the WebGPU API. |
 | Shared client (menu, sbar, console, screen) | `engine/hexen2`, `engine/h2shared` | Written against one API; renderer-specific gaps are filled by shim files, not by `#ifdef` sprinkling. |
 

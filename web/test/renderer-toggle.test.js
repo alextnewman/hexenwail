@@ -14,6 +14,9 @@ const webgpuNitro = readFileSync(join(repoRoot, 'engine/web/webgpu_nitro.js'), '
 const buildScript = readFileSync(join(repoRoot, 'scripts/wasm-build.sh'), 'utf8');
 const serviceWorker = readFileSync(join(repoRoot, 'web/sw.js'), 'utf8');
 const wasmAction = readFileSync(join(repoRoot, '.github/actions/wasm-build/action.yml'), 'utf8');
+const nitroEntity = readFileSync(join(repoRoot, 'engine/h2shared/wgpu_entity.c'), 'utf8');
+const nitroWorld = readFileSync(join(repoRoot, 'engine/h2shared/wgpu_world.c'), 'utf8');
+const nitroFront = readFileSync(join(repoRoot, 'engine/hexen2/r_webgpu.c'), 'utf8');
 
 test('renderer preference defaults to the shipping software bundle', () => {
   const prefsBlock = app.match(/preferences: \{([\s\S]*?)\},\n {2}touchOnlyEnvironment/)?.[1];
@@ -109,12 +112,14 @@ test('the launcher exposes an experimental, non-default WebGlide toggle', () => 
     'the card must frame WebGlide as modern shaders chasing the 3Dfx look, not a Voodoo-limits emulator');
   assert.match(card, /may render incorrectly/);
   assert.match(card, /target-feasibility step/);
-  // WebGlideNitro is a third, separate path. Its first slice draws the
-  // static world only, so the card must say so rather than let a user
-  // assume it is a playable renderer.
+  // WebGlideNitro is a third, separate path. It now draws entities and the
+  // view weapon, so the card must name what is still missing rather than
+  // let a user assume it is finished.
   assert.match(card, /WebGlideNitro/);
-  assert.match(card, /static world/);
+  assert.match(card, /brush entities/);
   assert.match(card, /technology preview/);
+  assert.match(card, /fog/,
+    'the card must still list the gaps that remain after the entity slice');
 });
 
 test('changing the toggle mid-play does not yank the tab out from a running game', () => {
@@ -215,6 +220,63 @@ test('WebGlideNitro is a native WebGPU renderer, not a GL translation layer', ()
   assert.match(webgpuNitro, /r8uint/);
   assert.match(webgpuNitro, /colormapTexture/);
   assert.match(webgpuNitro, /paletteTexture/);
+});
+
+test('WebGlideNitro draws entities, sprites and the view weapon its own way', () => {
+  // The entity source is Nitro's own, wired only into the webgpu branch.
+  const nitroBranch = cmake.match(/elseif\(WEB_RENDERER STREQUAL "webgpu"\)([\s\S]*?)\nelse\(\)/)?.[1];
+  assert.ok(nitroBranch, 'WEB_RENDERER=webgpu has its own renderer-source branch');
+  assert.match(nitroBranch, /wgpu_entity\.c/,
+    'the entity path is a Nitro source, not a shared or WebGlide one');
+  assert.doesNotMatch(nitroEntity, /#include\s+"(gl2_|r_webgl2)/,
+    'Nitro must not include a WebGlide header');
+  assert.doesNotMatch(nitroEntity, /\bGL2_\w+\s*\(/,
+    'Nitro must not call into WebGlide');
+  assert.doesNotMatch(nitroEntity, /\bgl[A-Z]\w+\s*\(/,
+    'nothing here may be a GL call');
+
+  // Ordering: opaque entities before anything translucent, and the view
+  // weapon last of all.
+  const renderView = nitroFront.match(/void R_RenderView \(void\)([\s\S]*?)\n\}/)?.[1];
+  assert.ok(renderView, 'R_RenderView is defined');
+  const opaque = renderView.indexOf('WGPUEntity_DrawEntitiesOnList (false)');
+  const endOpaque = renderView.indexOf('WGPUEntity_EndOpaque');
+  const translucent = renderView.indexOf('WGPUEntity_DrawEntitiesOnList (true)');
+  const viewModel = renderView.indexOf('WGPUEntity_DrawViewModel');
+  assert.ok(opaque > 0 && endOpaque > opaque && translucent > endOpaque
+    && viewModel > translucent,
+    'opaque entities, then translucent ones, then the view weapon');
+
+  // Indexed semantics survive the trip: entity lighting picks a colormap
+  // row and Hexen II's colorshade stays an index-to-index remap.
+  assert.match(nitroEntity, /colormap row/i);
+  assert.match(nitroEntity, /colorshade/);
+  assert.match(webgpuNitro, /tintTexture/);
+  assert.match(webgpuNitro, /Nitro_SetTintTable/);
+  assert.match(webgpuNitro, /modelShader/);
+  assert.match(webgpuNitro, /const modelPrimitive = \{ topology: 'triangle-list', cullMode: 'none' \}/,
+    'model winding flips with entity scale, so the depth test decides '
+    + 'visibility rather than a cull mode');
+
+  // Brush entities reuse the immutable world buffer through a dynamic
+  // uniform offset rather than a per-entity copy of the map.
+  assert.match(webgpuNitro, /hasDynamicOffset: true/);
+  assert.match(webgpuNitro, /ENTITY_STRIDE: 256/);
+  assert.doesNotMatch(webgpuNitro, /type: 'read-only-storage'/,
+    'the entity arena must stay a uniform buffer: compat mode allows no '
+    + 'storage buffers in the vertex stage');
+
+  // WebGPU has no glDepthRange, so the view weapon gets a viewport-depth
+  // slice instead, and the viewport is put back afterwards.
+  assert.match(webgpuNitro, /VIEWMODEL_DEPTH: 0\.3/);
+  assert.match(webgpuNitro, /setViewport\(0, 0, sceneWidth, sceneHeight, 0, 1\)/);
+
+  // The per-map gap report must not still claim entities are missing.
+  const gaps = nitroWorld.match(/void WGPUWorld_ReportGaps \(void\)([\s\S]*?)\n\}/)?.[1];
+  assert.ok(gaps, 'WGPUWorld_ReportGaps is defined');
+  assert.match(gaps, /world, entities and particles/);
+  assert.doesNotMatch(gaps, /not drawn: brush entities/);
+  assert.match(gaps, /not applied: animated light styles/);
 });
 
 test('the nitro build is reachable from the scripts, CI and the offline shell', () => {

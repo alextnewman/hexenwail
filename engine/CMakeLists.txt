@@ -110,6 +110,7 @@ elseif(WEB_RENDERER STREQUAL "webgpu")
         ${ENGINE_TOP}/hexen2/r_webgpu.c
         ${COMMONDIR}/draw_webgpu.c
         ${COMMONDIR}/wgpu_world.c
+        ${COMMONDIR}/wgpu_entity.c
         ${COMMONDIR}/gl_refrag.c
     )
 else()
