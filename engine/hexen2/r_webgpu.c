@@ -518,8 +518,8 @@ static void WGPU_SetupScene (wgpuscene_t *scene)
 	if (r_fullbright.integer || r_lightmap.integer)
 		scene->flags |= NITROSCENE_FULLBRIGHT;
 
-		VectorScale (vright, 1.5f, scene->particle_right);
-		VectorScale (vup, 1.5f, scene->particle_up);
+	VectorScale (vright, 1.5f, scene->particle_right);
+	VectorScale (vup, 1.5f, scene->particle_up);
 }
 
 /*
