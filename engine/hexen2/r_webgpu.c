@@ -129,6 +129,7 @@ int wgpu_frame_batches;
 int wgpu_frame_polys;
 
 static qboolean wgpu_frame_open;
+static qboolean wgpu_initialized;
 
 /*
 =============================================================================
@@ -575,14 +576,21 @@ static void Web_RegisterRendererCvars (void)
 
 void WebGPU_Init (void)
 {
+	if (wgpu_initialized)
+		return;
 	if (!Nitro_Init ())
 		Sys_Error ("WebGPU was not initialized by the launcher");
+	wgpu_initialized = true;
 }
 
 void WebGPU_Shutdown (void)
 {
+	if (!wgpu_initialized)
+		return;
 	WGPUWorld_Shutdown ();
 	Nitro_Shutdown ();
+	wgpu_initialized = false;
+	wgpu_frame_open = false;
 }
 
 void WebGPU_Resize (int width, int height)
