@@ -136,7 +136,8 @@ The web build renders with uHexen2's **classic 8bpp software rasteriser**, prese
 through an accelerated canvas (a WebGL2 palette-lookup blit). Two GPU
 renderers are retained and selectable at build time: WebGlide (WebGL2, an
 abortive experiment kept buildable) and WebGlideNitro (native WebGPU, a
-technology preview that currently draws only the static world).
+technology preview that draws the world, its entities, sprites, particles
+and the view weapon).
 
 **Requirements:** the [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html)
 (CI pins `4.0.23`) and Node.js 22+ for the PWA shell tests.

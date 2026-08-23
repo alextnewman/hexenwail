@@ -1468,7 +1468,7 @@ function bindUi() {
       : next === 'webgpu'
         ? 'software renderer with the experimental WebGPU presenter'
         : next === 'nitro'
-          ? 'WebGlideNitro native WebGPU renderer (static world only)'
+          ? 'WebGlideNitro native WebGPU renderer (technology preview)'
           : 'software renderer';
     appendRuntimeLog('[launcher]', `Renderer preference changed to ${next} (${label}).`);
     const enginePlaying = state.engineStarted && !state.runtimeExited;

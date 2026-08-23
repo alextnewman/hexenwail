@@ -45,8 +45,8 @@ change one thing, capture again.
 | `ui_ms` | HUD, menus and console. |
 | `present_ms` | `VID_Update`, including software framebuffer upload. |
 | `engine_other_ms` | Host CPU time outside those three measured stages. |
-| `draws`, `tris` | GPU submissions, counted by WebGlide and WebGlideNitro. Under Nitro one `draws` is one `drawIndexed`, so it is directly the batch count the design aims to keep low. |
-| `uploads`, `upload_kb` | Software presenter uploads, and load-time GPU uploads under WebGlideNitro. |
+| `draws`, `tris` | GPU submissions, counted by WebGlide and WebGlideNitro. Under Nitro one `draws` is one `drawIndexed` for world and brush-entity surfaces or one `draw` for a model batch, so it is directly the batch count the design aims to keep low. |
+| `uploads`, `upload_kb` | Software presenter uploads; under WebGlideNitro, load-time GPU uploads plus the per-frame index, entity and model arenas. |
 
 Intervals of one second or more are treated as loading/background stalls and
 excluded. Collection and integer counters are the only per-frame overhead;

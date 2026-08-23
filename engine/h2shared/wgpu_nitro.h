@@ -151,14 +151,63 @@ typedef struct
 extern wgpuparticle_t	*wgpu_particles;
 extern int		wgpu_particle_count;
 
-/* One drawIndexed (world) or one draw (2D). */
+/*
+ * Models and sprites: CPU-transformed, but still indexed.  The vertex
+ * carries the colormap row d_polyse.c would have interpolated, not a
+ * lit RGB colour, so the fragment shader can run the software
+ * rasteriser's lookup -- colormap[row][index] -- unchanged.
+ */
+typedef struct
+{
+	float		position[3];
+	float		texcoord[2];	/* normalised skin coordinates */
+	float		light;		/* colormap row 0..63.75; <0 is unlit */
+	unsigned int	shade;		/* byte 0 alpha, byte 1 tint-table row */
+} wgpumodel_vertex_t;
+
+/* One drawIndexed (world, brush entities) or one draw (2D, models). */
 typedef struct
 {
 	int	texture;
 	int	first;
 	int	count;
-	int	reserved;
+	int	entity;		/* wgpuentity_t block; 0 is the world itself,
+				   and the 2D path leaves it zero */
 } wgpubatch_t;
+
+/* Model batch flags; mirrored by webgpu_nitro.js. */
+#define NITROMODEL_BLEND_ALPHA	1u	/* src-alpha / one-minus-src-alpha */
+#define NITROMODEL_BLEND_ADD	2u	/* EF_SPECIAL_TRANS: additive */
+#define NITROMODEL_VIEWMODEL	4u	/* compressed depth range */
+
+typedef struct
+{
+	int		texture;
+	int		first;		/* first vertex, not index */
+	int		count;
+	unsigned int	flags;
+} wgpumodelbatch_t;
+
+/*
+ * Per-entity block for the world pipeline.  Brush entities draw straight
+ * out of the map's immutable vertex buffer -- every submodel shares
+ * cl.worldmodel->surfaces -- so all that changes per entity is this
+ * block, bound with a dynamic offset.  WebGPU's minimum uniform buffer
+ * offset alignment is 256 bytes, so the padding is part of the contract
+ * and the whole arena uploads in one writeBuffer.
+ */
+#define NITRO_ENTITY_ALIGN	256
+
+typedef struct
+{
+	float	mvp[16];
+	float	alpha;
+	float	light;		/* flat MLS light 0..1; <0 uses the lightmap */
+	float	pad[2];
+	float	align[NITRO_ENTITY_ALIGN / 4 - 20];
+} wgpuentity_t;
+_Static_assert (sizeof(wgpuentity_t) == NITRO_ENTITY_ALIGN,
+		"wgpuentity_t must match WebGPU's dynamic uniform stride");
 
 /* The whole per-frame scene description, uploaded in one go. */
 #define NITROSCENE_FULLBRIGHT	1
@@ -188,28 +237,57 @@ typedef struct
 	float	contrast;
 } wgpuui_params_t;
 
+/*
+ * Everything the scene pass draws, gathered by the C side and handed over
+ * as one description.  Keeping it in a struct is what keeps a frame at
+ * four calls into JavaScript however much is on screen.
+ *
+ * Both batch lists are emitted opaque-first, and the two "opaque" counts
+ * are where each list stops being opaque.  That is the whole ordering
+ * contract: world, opaque entities, translucent entities, view model,
+ * particles.
+ */
+typedef struct
+{
+	const unsigned int	*indices;
+	int			indexcount;
+	const wgpubatch_t	*batches;
+	int			batchcount;
+	int			opaquebatches;
+	const wgpuentity_t	*entities;
+	int			entitycount;
+	const wgpumodel_vertex_t *modelvertices;
+	int			modelvertexcount;
+	const wgpumodelbatch_t	*modelbatches;
+	int			modelbatchcount;
+	int			opaquemodelbatches;
+	const wgpuparticle_t	*particles;
+	int			particlecount;
+} wgpuscenedata_t;
+
 extern int  Nitro_Init (void);
 extern void Nitro_Shutdown (void);
 extern void Nitro_Resize (int width, int height);
 extern void Nitro_SetPalette (const byte *palette);
 extern void Nitro_SetColormap (const byte *colormap, int rows);
+extern void Nitro_SetTintTable (const byte *table);
 extern int  Nitro_CreateTexture (const char *name, int width, int height,
 			const byte *pixels, unsigned int flags);
+extern void Nitro_UpdateTexture (int texture, const byte *pixels);
+extern void Nitro_DestroyTexture (int texture);
 extern int  Nitro_CreateWorld (const float *vertices, int vertexcount,
 			int maxindices, int lightmaplayers, int lightmapsize);
 extern void Nitro_UploadLightmap (int layer, const byte *texels);
 extern void Nitro_DestroyWorld (void);
 extern void Nitro_BeginFrame (void);
-extern void Nitro_DrawScene (const wgpuscene_t *params, const unsigned int *indices,
-			int indexcount, const wgpubatch_t *batches, int batchcount,
-			const wgpuparticle_t *particles, int particlecount);
+extern void Nitro_DrawScene (const wgpuscene_t *params, const wgpuscenedata_t *data);
 extern void Nitro_EndFrame (const wgpuui_params_t *params, const wgpuui_vertex_t *vertices,
 			int vertexcount, const wgpubatch_t *runs, int runcount);
 
 /*
 =============================================================================
 
-	the static world (wgpu_world.c)
+	the static world and brush entities (wgpu_world.c)
 
 =============================================================================
 */
@@ -219,9 +297,30 @@ extern void Nitro_EndFrame (const wgpuui_params_t *params, const wgpuui_vertex_t
 
 void WGPUWorld_NewMap (void);
 void WGPUWorld_Shutdown (void);
-void WGPUWorld_DrawWorld (wgpuscene_t *scene);
+void WGPUWorld_BeginScene (void);
+void WGPUWorld_DrawWorld (void);
+void WGPUWorld_DrawBrushEntity (entity_t *entity);
+void WGPUWorld_EndOpaque (void);
+void WGPUWorld_SubmitScene (wgpuscene_t *scene);
 qboolean WGPUWorld_Ready (void);
 void WGPUWorld_ReportGaps (void);
+int  WGPUWorld_LightPoint (const vec3_t point);
+
+/*
+=============================================================================
+
+	models, sprites and the view weapon (wgpu_entity.c)
+
+=============================================================================
+*/
+
+void WGPUEntity_NewMap (void);
+void WGPUEntity_Shutdown (void);
+void WGPUEntity_BeginScene (void);
+void WGPUEntity_DrawEntitiesOnList (qboolean translucent);
+void WGPUEntity_DrawViewModel (void);
+void WGPUEntity_SceneData (wgpuscenedata_t *data);
+void WGPUEntity_EndOpaque (void);
 
 /*
 =============================================================================

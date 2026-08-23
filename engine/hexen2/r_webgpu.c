@@ -16,9 +16,9 @@
  * come from captures taken on the target iPad.  The output specification is
  * the software rasteriser.
  *
- * Scope of the first slice is deliberately narrow and is stated out loud in
- * the console at every map load; see WGPUWorld_ReportGaps() in wgpu_world.c
- * and docs/web/WEBGLIDE_NITRO.md.
+ * What this renderer does not yet draw is stated out loud in the console at
+ * every map load; see WGPUWorld_ReportGaps() in wgpu_world.c and
+ * docs/web/WEBGLIDE_NITRO.md.
  *
  * Copyright (C) 1996-1997  Id Software, Inc.
  * Copyright (C) 1997-1998  Raven Software Corp.
@@ -593,6 +593,7 @@ void WebGPU_Shutdown (void)
 {
 	if (!wgpu_initialized)
 		return;
+	WGPUEntity_Shutdown ();
 	WGPUWorld_Shutdown ();
 	Nitro_Shutdown ();
 	free (wgpu_particles);
@@ -656,20 +657,33 @@ void R_InitTextures (void)
 
 void R_Init (void)
 {
+	byte *tinttable;
+
 	Web_RegisterRendererCvars();
 	R_InitParticles();
 	playerTranslation = FS_LoadHunkFile("gfx/player.lmp", NULL);
 	if (!playerTranslation)
 		Sys_Error("Couldn't load gfx/player.lmp");
 	WebGPU_Init();
+
+	/* gfx/tinttab.lmp is the 256x256 index-to-index table R_AliasDrawModel
+	 * builds globalcolormap from when an entity has a colorshade.  Handing
+	 * it to the backend is what lets Nitro keep the coloured glows indexed
+	 * instead of multiplying an RGB tint over the palette result.  Missing
+	 * data is a visual no-op: the backend starts from the identity. */
+	tinttable = FS_LoadHunkFile("gfx/tinttab.lmp", NULL);
+	if (tinttable && fs_filesize == 256 * 256)
+		Nitro_SetTintTable(tinttable);
 }
 
 void R_NewMap (void)
 {
 	int i;
 
-	/* The slice bakes lightmaps once, so light styles are frozen at the
-	 * neutral value the software renderer starts from. */
+	/* Lightmaps are baked once at load, so light styles are frozen at the
+	 * neutral value the software renderer starts from.  Hexen II's model
+	 * light styles read the same table, so they are static too; both are
+	 * in the per-map gap report. */
 	for (i = 0; i < 256; ++i)
 		d_lightstylevalue[i] = 264;
 
@@ -683,6 +697,7 @@ void R_NewMap (void)
 	wgpu_visframecount = 0;
 
 	WGPUWorld_NewMap();
+	WGPUEntity_NewMap();
 	WGPUWorld_ReportGaps();
 }
 
@@ -701,11 +716,24 @@ void R_RenderView (void)
 	wgpu_particle_count = 0;
 	R_DrawParticles ();
 
+	/* The frame is gathered opaque-first and submitted once.  Both batch
+	 * lists record where they stop being opaque, so the backend can draw
+	 * world, opaque entities, translucent entities, view model and
+	 * particles in that order out of two arenas. */
+	WGPUWorld_BeginScene ();
+	WGPUEntity_BeginScene ();
+
 	if (r_drawworld.integer)
-		WGPUWorld_DrawWorld (&scene);
-	else
-		Nitro_DrawScene (&scene, NULL, 0, NULL, 0,
-				wgpu_particles, wgpu_particle_count);
+		WGPUWorld_DrawWorld ();
+	WGPUEntity_DrawEntitiesOnList (false);
+
+	WGPUWorld_EndOpaque ();
+	WGPUEntity_EndOpaque ();
+
+	WGPUEntity_DrawEntitiesOnList (true);
+	WGPUEntity_DrawViewModel ();
+
+	WGPUWorld_SubmitScene (&scene);
 
 	if (wgpu_viewleaf)
 		V_SetContentsColor(wgpu_viewleaf->contents);
@@ -737,9 +765,11 @@ void R_SetVrect (vrect_t *pvrectin, vrect_t *pvrect, int lineadj)
 ===============
 R_PushDlights
 
-Dynamic lights are not in the first slice: the lightmap atlas is uploaded
+World dynamic lights are not implemented: the lightmap atlas is uploaded
 once at load time and never touched again, so there is nothing for a dlight
-to mark.  The client still calls this every frame.
+to mark.  Model lighting does sample cl_dlights directly, in
+WGPUEntity_SetupLighting(), the way the software renderer does.  The client
+still calls this every frame.
 ===============
 */
 void R_PushDlights (void)

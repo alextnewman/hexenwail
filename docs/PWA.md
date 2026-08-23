@@ -213,11 +213,12 @@ which one to load at startup. The choice lives in the **Renderer
 - **WebGlideNitro (native WebGPU, technology preview)** — a separate,
   genuinely native WebGPU renderer that draws the world as batched engine
   polygons from immutable buffers, keeping the indexed palette and colormap
-  look. Its first slice implements **only the static world and the 2D
-  layer**: brush entities, alias models, sprites, particles, dynamic lights
-  and fog are simply not drawn, and it prints its own gaps once per map. It
-  needs a device with WebGPU support and is not playable yet. Build option
-  value `webgpu`, macro `WEBGPUQUAKE`, bundle `hexenwail-nitro.*`.
+  look. It now draws the world, brush entities, alias models, sprites,
+  particles and the view weapon, so a map can be played through; animated
+  light styles, world dynamic lights, shadows, model glows and fog are
+  still missing, and it prints its own gaps once per map. It needs a device
+  with WebGPU support. Build option value `webgpu`, macro `WEBGPUQUAKE`,
+  bundle `hexenwail-nitro.*`.
 
 The engine bundle is chosen once per launcher load, so a change reloads
 the launcher automatically when no game is running; if the engine is

@@ -14,12 +14,20 @@
  *   - The world's vertex buffer is created mappedAtCreation and never gets
  *     COPY_DST: it is immutable for the lifetime of the map.
  *   - A frame is one command encoder and two render passes (scene, canvas),
- *     submitted once.  The C side calls into JS four times per frame.
+ *     submitted once.  The C side calls into JS four times per frame,
+ *     however many entities are on screen: the whole scene arrives as one
+ *     description.
+ *   - Brush entities draw out of that same immutable world buffer, with
+ *     their transform, alpha and flat light level in one 256-byte block of
+ *     a uniform arena addressed by dynamic offset.  A door costs an offset,
+ *     not a buffer.
  *
  * Palette semantics are the software renderer's, not WebGlide's: the world
  * shader looks the texel index up in the authored colormap row that the
  * lightmap intensity selects, exactly as d_scan.c does, and only then
- * resolves the palette.
+ * resolves the palette.  Models carry the colormap row d_polyse.c would
+ * have interpolated, and Hexen II's colorshade stays an index-to-index
+ * remap through gfx/tinttab.lmp rather than becoming an RGB multiply.
  *
  * Copyright (C) 2026  Hexenwail contributors
  *
@@ -38,11 +46,26 @@ const HexenwailNitroLibrary = {
     WORLD_STRIDE: 32,
     UI_STRIDE: 20,
     PARTICLE_STRIDE: 20,
+    MODEL_STRIDE: 28,
+
+    /* Per-entity uniform block, padded to WebGPU's minimum dynamic uniform
+     * buffer offset alignment so the whole arena uploads in one write. */
+    ENTITY_STRIDE: 256,
 
     /* Texture parameter flags, mirrored by wgpu_nitro.h. */
     TEX_HOLEY: 1,
     TEX_ALPHA: 2,
     TEX_WRAP: 4,
+
+    /* Model batch flags, mirrored by wgpu_nitro.h. */
+    MODEL_BLEND_ALPHA: 1,
+    MODEL_BLEND_ADD: 2,
+    MODEL_VIEWMODEL: 4,
+
+    /* The view weapon is drawn into the near 30% of the depth range so it
+     * cannot poke through the wall the player is standing against.  WebGPU
+     * has no glDepthRange: the range belongs to the viewport. */
+    VIEWMODEL_DEPTH: 0.3,
 
     worldShader: `
 struct Frame {
@@ -59,6 +82,17 @@ struct TexParams {
   pad : u32,
 }
 
+/* One block per drawn thing: the world is block 0, every brush entity gets
+ * its own.  Bound with a dynamic offset, so a door costs an offset, not a
+ * buffer. */
+struct Entity {
+  mvp : mat4x4f,
+  alpha : f32,
+  light : f32,
+  pad0 : f32,
+  pad1 : f32,
+}
+
 @group(0) @binding(0) var<uniform> frame : Frame;
 @group(0) @binding(1) var paletteTexture : texture_2d<f32>;
 @group(0) @binding(2) var colormapTexture : texture_2d<u32>;
@@ -67,6 +101,8 @@ struct TexParams {
 
 @group(1) @binding(0) var diffuseTexture : texture_2d<u32>;
 @group(1) @binding(1) var<uniform> texParams : TexParams;
+
+@group(2) @binding(0) var<uniform> entity : Entity;
 
 struct VertexOutput {
   @builtin(position) position : vec4f,
@@ -79,7 +115,7 @@ fn vertexMain(@location(0) position : vec3f,
               @location(1) uv : vec2f,
               @location(2) lightmap : vec3f) -> VertexOutput {
   var output : VertexOutput;
-  output.position = frame.mvp * vec4f(position, 1.0);
+  output.position = entity.mvp * vec4f(position, 1.0);
   output.uv = uv;
   output.lightmap = lightmap;
   return output;
@@ -103,13 +139,102 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
    * (255 * 256 - blocklight) >> 2, so the row an 8-bit lightmap sample
    * selects is (255 - sample) >> 2, i.e. (1 - intensity) * 63.75. */
   var row = 0;
-  if (frame.fullbright == 0.0 && input.lightmap.z >= 0.0) {
-    let light = textureSampleLevel(lightmapTexture, lightmapSampler,
-        input.lightmap.xy, i32(input.lightmap.z), 0.0).r;
-    row = clamp(i32(floor((1.0 - light) * 63.75)), 0, 63);
+  if (frame.fullbright == 0.0) {
+    if (entity.light >= 0.0) {
+      /* A Hexen II model light style: one flat row for the whole
+       * submodel, which is what makes an MLS_ABSLIGHT lift uniform. */
+      row = clamp(i32(floor((1.0 - entity.light) * 63.75)), 0, 63);
+    } else if (input.lightmap.z >= 0.0) {
+      let light = textureSampleLevel(lightmapTexture, lightmapSampler,
+          input.lightmap.xy, i32(input.lightmap.z), 0.0).r;
+      row = clamp(i32(floor((1.0 - light) * 63.75)), 0, 63);
+    }
   }
   let shaded = textureLoad(colormapTexture, vec2i(i32(index), row), 0).r;
-  return vec4f(textureLoad(paletteTexture, vec2i(i32(shaded), 0), 0).rgb, 1.0);
+  return vec4f(textureLoad(paletteTexture, vec2i(i32(shaded), 0), 0).rgb,
+               entity.alpha);
+}`,
+
+    /*
+     * Models and sprites.  The CPU has already posed, transformed and lit
+     * the vertices, so the vertex stage is a single matrix multiply; what
+     * matters is that the fragment stage is still indexed.  light is the
+     * colormap row d_polyse.c would have interpolated, and shade.y is the
+     * gfx/tinttab.lmp row Hexen II's colorshade selects -- an index to
+     * index remap, exactly as R_AliasDrawModel builds globalcolormap.
+     */
+    modelShader: `
+struct Frame {
+  mvp : mat4x4f,
+  fullbright : f32,
+  pad0 : f32,
+  pad1 : f32,
+  pad2 : f32,
+}
+
+struct TexParams {
+  size : vec2f,
+  flags : u32,
+  pad : u32,
+}
+
+@group(0) @binding(0) var<uniform> frame : Frame;
+@group(0) @binding(1) var paletteTexture : texture_2d<f32>;
+@group(0) @binding(2) var colormapTexture : texture_2d<u32>;
+@group(0) @binding(5) var tintTexture : texture_2d<u32>;
+
+@group(1) @binding(0) var diffuseTexture : texture_2d<u32>;
+@group(1) @binding(1) var<uniform> texParams : TexParams;
+
+struct VertexOutput {
+  @builtin(position) position : vec4f,
+  @location(0) uv : vec2f,
+  @location(1) light : f32,
+  @location(2) alpha : f32,
+  @location(3) @interpolate(flat) tint : u32,
+}
+
+@vertex
+fn vertexMain(@location(0) position : vec3f,
+              @location(1) uv : vec2f,
+              @location(2) light : f32,
+              @location(3) shade : vec4u) -> VertexOutput {
+  var output : VertexOutput;
+  output.position = frame.mvp * vec4f(position, 1.0);
+  output.uv = uv;
+  output.light = light;
+  output.alpha = f32(shade.x) / 255.0;
+  output.tint = shade.y;
+  return output;
+}
+
+@fragment
+fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
+  let size = vec2i(texParams.size);
+  let texel = clamp(vec2i(floor(input.uv * texParams.size)),
+                    vec2i(0), size - vec2i(1));
+  let index = textureLoad(diffuseTexture, texel, 0).r;
+
+  if ((texParams.flags & 1u) != 0u && index == 0u) {
+    discard;
+  }
+  if ((texParams.flags & 2u) != 0u && index == 255u) {
+    discard;
+  }
+
+  var shaded = index;
+  /* A negative row is the unlit sentinel sprites use: d_sprite.c never
+   * touches the colormap, so neither does this. */
+  if (input.light >= 0.0 && frame.fullbright == 0.0) {
+    let row = clamp(i32(input.light), 0, 63);
+    shaded = textureLoad(colormapTexture, vec2i(i32(index), row), 0).r;
+  }
+  if (input.tint != 0u) {
+    shaded = textureLoad(tintTexture,
+        vec2i(i32(shaded), i32(input.tint)), 0).r;
+  }
+  return vec4f(textureLoad(paletteTexture, vec2i(i32(shaded), 0), 0).rgb,
+               input.alpha);
 }`,
 
     particleShader: `
@@ -280,9 +405,9 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       return Nitro.state;
     },
 
-    /* The frame bind group holds the palette, the colormap and the map's
-     * lightmap array; only the last of those ever changes, and only when a
-     * map is loaded or unloaded. */
+    /* The frame bind group holds the palette, the colormap, the tint table
+     * and the map's lightmap array; only the last of those ever changes,
+     * and only when a map is loaded or unloaded. */
     rebuildFrameBindGroup() {
       const state = Nitro.state;
       state.frameBindGroup = state.device.createBindGroup({
@@ -294,8 +419,30 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           { binding: 2, resource: state.colormapTexture.createView() },
           { binding: 3, resource: state.lightmapView },
           { binding: 4, resource: state.lightmapSampler },
+          { binding: 5, resource: state.tintTexture.createView() },
         ],
       });
+    },
+
+    /* The per-entity uniform arena.  One bind group serves every block in
+     * it, because the blocks are addressed by dynamic offset; it is only
+     * rebuilt when the arena itself has to grow. */
+    ensureEntityBuffer(bytes) {
+      const state = Nitro.state;
+      const before = state.entityBuffer;
+      const buffer = Nitro.ensureUploadBuffer('entityBuffer',
+        Math.max(bytes, Nitro.ENTITY_STRIDE), GPUBufferUsage.UNIFORM);
+      if (buffer !== before || !state.entityBindGroup) {
+        state.entityBindGroup = state.device.createBindGroup({
+          label: 'WebGlideNitro entity',
+          layout: state.entityGroupLayout,
+          entries: [
+            { binding: 0,
+              resource: { buffer, offset: 0, size: Nitro.ENTITY_STRIDE } },
+          ],
+        });
+      }
+      return buffer;
     },
 
     /* Scene colour + depth, reallocated only when the resolution ladder
@@ -373,10 +520,14 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
             texture: { sampleType: 'float', viewDimension: '2d-array' } },
           { binding: 4, visibility: GPUShaderStage.FRAGMENT,
             sampler: { type: 'filtering' } },
+          /* gfx/tinttab.lmp: 256 rows of index-to-index remap, one per
+           * Hexen II colorshade.  Only the model pipelines read it. */
+          { binding: 5, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: 'uint' } },
         ],
       });
       /* One layout for every indexed texture in the game, shared by the
-       * world and the 2D pipelines, so a texture's bind group is built
+       * world, model and 2D pipelines, so a texture's bind group is built
        * once at load time and never rebuilt. */
       const textureGroupLayout = device.createBindGroupLayout({
         label: 'WebGlideNitro texture',
@@ -385,6 +536,17 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
             texture: { sampleType: 'uint' } },
           { binding: 1, visibility: GPUShaderStage.FRAGMENT,
             buffer: { type: 'uniform' } },
+        ],
+      });
+      /* Dynamic offset, not a storage buffer: Safari's compatibility
+       * limits allow zero storage buffers in the vertex stage, and the
+       * target device is an iPad. */
+      const entityGroupLayout = device.createBindGroupLayout({
+        label: 'WebGlideNitro entity',
+        entries: [
+          { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+            buffer: { type: 'uniform', hasDynamicOffset: true,
+                      minBindingSize: Nitro.ENTITY_STRIDE } },
         ],
       });
       const scanoutGroupLayout = device.createBindGroupLayout({
@@ -426,37 +588,122 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       const uiModule = device.createShaderModule({
         label: 'WebGlideNitro 2D', code: Nitro.uiShader,
       });
+      const modelModule = device.createShaderModule({
+        label: 'WebGlideNitro models', code: Nitro.modelShader,
+      });
+
+      const ALPHA_BLEND = {
+        color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
+        alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+      };
+      const ADD_BLEND = {
+        color: { srcFactor: 'src-alpha', dstFactor: 'one' },
+        alpha: { srcFactor: 'one', dstFactor: 'one' },
+      };
+
+      const worldLayout = device.createPipelineLayout({
+        bindGroupLayouts: [frameGroupLayout, textureGroupLayout, entityGroupLayout],
+      });
+      const worldVertex = {
+        module: worldModule,
+        entryPoint: 'vertexMain',
+        buffers: [{
+          arrayStride: Nitro.WORLD_STRIDE,
+          attributes: [
+            { shaderLocation: 0, offset: 0, format: 'float32x3' },
+            { shaderLocation: 1, offset: 12, format: 'float32x2' },
+            { shaderLocation: 2, offset: 20, format: 'float32x3' },
+          ],
+        }],
+      };
+      /* Quake's world winding, the same one WebGlide culls with. */
+      const worldPrimitive = {
+        topology: 'triangle-list', frontFace: 'ccw', cullMode: 'front',
+      };
 
       const worldPipeline = device.createRenderPipeline({
         label: 'WebGlideNitro world',
-        layout: device.createPipelineLayout({
-          bindGroupLayouts: [frameGroupLayout, textureGroupLayout],
-        }),
-        vertex: {
-          module: worldModule,
-          entryPoint: 'vertexMain',
-          buffers: [{
-            arrayStride: Nitro.WORLD_STRIDE,
-            attributes: [
-              { shaderLocation: 0, offset: 0, format: 'float32x3' },
-              { shaderLocation: 1, offset: 12, format: 'float32x2' },
-              { shaderLocation: 2, offset: 20, format: 'float32x3' },
-            ],
-          }],
-        },
+        layout: worldLayout,
+        vertex: worldVertex,
         fragment: {
           module: worldModule,
           entryPoint: 'fragmentMain',
           targets: [{ format: 'rgba8unorm' }],
         },
-        /* Quake's world winding, the same one WebGlide culls with. */
-        primitive: { topology: 'triangle-list', frontFace: 'ccw', cullMode: 'front' },
+        primitive: worldPrimitive,
         depthStencil: {
           format: 'depth24plus',
           depthWriteEnabled: true,
           depthCompare: 'less-equal',
         },
       });
+
+      /* Translucent brush entities -- the water a func_train carries, a
+       * DRF_TRANSLUCENT door -- share the module and the geometry; only
+       * the blend state and the depth write differ. */
+      const worldBlendPipeline = device.createRenderPipeline({
+        label: 'WebGlideNitro world blended',
+        layout: worldLayout,
+        vertex: worldVertex,
+        fragment: {
+          module: worldModule,
+          entryPoint: 'fragmentMain',
+          targets: [{ format: 'rgba8unorm', blend: ALPHA_BLEND }],
+        },
+        primitive: worldPrimitive,
+        depthStencil: {
+          format: 'depth24plus',
+          depthWriteEnabled: false,
+          depthCompare: 'less-equal',
+        },
+      });
+
+      const modelLayout = device.createPipelineLayout({
+        bindGroupLayouts: [frameGroupLayout, textureGroupLayout],
+      });
+      const modelVertex = {
+        module: modelModule,
+        entryPoint: 'vertexMain',
+        buffers: [{
+          arrayStride: Nitro.MODEL_STRIDE,
+          attributes: [
+            { shaderLocation: 0, offset: 0, format: 'float32x3' },
+            { shaderLocation: 1, offset: 12, format: 'float32x2' },
+            { shaderLocation: 2, offset: 20, format: 'float32' },
+            { shaderLocation: 3, offset: 24, format: 'uint8x4' },
+          ],
+        }],
+      };
+      /* Models are not culled.  Alias winding varies with the entity's
+       * scale sign and sprites are built to face the eye, so the depth
+       * test is the thing that decides visibility, as it does in the
+       * software rasteriser's own back-face-free model path. */
+      const modelPrimitive = { topology: 'triangle-list', cullMode: 'none' };
+      const modelPipeline = (label, blend, depthWrite) =>
+        device.createRenderPipeline({
+          label,
+          layout: modelLayout,
+          vertex: modelVertex,
+          fragment: {
+            module: modelModule,
+            entryPoint: 'fragmentMain',
+            targets: [blend ? { format: 'rgba8unorm', blend }
+                            : { format: 'rgba8unorm' }],
+          },
+          primitive: modelPrimitive,
+          depthStencil: {
+            format: 'depth24plus',
+            depthWriteEnabled: depthWrite,
+            depthCompare: 'less-equal',
+          },
+        });
+
+      const modelOpaquePipeline =
+        modelPipeline('WebGlideNitro models', null, true);
+      const modelAlphaPipeline =
+        modelPipeline('WebGlideNitro models blended', ALPHA_BLEND, false);
+      const modelAddPipeline =
+        modelPipeline('WebGlideNitro models additive', ADD_BLEND, false);
 
       const scanoutPipeline = device.createRenderPipeline({
         label: 'WebGlideNitro scan-out',
@@ -568,6 +815,22 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         format: 'r8uint',
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
       });
+      /* gfx/tinttab.lmp, seeded with the identity so a data set that has no
+       * tint table renders as if no entity ever had a colorshade rather
+       * than turning every tinted item black. */
+      const tintTexture = device.createTexture({
+        label: 'WebGlideNitro tint table',
+        size: { width: 256, height: 256 },
+        format: 'r8uint',
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+      const identityTint = new Uint8Array(256 * 256);
+      for (let row = 0; row < 256; ++row) {
+        for (let i = 0; i < 256; ++i) identityTint[row * 256 + i] = i;
+      }
+      device.queue.writeTexture(
+        { texture: tintTexture }, identityTint,
+        { bytesPerRow: 256, rowsPerImage: 256 }, { width: 256, height: 256 });
       /* A 1x1x1 stand-in so the world bind group is complete before a map
        * is loaded; unlit geometry never samples it anyway. */
       const placeholderLightmap = device.createTexture({
@@ -590,10 +853,12 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       Nitro.state = {
         device, context, format,
         frameGroupLayout, textureGroupLayout, scanoutGroupLayout, uiGroupLayout,
-        particleGroupLayout,
-        worldPipeline, particlePipeline, scanoutPipeline, uiPipeline,
+        particleGroupLayout, entityGroupLayout,
+        worldPipeline, worldBlendPipeline, particlePipeline, scanoutPipeline,
+        uiPipeline,
+        modelOpaquePipeline, modelAlphaPipeline, modelAddPipeline,
         frameUniform, scanoutUniform, uiUniform, particleUniform,
-        paletteTexture, colormapTexture, lightmapSampler, sceneSampler,
+        paletteTexture, colormapTexture, tintTexture, lightmapSampler, sceneSampler,
         placeholderLightmap,
         lightmapTexture: null, lightmapView: placeholderLightmap.createView({
           dimension: '2d-array',
@@ -601,12 +866,14 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         frameBindGroup: null,
         uiBindGroup: null,
         textures: [null],
+        freeTextures: [],
         world: null,
         sceneColor: null, sceneDepth: null,
         sceneColorView: null, sceneDepthView: null,
         sceneWidth: 0, sceneHeight: 0,
         scanoutBindGroup: null,
         worldIndexBuffer: null, particleBuffer: null, uiVertexBuffer: null,
+        modelVertexBuffer: null, entityBuffer: null, entityBindGroup: null,
         encoder: null, sceneReady: false,
         scanout: null,
         canvasWidth: 0, canvasHeight: 0,
@@ -651,6 +918,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     state.worldIndexBuffer?.destroy();
     state.particleBuffer?.destroy();
     state.uiVertexBuffer?.destroy();
+    state.modelVertexBuffer?.destroy();
+    state.entityBuffer?.destroy();
     state.lightmapTexture?.destroy();
     state.placeholderLightmap?.destroy();
     state.sceneColor?.destroy();
@@ -661,6 +930,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     state.particleUniform.destroy();
     state.paletteTexture.destroy();
     state.colormapTexture.destroy();
+    state.tintTexture.destroy();
     Nitro.state = null;
   },
 
@@ -702,6 +972,22 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     state.device.queue.writeTexture(
       { texture: state.colormapTexture }, source,
       { bytesPerRow: 256, rowsPerImage: count }, { width: 256, height: count });
+  },
+
+  /*
+   * gfx/tinttab.lmp: 256 rows of index-to-index remap.  R_AliasDrawModel
+   * rebuilds globalcolormap through row colorshade; the GPU does the same
+   * lookup per fragment, which is what keeps a tinted item indexed instead
+   * of turning it into an RGB multiply.
+   */
+  Nitro_SetTintTable__deps: ['$Nitro'],
+  Nitro_SetTintTable: function (tablePointer) {
+    const state = Nitro.state;
+    if (!state || !tablePointer) return;
+    state.device.queue.writeTexture(
+      { texture: state.tintTexture },
+      HEAPU8.subarray(tablePointer, tablePointer + 256 * 256),
+      { bytesPerRow: 256, rowsPerImage: 256 }, { width: 256, height: 256 });
   },
 
   /*
@@ -749,14 +1035,48 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         ],
       });
       Nitro.watchErrors(state.device, `texture ${name}`);
-      state.textures.push({ texture, params, bindGroup });
+      /* Slot 0 is reserved as "no texture"; freed slots are reused so a map
+       * change does not grow the table for ever. */
+      const slot = state.freeTextures.length ? state.freeTextures.pop()
+                                             : state.textures.length;
+      state.textures[slot] = { texture, params, bindGroup, width, height };
+      return slot;
     } catch (error) {
       Nitro.fail(`texture ${name} failed: ${error.message}`);
       texture?.destroy();
       params?.destroy();
       return 0;
     }
-    return state.textures.length - 1;
+  },
+
+  /*
+   * Re-specify an existing texture's texels.  Player skins are the only
+   * thing that needs this: their pixels are a translation of the base skin
+   * through the entity's colormap, so a colour change has to land on the
+   * same GPU texture rather than leaking a new one every frame.
+   */
+  Nitro_UpdateTexture__deps: ['$Nitro'],
+  Nitro_UpdateTexture: function (id, pixelPointer) {
+    const state = Nitro.state;
+    const entry = state?.textures[id];
+    if (!entry) return;
+    const { width, height } = entry;
+    state.device.queue.writeTexture(
+      { texture: entry.texture },
+      HEAPU8.subarray(pixelPointer, pixelPointer + width * height),
+      { bytesPerRow: width, rowsPerImage: height },
+      { width, height });
+  },
+
+  Nitro_DestroyTexture__deps: ['$Nitro'],
+  Nitro_DestroyTexture: function (id) {
+    const state = Nitro.state;
+    const entry = (id > 0) ? state?.textures[id] : null;
+    if (!entry) return;
+    entry.texture.destroy();
+    entry.params.destroy();
+    state.textures[id] = null;
+    state.freeTextures.push(id);
   },
 
   /*
@@ -867,16 +1187,39 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
    *   [28]     flags: 1 = fullbright
    *   [29..32] particle right basis vector
    *   [33..36] particle up basis vector
-   * batches are int quads of { textureId, firstIndex, indexCount, unused }.
+   *
+   * data (see wgpuscenedata_t in wgpu_nitro.h) is fourteen ints:
+   *   [0]  world index arena     [1]  index count
+   *   [2]  world batches         [3]  batch count
+   *   [4]  opaque world batches  (the first N of [2] are opaque)
+   *   [5]  entity blocks         [6]  entity count
+   *   [7]  model vertex arena    [8]  model vertex count
+   *   [9]  model batches         [10] model batch count
+   *   [11] opaque model batches  (the first N of [9] are opaque)
+   *   [12] particles             [13] particle count
+   *
+   * World batches are int quads of { textureId, firstIndex, indexCount,
+   * entity }, where entity indexes the block arena; block 0 is the world
+   * itself.  Model batches are int quads of { textureId, firstVertex,
+   * vertexCount, flags }.
    */
   Nitro_DrawScene__deps: ['$Nitro'],
-  Nitro_DrawScene: function (paramsPointer, indexPointer, indexCount,
-    batchPointer, batchCount, particlePointer, particleCount) {
+  Nitro_DrawScene: function (paramsPointer, dataPointer) {
     const state = Nitro.checkDevice();
-    if (!state?.encoder || !state.world) return;
+    if (!state?.encoder) return;
 
     const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 37);
     const integers = HEAP32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 29);
+    const data = HEAP32.subarray(dataPointer >> 2, (dataPointer >> 2) + 14);
+    const indexPointer = data[0], indexCount = data[1];
+    const batchPointer = data[2], batchCount = data[3];
+    const opaqueBatches = data[4];
+    const entityPointer = data[5], entityCount = data[6];
+    const modelVertexPointer = data[7], modelVertexCount = data[8];
+    const modelBatchPointer = data[9], modelBatchCount = data[10];
+    const opaqueModelBatches = data[11];
+    const particlePointer = data[12], particleCount = data[13];
+
     const sceneWidth = Math.max(integers[22], 1);
     const sceneHeight = Math.max(integers[23], 1);
 
@@ -897,6 +1240,38 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     scan.set(floats.subarray(16, 20), 4);
     state.device.queue.writeBuffer(state.scanoutUniform, 0, scan);
 
+    /* Every entity's transform, alpha and flat light level in one upload;
+     * the draws below address a block by dynamic offset. */
+    let entityBound = false;
+    if (entityPointer && entityCount > 0) {
+      const bytes = entityCount * Nitro.ENTITY_STRIDE;
+      const buffer = Nitro.ensureEntityBuffer(bytes);
+      state.device.queue.writeBuffer(buffer, 0, HEAPU8, entityPointer, bytes);
+      entityBound = true;
+    }
+
+    /* Alias and sprite geometry is rebuilt every frame -- animation is
+     * whole-frame, so there is nothing to keep -- and the arena grows to
+     * whatever the busiest frame so far needed. */
+    let modelBuffer = null;
+    if (modelVertexPointer && modelVertexCount > 0) {
+      const bytes = modelVertexCount * Nitro.MODEL_STRIDE;
+      modelBuffer = Nitro.ensureUploadBuffer('modelVertexBuffer', bytes,
+        GPUBufferUsage.VERTEX);
+      state.device.queue.writeBuffer(modelBuffer, 0, HEAPU8,
+        modelVertexPointer, bytes);
+    }
+
+    /* A brush entity re-walks a submodel that the world already listed, so
+     * a frame can need more indices than the map's own worst case. */
+    let indexBuffer = state.worldIndexBuffer;
+    if (state.world && indexPointer && indexCount > 0) {
+      indexBuffer = Nitro.ensureUploadBuffer('worldIndexBuffer', indexCount * 4,
+        GPUBufferUsage.INDEX);
+      state.device.queue.writeBuffer(indexBuffer, 0, HEAPU8, indexPointer,
+        indexCount * 4);
+    }
+
     const pass = state.encoder.beginRenderPass({
       label: 'WebGlideNitro scene',
       colorAttachments: [{
@@ -914,29 +1289,106 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     });
     state.sceneReady = true;
 
-    if (indexCount > 0 && batchCount > 0 && state.worldIndexBuffer) {
-      state.device.queue.writeBuffer(state.worldIndexBuffer, 0,
-        HEAPU8, indexPointer, indexCount * 4);
-      pass.setPipeline(state.worldPipeline);
-      pass.setBindGroup(0, state.frameBindGroup);
-      pass.setVertexBuffer(0, state.world.vertexBuffer);
-      pass.setIndexBuffer(state.worldIndexBuffer, 'uint32');
+    const worldReady = state.world && entityBound && indexBuffer &&
+      indexCount > 0 && batchCount > 0;
+    let boundPipeline = null;
+    let boundTexture = -1;
+    let boundEntity = -1;
+    let boundVertices = null;
 
+    /* World and brush-entity surfaces: same vertex buffer, same index
+     * arena, one dynamic offset per entity. */
+    const drawWorldBatches = (from, to, blended) => {
+      if (!worldReady || from >= to) return;
       const batches = HEAP32.subarray(batchPointer >> 2,
         (batchPointer >> 2) + batchCount * 4);
-      let boundTexture = -1;
-      for (let i = 0; i < batchCount; ++i) {
-        const entry = state.textures[batches[i * 4]];
+      const pipeline = blended ? state.worldBlendPipeline : state.worldPipeline;
+      if (boundPipeline !== pipeline) {
+        pass.setPipeline(pipeline);
+        pass.setBindGroup(0, state.frameBindGroup);
+        boundPipeline = pipeline;
+        boundTexture = -1;
+        boundEntity = -1;
+      }
+      if (boundVertices !== state.world.vertexBuffer) {
+        pass.setVertexBuffer(0, state.world.vertexBuffer);
+        pass.setIndexBuffer(indexBuffer, 'uint32');
+        boundVertices = state.world.vertexBuffer;
+      }
+      for (let i = from; i < to; ++i) {
+        const textureId = batches[i * 4];
+        const entry = state.textures[textureId];
         const first = batches[i * 4 + 1];
         const count = batches[i * 4 + 2];
-        if (!entry || count <= 0) continue;
-        if (batches[i * 4] !== boundTexture) {
+        const entity = batches[i * 4 + 3];
+        if (!entry || count <= 0 || entity < 0 || entity >= entityCount) continue;
+        if (textureId !== boundTexture) {
           pass.setBindGroup(1, entry.bindGroup);
-          boundTexture = batches[i * 4];
+          boundTexture = textureId;
+        }
+        if (entity !== boundEntity) {
+          pass.setBindGroup(2, state.entityBindGroup,
+            [entity * Nitro.ENTITY_STRIDE]);
+          boundEntity = entity;
         }
         pass.drawIndexed(count, 1, first, 0, 0);
       }
-    }
+    };
+
+    /* Alias models and sprites: unindexed triangles whose transform is
+     * already baked in, so the batch's own flags are all that changes. */
+    const drawModelBatches = (from, to) => {
+      if (!modelBuffer || from >= to) return;
+      const batches = HEAP32.subarray(modelBatchPointer >> 2,
+        (modelBatchPointer >> 2) + modelBatchCount * 4);
+      let viewmodel = false;
+      for (let i = from; i < to; ++i) {
+        const textureId = batches[i * 4];
+        const entry = state.textures[textureId];
+        const first = batches[i * 4 + 1];
+        const count = batches[i * 4 + 2];
+        const flags = batches[i * 4 + 3];
+        if (!entry || count <= 0) continue;
+        const pipeline = (flags & Nitro.MODEL_BLEND_ADD)
+          ? state.modelAddPipeline
+          : (flags & Nitro.MODEL_BLEND_ALPHA) ? state.modelAlphaPipeline
+                                              : state.modelOpaquePipeline;
+        /* WebGPU has no glDepthRange, so the view weapon gets its own
+         * slice of the depth buffer through the viewport instead -- the
+         * same trick, and the same reason: the gun must not poke into a
+         * wall the player is standing against. */
+        const wantViewmodel = (flags & Nitro.MODEL_VIEWMODEL) !== 0;
+        if (wantViewmodel !== viewmodel) {
+          pass.setViewport(0, 0, sceneWidth, sceneHeight, 0,
+            wantViewmodel ? Nitro.VIEWMODEL_DEPTH : 1);
+          viewmodel = wantViewmodel;
+        }
+        if (boundPipeline !== pipeline) {
+          pass.setPipeline(pipeline);
+          pass.setBindGroup(0, state.frameBindGroup);
+          boundPipeline = pipeline;
+          boundTexture = -1;
+        }
+        if (boundVertices !== modelBuffer) {
+          pass.setVertexBuffer(0, modelBuffer);
+          boundVertices = modelBuffer;
+        }
+        if (textureId !== boundTexture) {
+          pass.setBindGroup(1, entry.bindGroup);
+          boundTexture = textureId;
+        }
+        pass.draw(count, 1, first, 0);
+      }
+      if (viewmodel) pass.setViewport(0, 0, sceneWidth, sceneHeight, 0, 1);
+    };
+
+    /* Opaque first, both kinds, then everything that blends -- the order
+     * the software renderer's own edge list produces. */
+    drawWorldBatches(0, opaqueBatches, false);
+    drawModelBatches(0, opaqueModelBatches);
+    drawWorldBatches(opaqueBatches, batchCount, true);
+    drawModelBatches(opaqueModelBatches, modelBatchCount);
+
     if (particlePointer && particleCount > 0) {
       const bytes = particleCount * Nitro.PARTICLE_STRIDE;
       const buffer = Nitro.ensureUploadBuffer('particleBuffer', bytes,

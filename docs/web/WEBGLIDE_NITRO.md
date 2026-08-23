@@ -1,14 +1,14 @@
 # WebGlideNitro — WebGPU renderer design
 
-**Status: gate removed by explicit owner instruction; first vertical slice
+**Status: gate removed by explicit owner instruction; world and entities
 landed.** Nitro is no longer gated on WebGlide in any way, and WebGlide is
 explicitly *not* its performance baseline (see "How Nitro is measured").
 The renderer now exists as a real build configuration
 (`-DWEB_RENDERER=webgpu`, macro `WEBGPUQUAKE`, bundle `hexenwail-nitro`) that
-draws the static world as batched engine polygons through native WebGPU. It is
-a **technology preview**: only the static world and the 2D layer are
-implemented, with GPU-expanded particles as the first dynamic scene content,
-so it is not yet playable. See "Where the slice stops" below.
+draws the world, its brush entities, alias models, sprites, particles and the
+view weapon as batched engine polygons through native WebGPU. It is still a
+**technology preview**: animated light styles, world dynamic lights, shadows,
+model glows and fog are missing. See "Where it stops" below.
 
 The WebGPU *presenter* preview remains a separate thing: it is part of the
 software-renderer configuration (`-DWEB_PRESENTER=webgpu`, macro
@@ -72,7 +72,7 @@ So:
   behavioural reference: it can be a convenient second opinion on what a frame
   should contain, and where it and the software renderer disagree, the software
   renderer wins.
-* Nitro's own remaining correctness work is listed in "Where the slice stops"
+* Nitro's own remaining correctness work is listed in "Where it stops"
   and in delivery step 5; that list, not WebGlide, is what "finished" means.
 
 The WebGPU presenter came first because it changes only how the
@@ -131,17 +131,19 @@ Keep the implementation behind a positive `WEBGPUQUAKE` build macro. Do not
 make `WEBQUAKE` mean GPU and do not spread WebGPU conditionals through the
 shared client.
 
-## As built (first slice)
+## As built
 
-The slice implements the backend shape above only as far as the static world
-and the UI pass need. Nothing is stubbed out behind a flag that pretends to
-work; unimplemented content is simply not drawn, and the renderer says so.
+The renderer implements the backend shape above as far as the world, the
+entities in it and the UI pass need. Nothing is stubbed out behind a flag that
+pretends to work; unimplemented content is simply not drawn, and the renderer
+says so.
 
 | Piece | File | Owns |
 | --- | --- | --- |
 | GPU backend | `engine/web/webgpu_nitro.js` | The device, pipelines, bind groups, buffers, textures, the two render passes and the single submit. The only file that touches WebGPU. |
 | Renderer front end | `engine/hexen2/r_webgpu.c` | Cvars, view/frustum setup, the `[0,1]`-depth projection, culling, gamma/contrast, polyblend, frame entry points, `R_*`/`D_*` shared-client surface. |
-| Static world | `engine/h2shared/wgpu_world.c` | Load-time texture and lightmap upload, the immutable vertex/index buffers, BSP/PVS traversal, texture chains, batch emission. |
+| Static world | `engine/h2shared/wgpu_world.c` | Load-time texture and lightmap upload, the immutable vertex/index buffers, BSP/PVS traversal, texture chains, batch emission, brush entities, the per-entity uniform arena, the world light sample, the single scene submit. |
+| Entities | `engine/h2shared/wgpu_entity.c` | Alias models and sprites: skin cache and player-colour translation, entity lighting, pose and transform, sprite orientations, the visedict walk and the view weapon. |
 | 2D layer | `engine/h2shared/draw_webgpu.c` | The whole `Draw_*` API, accumulated into one CPU arena and flushed as coalesced runs. |
 | Video layer | `engine/h2shared/vid_webgpu.c` | Palette, colormap and tint tables, the UI-height ladder, canvas resize, the `VID_*` menu surface. |
 
@@ -177,6 +179,39 @@ second adapter for a canvas that already has one.
 * the whole frame is one command encoder, two passes (scene, then scan-out
   plus UI at panel resolution) and one `queue.submit`.
 
+**Entities.** Brush entities reuse the world's immutable vertex buffer: only
+their indices are gathered per frame, and their transform, alpha and flat
+light level live in a 256-byte block of a per-entity uniform arena addressed
+by dynamic offset. A door therefore costs an offset, not a buffer, and not a
+copy of the map. That arena is a uniform buffer rather than a vertex-stage
+storage buffer on purpose: WebGPU's compatibility limits allow zero storage
+buffers in the vertex stage, and the target device is an iPad. Block 0 is the
+world itself.
+
+Alias models and sprites are posed, transformed and lit on the CPU into one
+per-frame vertex arena, so the model vertex stage is a single matrix multiply
+and a whole texture's worth of models is one `draw`. Model frames step rather
+than interpolate, matching the software renderer. Player skins are translated
+through the entity's colormap and cached by `(skin, top, bottom)`, so a colour
+change re-specifies one texture instead of leaking a new one per frame.
+
+**Entity lighting stays indexed.** `d_polyse.c`'s shading is reproduced
+exactly: `darkness = (255 - ambient) * 64`, plus `shade * 64 * lightcos` when
+the normal faces the light, clamped to `[0, 255 * 64]`, divided by 256 to give
+the colormap row. Hexen II's `colorshade` stays an index remap too — the
+256x256 `gfx/tinttab.lmp` is a `r8uint` texture applied *after* the colormap,
+which is what `R_AliasDrawModel` does when it rebuilds `globalcolormap`. A
+data set with no tint table gets an identity table, so a missing file is a
+visual no-op rather than a black item.
+
+Sprites are unlit, exactly as `d_sprite.c` leaves them, and carry all five
+Hexen II orientations. The view weapon is drawn last, into the near 30% of the
+depth range: WebGPU has no `glDepthRange`, so the range belongs to the
+viewport, and the viewport is restored afterwards. Model pipelines do not
+cull: alias winding flips with the sign of the entity's scale and sprites are
+built facing the eye, so the depth test decides visibility, as it does in the
+software rasteriser's own model path.
+
 **Indexed colour is preserved end to end.** Diffuse textures are `r8uint`
 palette indices. The world shader reconstructs the software rasteriser's
 lighting exactly: an 8-bit lightmap sample `L` selects colormap row
@@ -186,21 +221,26 @@ filtered in RGB space, so the result stays inside the authored palette by
 construction — the same contract as the software renderer, which is the
 specification here.
 
-### Where the slice stops
+### Where it stops
 
 The renderer prints its own gaps once per map (`r_nitro_report 0` silences
 it) so a running build never quietly implies more than it does.
 
-Not drawn at all: brush entities, alias models and sprites. Particles are
-uploaded as compact instances and expanded into camera-facing quads by the
-WebGPU vertex shader. Not
-applied: dynamic lights, animated light styles, fog. Approximated: sky is its
-solid layer drawn unscrolled, liquids are opaque and unwarped. Texture
-*animation* is implemented, so it is deliberately absent from that list.
+Not drawn: model shadows, model glows and fullbright skin pixels. Not applied:
+animated light styles, world dynamic lights (model lighting *does* take
+dlights), fog. Approximated: sky is its solid layer drawn unscrolled, liquids
+are opaque and unwarped, and model frames step rather than interpolate.
+Texture *animation*, entity animation, player skin translation and particles
+are implemented, so they are deliberately absent from those lists.
 
-This is why the launcher labels `nitro` a technology preview limited to the
-static world, and why the bundle is optional in the service worker rather than
-precached.
+Ordering is opaque then translucent, as the software renderer's edge list
+produces; within the translucent half, brush entities are drawn before alias
+models and sprites rather than interleaved in visedict order. That is a
+deliberate batching choice, not an oversight: it keeps a translucent door to
+one `drawIndexed` and it is invisible unless two translucent things overlap.
+
+This is why the launcher still labels `nitro` a technology preview, and why
+the bundle is optional in the service worker rather than precached.
 
 ## Delivery order
 
@@ -211,24 +251,27 @@ precached.
 4. Render the static world from immutable geometry with one lightmap texture
    array, retaining CPU BSP/PVS traversal.
 5. Add brush entities, aliases, sprites, sky, liquids, particles, fog and
-   dynamic lights in correctness order.
+   dynamic lights in correctness order. The view weapon belongs here too: it
+   is an alias model with its own depth range.
 6. Consolidate frame uniforms, upload arenas and dirty lightmap regions.
 7. Add adaptive scene scale, then GPU-side particles. Indirect submission,
    checkerboarding and decoupled scan-out require measured evidence.
 
-The first renderer milestone is static world plus lightmap array, Glide-style
-scan-out and complete batched UI. Its bar is the software renderer's output,
-and GPU-driven visibility or model transforms come after content correctness,
-not after a comparison with WebGlide.
+The first renderer milestone was static world plus lightmap array,
+Glide-style scan-out and complete batched UI; the second is everything that
+moves in a map. The bar for both is the software renderer's output, and
+GPU-driven visibility or model transforms come after content correctness, not
+after a comparison with WebGlide.
 
-Progress: steps 1–4 and the particle part of step 5 are delivered by the slice
-described in "As built" —
-device acquisition and resize via the launcher handoff, offscreen scene
-scan-out with explicit failure reporting, a fully batched 2D layer, and the
+Progress: steps 1–4 and most of step 5 are delivered by what "As built"
+describes — device acquisition and resize via the launcher handoff, offscreen
+scene scan-out with explicit failure reporting, a fully batched 2D layer, the
 static world drawn from immutable geometry with one lightmap texture array
-behind CPU BSP/PVS traversal. Step 5 is the next work: it is the content
-Nitro still does not draw, listed in "Where the slice stops". Steps 6–7 remain
-gated on measured evidence from Nitro captures on the iPad.
+behind CPU BSP/PVS traversal, and then brush entities, alias models, sprites,
+particles and the view weapon. What is left of step 5 is fog, animated light
+styles, world dynamic lights, and the sky and liquid approximations, all
+listed in "Where it stops". Steps 6–7 remain gated on measured evidence from
+Nitro captures on the iPad.
 
 ## Candidate tricks
 
