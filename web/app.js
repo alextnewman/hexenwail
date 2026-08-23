@@ -61,6 +61,10 @@ const state = {
      *   'software' -> ./hexenwail.js            (shipping, supported default)
      *   'webglide' -> ./hexenwail-webglide.js   (experimental GPU renderer)
      *   'webgpu'   -> ./hexenwail-webgpu.js     (software + WebGPU presenter)
+     *   'nitro'    -> ./hexenwail-nitro.js      (WebGlideNitro, native WebGPU)
+     * 'webgpu' and 'nitro' share the launcher's WebGPU device handoff but
+     * are otherwise unrelated: the first scans out the software
+     * framebuffer, the second builds and draws its own scene geometry.
      * The engine script is loaded once during init(), so a change here
      * takes effect on the next launcher load; savePreferences() is what
      * makes the choice survive that reload. */
@@ -702,7 +706,7 @@ function loadPreferences() {
       ? saved.perfCapture
       : Number(saved.perfOverlay) > 0;
     state.preferences.phoneHintSeen = Boolean(saved.phoneHintSeen);
-    if (['software', 'webglide', 'webgpu'].includes(saved.renderer)) state.preferences.renderer = saved.renderer;
+    if (['software', 'webglide', 'webgpu', 'nitro'].includes(saved.renderer)) state.preferences.renderer = saved.renderer;
   } catch (error) {
     console.warn('Could not load launcher preferences', error);
   }
@@ -1289,9 +1293,11 @@ async function ensureEngineScriptLoaded() {
    * runtime log so a bug report shows which bundle was in use. */
   const useWebGlide = state.preferences.renderer === 'webglide';
   const useWebGPU = state.preferences.renderer === 'webgpu';
+  const useNitro = state.preferences.renderer === 'nitro';
   const scriptUrl = useWebGlide
     ? './hexenwail-webglide.js'
-    : useWebGPU ? './hexenwail-webgpu.js' : './hexenwail.js';
+    : useWebGPU ? './hexenwail-webgpu.js'
+      : useNitro ? './hexenwail-nitro.js' : './hexenwail.js';
   logToConsole('[launcher]', `Loading engine bundle: ${scriptUrl} (renderer=${state.preferences.renderer})`);
 
   await new Promise((resolve, reject) => {
@@ -1315,6 +1321,10 @@ async function ensureEngineScriptLoaded() {
           ? `Failed to load ${scriptUrl}. The WebGPU presenter preview is missing from this artifact.`
             + ' Open the "Renderer (experimental)" card, switch back to "Software (default, stable)",'
             + ' and the launcher will reload with the shipping presenter.'
+        : useNitro
+          ? `Failed to load ${scriptUrl}. The WebGlideNitro bundle is missing from this artifact.`
+            + ' Open the "Renderer (experimental)" card, switch back to "Software (default, stable)",'
+            + ' and the launcher will reload with the shipping renderer.'
         : `Failed to load ${scriptUrl}. Build the WASM target before serving this directory.`;
       reject(new Error(detail));
     };
@@ -1447,7 +1457,7 @@ function bindUi() {
    * data-engine-state are the same signal handleEngineQuit() sets, so a
    * finished game (runtimeExited) counts as "not running" here. */
   ui.rendererSetting?.addEventListener('change', () => {
-    const next = ['webglide', 'webgpu'].includes(ui.rendererSetting.value)
+    const next = ['webglide', 'webgpu', 'nitro'].includes(ui.rendererSetting.value)
       ? ui.rendererSetting.value : 'software';
     if (next === state.preferences.renderer) return;
     state.preferences.renderer = next;
@@ -1457,7 +1467,9 @@ function bindUi() {
       ? 'WebGlide experimental GPU renderer'
       : next === 'webgpu'
         ? 'software renderer with the experimental WebGPU presenter'
-        : 'software renderer';
+        : next === 'nitro'
+          ? 'WebGlideNitro native WebGPU renderer (static world only)'
+          : 'software renderer';
     appendRuntimeLog('[launcher]', `Renderer preference changed to ${next} (${label}).`);
     const enginePlaying = state.engineStarted && !state.runtimeExited;
     if (enginePlaying) {
@@ -1593,7 +1605,10 @@ async function init() {
     state.perfReport = '';
   }
   bindUi();
-  if (state.preferences.renderer === 'webgpu') {
+  /* Both WebGPU bundles take the device from here rather than opening one
+   * of their own: the canvas can only ever have a single configured
+   * context, and the launcher is what owns the canvas. */
+  if (state.preferences.renderer === 'webgpu' || state.preferences.renderer === 'nitro') {
     const report = await probeWebGPU({ canvas: ui.canvas });
     if (report.ok) {
       const limits = report.handoff.limits;

@@ -1,10 +1,17 @@
 # WebGlide — the experimental GPU renderer
 
-**Status:** experimental, **not** the default. The shipping renderer is the
-classic 8bpp software rasteriser on an accelerated canvas — see
+**Status:** **abortive experiment**, retained and buildable, **not** the
+default and not actively pursued. The shipping renderer is the classic 8bpp
+software rasteriser on an accelerated canvas — see
 [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md). WebGlide is retained,
 built by CI, and must keep compiling; it may still render incorrectly or
 fail to start.
+
+Per an explicit owner instruction, **WebGlide's performance is not a baseline,
+gate or optimisation criterion for anything else in this tree** — in
+particular not for WebGlideNitro. What remains useful about it is the design
+notes below and, optionally, a second opinion on what a frame should look
+like.
 
 ## The brief
 
@@ -58,6 +65,13 @@ The build option is still spelled `webgl2` — that is the CMake value and the
 toggle, the console messages and the shipped bundle basename
 (`hexenwail-webglide.*`). WebGlide is deliberately distinct from the older
 "maximum GL2" profile this configuration used to carry.
+
+WebGlide is also distinct from **WebGlideNitro** (`-DWEB_RENDERER=webgpu`,
+`WEBGPUQUAKE`, `hexenwail-nitro.*`), which is a separate native WebGPU backend
+rather than a mode of this one. Nitro shares no code with `gl2_*`; it may use
+WebGlide as an *optional* visual and scene-preparation reference, never as a
+performance baseline. Changing WebGlide does not change Nitro, and vice versa.
+See [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md).
 
 ## Files
 
@@ -408,11 +422,12 @@ every one of them in WebGL2, draws generated textures through the world
 contract into an RGBA8 FBO, and rejects GL errors, unexpected pixels and
 predominantly black output. It runs in CI before the WASM build.
 
-CI builds both renderer configurations on every run, so a deployed artifact
-always ships both bundles. Locally, `make dist` builds only the software
+CI builds every renderer configuration on every run, so a deployed artifact
+always ships all the bundles. Locally, `make dist` builds only the software
 renderer, and `scripts/wasm-validate-artifact.sh` accepts an artifact with
 both WebGlide files or with neither — one half alone is an error, because the
-launcher toggle would then load a bundle that cannot fetch its `.wasm`.
+launcher toggle would then load a bundle that cannot fetch its `.wasm`. The
+same all-or-nothing rule applies to the WebGlideNitro pair.
 
 `npm test` covers the launcher side, including the renderer toggle and the
 failure gate that names the toggle when the WebGlide bundle is missing.
@@ -427,6 +442,8 @@ goal — there is no desktop build.
 * [`ARCHITECTURE.md`](ARCHITECTURE.md) — layering, the macro contract, non-goals.
 * [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md) — the default renderer.
 * [`PERF_CAPTURE.md`](PERF_CAPTURE.md) — copyable raw capture used to measure this renderer.
-* [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md) — an idea for what comes *after* this
-  renderer is correct. It is gated; do not start it early.
+* [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md) — the separate native WebGPU
+  renderer. It is **not** gated on this renderer and is **not** measured
+  against it: Nitro's correctness bar is the software renderer and its
+  performance is measured on the target iPad against Nitro's own captures.
 * [`../PWA.md`](../PWA.md) — the launcher's renderer toggle and deployment.

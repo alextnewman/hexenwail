@@ -1,0 +1,225 @@
+/*
+ * wgpu_nitro.h -- internal interface of the WebGlideNitro renderer.
+ *
+ * WebGlideNitro is the web port's native WebGPU renderer.  It is not a
+ * translation of the WebGlide (WebGL2) renderer and it does not present the
+ * software rasteriser's framebuffer: it builds its own scene geometry and
+ * hands WebGPU batched, indexed triangles.  WebGlide is an abortive
+ * experiment that is kept buildable; it is used here only as an optional
+ * reference for *what* a frame contains -- which surfaces are visible, how a
+ * lightmap atlas is packed, where the scene is scanned out -- never for how
+ * to call an API, and never as a performance baseline.  What Nitro must look
+ * like is defined by the software rasteriser, and what it costs is measured
+ * on the target iPad against Nitro's own captures.
+ *
+ * The shipping renderer is still the 8bpp software rasteriser (see
+ * docs/web/SOFTWARE_RENDERER.md); Nitro is reached through the launcher's
+ * "WebGlideNitro" renderer option, and its design lives in
+ * docs/web/WEBGLIDE_NITRO.md.
+ *
+ * The rules this file encodes:
+ *
+ *   - Anything that only depends on the map is built once, at load time:
+ *     the world vertex buffer (immutable -- it is never given COPY_DST),
+ *     every indexed texture, its parameter uniform and its bind group, and
+ *     the lightmap texture array.
+ *   - A frame costs four calls into JavaScript, one command encoder and two
+ *     render passes.  Per-texture work in a pass is one setBindGroup plus
+ *     one drawIndexed.
+ *   - Shading stays indexed: the diffuse texture is r8uint, the lightmap
+ *     selects an authored colormap row, and only then does the palette turn
+ *     the result into colour.  That is d_scan.c's arithmetic, on the GPU.
+ *
+ * Copyright (C) 1996-1997  Id Software, Inc.
+ * Copyright (C) 1997-1998  Raven Software Corp.
+ * Copyright (C) 2026  Hexenwail contributors
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
+#ifndef UHEXEN2_WGPU_NITRO_H
+#define UHEXEN2_WGPU_NITRO_H
+
+/*
+=============================================================================
+
+	cvars
+
+=============================================================================
+*/
+
+extern cvar_t	r_nitro_scenescale;	/* scene buffer scale, 0.25..2 */
+extern cvar_t	r_nitro_report;		/* print the slice's content gaps per map */
+
+/*
+=============================================================================
+
+	matrices
+
+	Column major, in the order a WGSL mat4x4f wants them.
+
+=============================================================================
+*/
+
+typedef struct
+{
+	float	m[16];
+} wgpumatrix_t;
+
+void WGPU_MatrixIdentity (wgpumatrix_t *out);
+void WGPU_MatrixMultiply (wgpumatrix_t *out, const wgpumatrix_t *a, const wgpumatrix_t *b);
+void WGPU_MatrixFrustum (wgpumatrix_t *out, float fovx, float fovy, float zNear);
+void WGPU_MatrixRotate (wgpumatrix_t *out, float degrees, float x, float y, float z);
+void WGPU_MatrixTranslate (wgpumatrix_t *out, float x, float y, float z);
+
+/*
+=============================================================================
+
+	shared frame state (r_webgpu.c)
+
+=============================================================================
+*/
+
+typedef struct
+{
+	mplane_t	planes[4];
+} wgpufrustum_t;
+
+extern wgpufrustum_t	wgpu_frustum;
+extern wgpumatrix_t	wgpu_view_projection;
+extern int		wgpu_visframecount;
+extern mleaf_t		*wgpu_viewleaf;
+extern vec3_t		wgpu_modelorg;
+extern int		wgpu_frame_batches;
+extern int		wgpu_frame_polys;
+
+qboolean WGPU_CullBox (const vec3_t mins, const vec3_t maxs);
+void WGPU_GammaContrast (float *gamma, float *contrast);
+void WGPU_PolyBlendColor (float *rgba);
+
+/*
+=============================================================================
+
+	the JavaScript backend (engine/web/webgpu_nitro.js)
+
+	Every one of these is a real WebGPU object operation, not a GL call
+	in disguise.  Buffers are handed whole arrays; nothing here is
+	per-primitive.
+
+=============================================================================
+*/
+
+/* Texture parameter flags; mirrored by the WGSL in webgpu_nitro.js. */
+#define NITROTEX_HOLEY		1u	/* palette index 0 is clear ('{' textures) */
+#define NITROTEX_ALPHA		2u	/* palette index 255 is clear (2D pics) */
+#define NITROTEX_WRAP		4u	/* repeat instead of clamping */
+
+/* Vertex layouts; mirrored by the pipeline descriptors in webgpu_nitro.js. */
+typedef struct
+{
+	float		position[3];
+	float		texcoord[2];	/* normalised diffuse coordinates */
+	float		lightmap[3];	/* s, t within the layer; layer, or -1 */
+} wgpuworld_vertex_t;
+
+typedef struct
+{
+	float		x, y;
+	float		s, t;
+	unsigned int	color;		/* RGBA bytes, little endian */
+} wgpuui_vertex_t;
+
+/* One drawIndexed (world) or one draw (2D). */
+typedef struct
+{
+	int	texture;
+	int	first;
+	int	count;
+	int	reserved;
+} wgpubatch_t;
+
+/* The whole per-frame scene description, uploaded in one go. */
+#define NITROSCENE_FULLBRIGHT	1
+
+typedef struct
+{
+	float	mvp[16];
+	float	tint[4];
+	float	gamma;
+	float	contrast;
+	int	scene_width;
+	int	scene_height;
+	int	dest_x;
+	int	dest_y;
+	int	dest_width;
+	int	dest_height;
+	int	flags;
+} wgpuscene_t;
+
+typedef struct
+{
+	float	screen_width;
+	float	screen_height;
+	float	gamma;
+	float	contrast;
+} wgpuui_params_t;
+
+extern int  Nitro_Init (void);
+extern void Nitro_Shutdown (void);
+extern void Nitro_Resize (int width, int height);
+extern void Nitro_SetPalette (const byte *palette);
+extern void Nitro_SetColormap (const byte *colormap, int rows);
+extern int  Nitro_CreateTexture (const char *name, int width, int height,
+			const byte *pixels, unsigned int flags);
+extern int  Nitro_CreateWorld (const float *vertices, int vertexcount,
+			int maxindices, int lightmaplayers, int lightmapsize);
+extern void Nitro_UploadLightmap (int layer, const byte *texels);
+extern void Nitro_DestroyWorld (void);
+extern void Nitro_BeginFrame (void);
+extern void Nitro_DrawScene (const wgpuscene_t *params, const unsigned int *indices,
+			int indexcount, const wgpubatch_t *batches, int batchcount);
+extern void Nitro_EndFrame (const wgpuui_params_t *params, const wgpuui_vertex_t *vertices,
+			int vertexcount, const wgpubatch_t *runs, int runcount);
+
+/*
+=============================================================================
+
+	the static world (wgpu_world.c)
+
+=============================================================================
+*/
+
+#define NITRO_LIGHTMAP_SIZE	128
+#define NITRO_MAX_LIGHTMAPS	128
+
+void WGPUWorld_NewMap (void);
+void WGPUWorld_Shutdown (void);
+void WGPUWorld_DrawWorld (wgpuscene_t *scene);
+qboolean WGPUWorld_Ready (void);
+void WGPUWorld_ReportGaps (void);
+
+/*
+=============================================================================
+
+	the 2D layer (draw_webgpu.c)
+
+=============================================================================
+*/
+
+void WGPUDraw_EndFrame (void);
+int WGPUDraw_LoadTexture (const char *name, const byte *pixels, int width,
+			int height, unsigned int flags);
+
+#endif	/* UHEXEN2_WGPU_NITRO_H */

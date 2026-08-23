@@ -67,9 +67,9 @@ agreed design; they exist so sessions stop re-deriving context from scratch.
 | --- | --- |
 | [`docs/web/ARCHITECTURE.md`](docs/web/ARCHITECTURE.md) | What the web port is, its non-goals, layering, the `WEBQUAKE` / `WEBGL2QUAKE` macro contract, ownership boundaries |
 | [`docs/web/SOFTWARE_RENDERER.md`](docs/web/SOFTWARE_RENDERER.md) | The **default** renderer: classic 8bpp rasteriser presented on an accelerated canvas, resolution ladder, iPad Pro panel math, cvars |
-| [`docs/web/WEBGLIDE.md`](docs/web/WEBGLIDE.md) | The experimental WebGlide GPU renderer (`-DWEB_RENDERER=webgl2`) |
-| [`docs/web/PERF_CAPTURE.md`](docs/web/PERF_CAPTURE.md) | Copyable raw performance capture shared by both renderers |
-| [`docs/web/WEBGLIDE_NITRO.md`](docs/web/WEBGLIDE_NITRO.md) | **Idea only, gated:** console-style tricks layered on a finished WebGlide |
+| [`docs/web/WEBGLIDE.md`](docs/web/WEBGLIDE.md) | WebGlide, the abortive WebGL2 experiment kept buildable (`-DWEB_RENDERER=webgl2`) |
+| [`docs/web/PERF_CAPTURE.md`](docs/web/PERF_CAPTURE.md) | Copyable raw performance capture shared by every renderer; compare a capture only with another capture from the same renderer |
+| [`docs/web/WEBGLIDE_NITRO.md`](docs/web/WEBGLIDE_NITRO.md) | WebGlideNitro, the separate native WebGPU renderer (`-DWEB_RENDERER=webgpu`). Not gated on WebGlide; measured on the target iPad against its own captures |
 | [`docs/PWA.md`](docs/PWA.md) | PWA shell, asset import, deployment |
 
 **Settled decisions — do not reopen without an explicit instruction:**
@@ -79,7 +79,11 @@ agreed design; they exist so sessions stop re-deriving context from scratch.
 * The web platform is treated as an independent OS, like a console port.
   POSIX/desktop parity and upstreamability are **non-goals**.
 * The **software renderer is the default**. The WebGlide GPU renderer stays
-  in-tree and buildable; do not delete it.
+  in-tree and buildable; do not delete it. WebGlide is an **abortive
+  experiment**, though: its performance is explicitly not a gate, baseline or
+  optimisation criterion for WebGlideNitro or anything else, and it is at most
+  an optional visual/behavioural reference. Nitro performance is measured
+  directly on the target iPad against Nitro's own captures.
 
 If the code and these documents disagree, say so explicitly and fix one of
 them — do not silently invent a third plan.

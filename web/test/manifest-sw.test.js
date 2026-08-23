@@ -21,7 +21,8 @@ test('service worker precaches repo-managed launcher assets', () => {
   const matches = [...swText.matchAll(/'\.\/([^']+)'/g)].map((match) => match[1]);
   const repoManaged = matches.filter((asset) => !asset.startsWith('hexenwail.')
     && !asset.startsWith('hexenwail-webglide.')
-    && !asset.startsWith('hexenwail-webgpu.'));
+    && !asset.startsWith('hexenwail-webgpu.')
+    && !asset.startsWith('hexenwail-nitro.'));
   for (const asset of repoManaged) {
     const relativePath = asset === '' ? 'index.html' : asset;
     assert.equal(existsSync(join(repoRoot, 'web', relativePath)), true, `missing precache asset ${asset}`);
@@ -44,12 +45,16 @@ test('service worker keeps optional GPU bundles out of the install precache', ()
     'CORE_ASSETS must not precache the experimental WebGlide bundle');
   assert.doesNotMatch(coreBlock, /hexenwail-webgpu/,
     'CORE_ASSETS must not precache the WebGPU presenter preview');
+  assert.doesNotMatch(coreBlock, /hexenwail-nitro/,
+    'CORE_ASSETS must not precache the WebGlideNitro bundle');
   const optionalBlock = swText.match(/const OPTIONAL_ASSETS = \[([\s\S]*?)\];/)?.[1];
   assert.ok(optionalBlock, 'OPTIONAL_ASSETS array is defined');
   assert.match(optionalBlock, /'\.\/hexenwail-webglide\.js'/);
   assert.match(optionalBlock, /'\.\/hexenwail-webglide\.wasm'/);
   assert.match(optionalBlock, /'\.\/hexenwail-webgpu\.js'/);
   assert.match(optionalBlock, /'\.\/hexenwail-webgpu\.wasm'/);
+  assert.match(optionalBlock, /'\.\/hexenwail-nitro\.js'/);
+  assert.match(optionalBlock, /'\.\/hexenwail-nitro\.wasm'/);
   // Runtime-cached on first use, so both core and optional URLs feed the
   // same cache-first fetch path; anything else would break offline play
   // after a single WebGlide session.

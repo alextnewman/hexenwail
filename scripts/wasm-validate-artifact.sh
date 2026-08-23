@@ -93,6 +93,26 @@ else
 		"(WebGPU presenter feasibility bundle)"
 fi
 
+# WebGlideNitro, the native WebGPU renderer, follows the same rule again.
+nitro_js="$DIST_DIR/hexenwail-nitro.js"
+nitro_wasm="$DIST_DIR/hexenwail-nitro.wasm"
+if [ -s "$nitro_js" ] && [ -s "$nitro_wasm" ]; then
+	echo "OK (optional present): $nitro_js"
+	echo "OK (optional present): $nitro_wasm"
+	for optional in hexenwail-nitro.data hexenwail-nitro.worker.js engine-shell-debug-nitro.html; do
+		if [ -s "$DIST_DIR/$optional" ]; then
+			echo "OK (optional present): $DIST_DIR/$optional"
+		fi
+	done
+elif [ -s "$nitro_js" ] || [ -s "$nitro_wasm" ]; then
+	echo "INVALID: only one half of the WebGlideNitro bundle is present" \
+		"(hexenwail-nitro.js and hexenwail-nitro.wasm must ship together)" >&2
+	missing=1
+else
+	echo "info: optional artifact not present: $DIST_DIR/hexenwail-nitro.js" \
+		"(WebGlideNitro native WebGPU bundle)"
+fi
+
 if [ "$missing" -ne 0 ]; then
 	echo "PWA artifact validation FAILED: required files are missing." >&2
 	exit 1

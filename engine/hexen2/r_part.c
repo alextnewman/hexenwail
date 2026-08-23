@@ -1446,6 +1446,11 @@ void R_DrawParticles (void)
 {
 	WebGL2_DrawParticles(active_particles);
 }
+#elif defined(WEBGPUQUAKE)
+void R_DrawParticles (void)
+{
+	WebGPU_DrawParticles(active_particles);
+}
 #elif defined(GLQUAKE)
 static const float ptex_coord[4][3][2] =
 {

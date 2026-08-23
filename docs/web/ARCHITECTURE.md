@@ -53,27 +53,33 @@ software rasteriser presented through an accelerated canvas.
              |
              |  renderer interface (R_*, Draw_*, VID_*)
              v
-   +---------------------+---------------------+
-   |  software renderer  |  WebGlide (GPU)     |   picked at build time
-   |  (default)          |  (experimental)     |
-   +---------------------+---------------------+
-             |                       |
-             |  WebCanvas_*          |  direct GL
-             v                       v
-   +---------------------------------------------+
-   |  presenter backends (web_canvas.h)          |
-   |   web_canvas_gl2.c   web_canvas_wgpu.c      |
-   +---------------------------------------------+
-             |
-             v
-        <canvas> in the PWA shell (web/)
+   +---------------------+-----------------+-------------------+
+   |  software renderer  |  WebGlide       |  WebGlideNitro    |  picked at
+   |  (default)          |  (WebGL2, exp.) |  (WebGPU, preview)|  build time
+   +---------------------+-----------------+-------------------+
+             |                    |                  |
+             |  WebCanvas_*       |  direct GL       |  Nitro_* -> WebGPU
+             v                    v                  v
+   +-----------------------------------+             |
+   |  presenter backends               |             |
+   |  (web_canvas.h)                   |             |
+   |   web_canvas_gl2.c                |             |
+   |   web_canvas_wgpu.c               |             |
+   +-----------------------------------+             |
+             |                    |                  |
+             v                    v                  v
+              <canvas> in the PWA shell (web/)
 ```
 
 The **presenter** is deliberately separated from the **renderer**. The
 software renderer produces an 8bpp indexed framebuffer and knows nothing
 about how it reaches the screen; the presenter knows nothing about Hexen II.
-That boundary is what lets us add a WebGPU backend later without touching a
-line of rasteriser code.
+That boundary is what let us add a WebGPU presenter without touching a line
+of rasteriser code.
+
+The presenter layer belongs to the software renderer alone. WebGlide and
+WebGlideNitro each own their whole path to the canvas, which is why they do
+not appear above `web_canvas.h`.
 
 ## Build-time renderer selection
 
@@ -83,23 +89,47 @@ emcmake cmake -S engine -B build
 
 # WebGlide, the experimental GPU renderer
 emcmake cmake -S engine -B build -DWEB_RENDERER=webgl2
+
+# WebGlideNitro, the native WebGPU renderer (technology preview)
+emcmake cmake -S engine -B build -DWEB_RENDERER=webgpu
 ```
 
-Both configurations must keep compiling. WebGlide is **not** deprecated and
-must not be deleted. The build option value is `webgl2` and the macro is
-`WEBGL2QUAKE`, but the shipped bundle basename (`hexenwail-webglide.*`) and
-every user-facing name are WebGlide — see [`WEBGLIDE.md`](WEBGLIDE.md).
+`WEB_RENDERER` is the *only* renderer switch, it takes exactly one of
+`software`, `webgl2` or `webgpu`, and all three configurations must keep
+compiling. WebGlide is an **abortive experiment**: deprecated in the sense that
+no further work is owed to it, but it stays in-tree, keeps compiling and must
+not be deleted. It is not a performance baseline for anything — the owner's
+instruction is explicit that WebGlide performance is not a criterion — and at
+most an optional visual and behavioural reference.
 
-The software renderer also has an opt-in WebGPU presenter feasibility build:
+| `WEB_RENDERER` | Macro | Bundle | Build helper | Status |
+| --- | --- | --- | --- | --- |
+| `software` (default) | `WEBSOFT` | `hexenwail.*` | `make build` | The supported renderer |
+| `webgl2` | `WEBGL2QUAKE` | `hexenwail-webglide.*` | `make build-webgl2` | Abortive experiment, kept buildable |
+| `webgpu` | `WEBGPUQUAKE` | `hexenwail-nitro.*` | `make build-nitro` | Technology preview, static world only |
+
+The option value is `webgl2` and the macro is `WEBGL2QUAKE`, but the shipped
+bundle basename and every user-facing name are WebGlide — see
+[`WEBGLIDE.md`](WEBGLIDE.md). Likewise `webgpu`/`WEBGPUQUAKE` ships as
+WebGlideNitro — see [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md).
+
+The software renderer additionally has an opt-in WebGPU *presenter*
+feasibility build, which is a different axis entirely:
 
 ```bash
 ./scripts/wasm-build.sh webgpu engine/build-webgpu
 ```
 
-This changes only indexed framebuffer scan-out and retains `WEBSOFT`; it is not
-the future WebGlideNitro renderer. The launcher acquires the asynchronous
-WebGPU device before `callMain` and hands it to the linked presenter through
-`Module.hexenwailWebGPU`.
+`WEB_PRESENTER` only applies to `WEB_RENDERER=software`. It changes only
+indexed framebuffer scan-out, retains `WEBSOFT`, and is **not** the
+WebGlideNitro renderer despite both using WebGPU. The two never share a build:
+the presenter is `hexenwail-webgpu` with `WEBGPU_PRESENT`, Nitro is
+`hexenwail-nitro` with `WEBGPUQUAKE`.
+
+What they do share is the launcher device handoff. The launcher acquires the
+asynchronous WebGPU device before `callMain` and hands it over through
+`Module.hexenwailWebGPU`; both the presenter and Nitro adopt that device rather
+than requesting a second adapter for a canvas that already has one.
 
 ### Macro contract
 
@@ -108,9 +138,10 @@ Those are now separate:
 
 | Macro | Meaning | Defined for |
 | --- | --- | --- |
-| `PLATFORM_WEB` | Emscripten host: no SDL, browser event loop, OPFS filesystem | both configurations |
-| `WEBQUAKE` | web *platform* client: web VID/input/sound, extended 2D API surface | both configurations |
+| `PLATFORM_WEB` | Emscripten host: no SDL, browser event loop, OPFS filesystem | every configuration |
+| `WEBQUAKE` | web *platform* client: web VID/input/sound, extended 2D API surface | every configuration |
 | `WEBGL2QUAKE` | the WebGlide GPU *renderer* | `-DWEB_RENDERER=webgl2` only |
+| `WEBGPUQUAKE` | the WebGlideNitro native WebGPU *renderer* | `-DWEB_RENDERER=webgpu` only |
 | `WEBSOFT` | the software *renderer* | default configuration only |
 | `WEBGPU_PRESENT` | WebGPU presenter under the software renderer | `WEB_PRESENTER=webgpu` only |
 | `GLQUAKE` | the desktop OpenGL renderer | never (no desktop target is built) |
@@ -118,8 +149,12 @@ Those are now separate:
 Rules of thumb when adding a guard:
 
 * Guarding *browser vs. native* behaviour → `WEBQUAKE` / `PLATFORM_WEB`.
-* Guarding *GPU-specific* behaviour → `WEBGL2QUAKE`.
+* Guarding *WebGlide-specific* behaviour → `WEBGL2QUAKE`.
+* Guarding *WebGlideNitro-specific* behaviour → `WEBGPUQUAKE`.
 * Guarding *software-rasteriser-specific* behaviour → `WEBSOFT`.
+* Exactly one of `WEBSOFT`, `WEBGL2QUAKE` and `WEBGPUQUAKE` is ever defined,
+  so "any GPU renderer" is spelled `defined(WEBGL2QUAKE) || defined(WEBGPUQUAKE)`
+  rather than by negating the software case.
 * Never add a new `#if defined(WEBQUAKE)` that really means "GPU", and never
   spell the software case as `defined(WEBQUAKE) && !defined(WEBGL2QUAKE)` —
   `WEBSOFT` exists precisely so that renderer guards stay positive and
@@ -149,8 +184,9 @@ as everything else — the shell owns the page, the engine owns the game:
 | Engine ↔ JS entry points | `engine/CMakeLists.txt` `EXPORTED_FUNCTIONS` | Names are `Web_*`. `web/app.js` must match exactly; a mismatch fails **silently** at runtime. |
 | Platform backends | `engine/hexen2/sys_web.c`, `engine/h2shared/in_web.c`, `snd_web.c` | |
 | Music codec set | `engine/CMakeLists.txt` | `bgmusic.c` only offers a format whose codec registered itself in `S_CodecInit`, so the build file is what decides which formats exist at runtime — see below. |
-| VID / presentation | `vid_soft_web.c` + `web_canvas*.c` (software), `vid_webgl2.c` (WebGlide) | |
-| Renderer | restored `d_*.c` / `r_*.c` (software), `r_webgl2.c` + `gl2_*.c` (WebGlide) | |
+| VID / presentation | `vid_soft_web.c` + `web_canvas*.c` (software), `vid_webgl2.c` (WebGlide), `vid_webgpu.c` (Nitro) | |
+| Renderer | restored `d_*.c` / `r_*.c` (software), `r_webgl2.c` + `gl2_*.c` (WebGlide), `r_webgpu.c` + `wgpu_world.c` + `draw_webgpu.c` (Nitro) | The three renderers share no backend code. Nitro treats WebGlide as a visual and scene-preparation reference only; it contains no GL call and no `gl2_*` source. |
+| WebGPU JS libraries | `engine/web/webgpu_present.js` (presenter), `engine/web/webgpu_nitro.js` (Nitro) | Linked with `--js-library`. WebGlide needs no such file because Emscripten already maps GL to WebGL2. `webgpu_nitro.js` is the only file in the Nitro build that touches the WebGPU API. |
 | Shared client (menu, sbar, console, screen) | `engine/hexen2`, `engine/h2shared` | Written against one API; renderer-specific gaps are filled by shim files, not by `#ifdef` sprinkling. |
 
 ## Audio and music
@@ -205,7 +241,7 @@ actually play.
 
 ## Working agreements
 
-* **Small, reversible steps.** Build after every meaningful change — both
+* **Small, reversible steps.** Build after every meaningful change — all three
   renderer configurations.
 * **No history rewriting.** Fix forward with new commits.
 * **Issues live in `bd`**, not in markdown TODO lists.
@@ -217,7 +253,10 @@ actually play.
 
 * [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md) — the default renderer and
   presenter design, resolution ladder, and cvars.
-* [`WEBGLIDE.md`](WEBGLIDE.md) — the experimental WebGlide GPU renderer.
+* [`WEBGLIDE.md`](WEBGLIDE.md) — WebGlide, the abortive WebGL2 experiment that
+  stays buildable.
 * [`PERF_CAPTURE.md`](PERF_CAPTURE.md) — copyable raw web performance capture.
-* [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md) — the separate WebGPU renderer design, gated on a finished WebGlide.
+* [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md) — the separate native WebGPU
+  renderer. Not gated on WebGlide; measured on the target iPad against its own
+  captures.
 * [`../PWA.md`](../PWA.md) — PWA shell, asset import, deployment.
