@@ -37,6 +37,7 @@ const HexenwailNitroLibrary = {
     /* Vertex strides, mirrored by wgpu_nitro.h. */
     WORLD_STRIDE: 32,
     UI_STRIDE: 20,
+    PARTICLE_STRIDE: 20,
 
     /* Texture parameter flags, mirrored by wgpu_nitro.h. */
     TEX_HOLEY: 1,
@@ -109,6 +110,50 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   }
   let shaded = textureLoad(colormapTexture, vec2i(i32(index), row), 0).r;
   return vec4f(textureLoad(paletteTexture, vec2i(i32(shaded), 0), 0).rgb, 1.0);
+}`,
+
+    particleShader: `
+struct Frame {
+  mvp : mat4x4f,
+  fullbright : f32,
+  pad0 : f32,
+  pad1 : f32,
+  pad2 : f32,
+}
+
+struct ParticleParams {
+  right : vec4f,
+  up : vec4f,
+}
+
+@group(0) @binding(0) var<uniform> frame : Frame;
+@group(1) @binding(0) var<uniform> particle : ParticleParams;
+
+struct VertexOutput {
+  @builtin(position) position : vec4f,
+  @location(0) color : vec4f,
+}
+
+@vertex
+fn vertexMain(@builtin(vertex_index) vertexIndex : u32,
+              @location(0) origin : vec3f,
+              @location(1) scale : f32,
+              @location(2) color : vec4f) -> VertexOutput {
+  const corners = array<vec2f, 6>(
+    vec2f(-0.5, -0.5), vec2f(-0.5, 0.5), vec2f(0.5, 0.5),
+    vec2f(-0.5, -0.5), vec2f(0.5, 0.5), vec2f(0.5, -0.5));
+  let corner = corners[vertexIndex];
+  let position = origin + particle.right.xyz * corner.x * scale
+                        + particle.up.xyz * corner.y * scale;
+  var output : VertexOutput;
+  output.position = frame.mvp * vec4f(position, 1.0);
+  output.color = color;
+  return output;
+}
+
+@fragment
+fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
+  return input.color;
 }`,
 
     scanoutShader: `
@@ -352,6 +397,13 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
             buffer: { type: 'uniform' } },
         ],
       });
+      const particleGroupLayout = device.createBindGroupLayout({
+        label: 'WebGlideNitro particles',
+        entries: [
+          { binding: 0, visibility: GPUShaderStage.VERTEX,
+            buffer: { type: 'uniform' } },
+        ],
+      });
       const uiGroupLayout = device.createBindGroupLayout({
         label: 'WebGlideNitro 2D',
         entries: [
@@ -367,6 +419,9 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       });
       const scanoutModule = device.createShaderModule({
         label: 'WebGlideNitro scan-out', code: Nitro.scanoutShader,
+      });
+      const particleModule = device.createShaderModule({
+        label: 'WebGlideNitro particles', code: Nitro.particleShader,
       });
       const uiModule = device.createShaderModule({
         label: 'WebGlideNitro 2D', code: Nitro.uiShader,
@@ -411,6 +466,43 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           module: scanoutModule, entryPoint: 'fragmentMain', targets: [{ format }],
         },
         primitive: { topology: 'triangle-list' },
+      });
+
+      const particlePipeline = device.createRenderPipeline({
+        label: 'WebGlideNitro particles',
+        layout: device.createPipelineLayout({
+          bindGroupLayouts: [frameGroupLayout, particleGroupLayout],
+        }),
+        vertex: {
+          module: particleModule,
+          entryPoint: 'vertexMain',
+          buffers: [{
+            arrayStride: Nitro.PARTICLE_STRIDE,
+            stepMode: 'instance',
+            attributes: [
+              { shaderLocation: 0, offset: 0, format: 'float32x3' },
+              { shaderLocation: 1, offset: 12, format: 'float32' },
+              { shaderLocation: 2, offset: 16, format: 'unorm8x4' },
+            ],
+          }],
+        },
+        fragment: {
+          module: particleModule,
+          entryPoint: 'fragmentMain',
+          targets: [{
+            format: 'rgba8unorm',
+            blend: {
+              color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
+              alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+            },
+          }],
+        },
+        primitive: { topology: 'triangle-list' },
+        depthStencil: {
+          format: 'depth24plus',
+          depthWriteEnabled: false,
+          depthCompare: 'less-equal',
+        },
       });
 
       const uiPipeline = device.createRenderPipeline({
@@ -459,6 +551,11 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         size: 16,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
+      const particleUniform = device.createBuffer({
+        label: 'WebGlideNitro particle uniform',
+        size: 32,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
       const paletteTexture = device.createTexture({
         label: 'WebGlideNitro palette',
         size: { width: 256, height: 1 },
@@ -493,8 +590,9 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       Nitro.state = {
         device, context, format,
         frameGroupLayout, textureGroupLayout, scanoutGroupLayout, uiGroupLayout,
-        worldPipeline, scanoutPipeline, uiPipeline,
-        frameUniform, scanoutUniform, uiUniform,
+        particleGroupLayout,
+        worldPipeline, particlePipeline, scanoutPipeline, uiPipeline,
+        frameUniform, scanoutUniform, uiUniform, particleUniform,
         paletteTexture, colormapTexture, lightmapSampler, sceneSampler,
         placeholderLightmap,
         lightmapTexture: null, lightmapView: placeholderLightmap.createView({
@@ -508,7 +606,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         sceneColorView: null, sceneDepthView: null,
         sceneWidth: 0, sceneHeight: 0,
         scanoutBindGroup: null,
-        worldIndexBuffer: null, uiVertexBuffer: null,
+        worldIndexBuffer: null, particleBuffer: null, uiVertexBuffer: null,
         encoder: null, sceneReady: false,
         scanout: null,
         canvasWidth: 0, canvasHeight: 0,
@@ -522,6 +620,13 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         entries: [
           { binding: 0, resource: { buffer: uiUniform } },
           { binding: 1, resource: paletteTexture.createView() },
+        ],
+      });
+      Nitro.state.particleBindGroup = device.createBindGroup({
+        label: 'WebGlideNitro particles',
+        layout: particleGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: particleUniform } },
         ],
       });
 
@@ -544,6 +649,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     }
     state.world?.vertexBuffer?.destroy();
     state.worldIndexBuffer?.destroy();
+    state.particleBuffer?.destroy();
     state.uiVertexBuffer?.destroy();
     state.lightmapTexture?.destroy();
     state.placeholderLightmap?.destroy();
@@ -552,6 +658,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     state.frameUniform.destroy();
     state.scanoutUniform.destroy();
     state.uiUniform.destroy();
+    state.particleUniform.destroy();
     state.paletteTexture.destroy();
     state.colormapTexture.destroy();
     Nitro.state = null;
@@ -758,15 +865,17 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
    *   [22]     scene width  [23] scene height   (integers)
    *   [24..27] destination rect on the canvas   (integers)
    *   [28]     flags: 1 = fullbright
+   *   [29..32] particle right basis vector
+   *   [33..36] particle up basis vector
    * batches are int quads of { textureId, firstIndex, indexCount, unused }.
    */
   Nitro_DrawScene__deps: ['$Nitro'],
   Nitro_DrawScene: function (paramsPointer, indexPointer, indexCount,
-    batchPointer, batchCount) {
+    batchPointer, batchCount, particlePointer, particleCount) {
     const state = Nitro.checkDevice();
     if (!state?.encoder || !state.world) return;
 
-    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 29);
+    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 37);
     const integers = HEAP32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 29);
     const sceneWidth = Math.max(integers[22], 1);
     const sceneHeight = Math.max(integers[23], 1);
@@ -827,6 +936,19 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         }
         pass.drawIndexed(count, 1, first, 0, 0);
       }
+    }
+    if (particlePointer && particleCount > 0) {
+      const bytes = particleCount * Nitro.PARTICLE_STRIDE;
+      const buffer = Nitro.ensureUploadBuffer('particleBuffer', bytes,
+        GPUBufferUsage.VERTEX);
+      state.device.queue.writeBuffer(buffer, 0, HEAPU8, particlePointer, bytes);
+      state.device.queue.writeBuffer(state.particleUniform, 0,
+        floats.subarray(29, 37));
+      pass.setPipeline(state.particlePipeline);
+      pass.setBindGroup(0, state.frameBindGroup);
+      pass.setBindGroup(1, state.particleBindGroup);
+      pass.setVertexBuffer(0, buffer);
+      pass.draw(6, particleCount);
     }
     pass.end();
   },

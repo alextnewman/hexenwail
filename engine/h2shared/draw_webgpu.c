@@ -385,10 +385,10 @@ void Draw_Init (void)
 	pixels = FS_LoadTempFile ("gfx/menu/conchars.lmp", NULL);
 	if (!pixels || fs_filesize < 256 * 128)
 		Sys_Error ("Invalid gfx/menu/conchars.lmp");
-	charset_texture = Draw_LoadPicTexture ("conchars", pixels, 256, 128, false, true);
+	charset_texture = Draw_LoadPicTexture ("conchars", pixels, 256, 128, true, true);
 
 	pixels = W_GetLumpName ("tinyfont");
-	smallfont_texture = Draw_LoadPicTexture ("tinyfont", pixels, 128, 32, false, true);
+	smallfont_texture = Draw_LoadPicTexture ("tinyfont", pixels, 128, 32, true, true);
 
 	pic = (qpic_t *)FS_LoadTempFile ("gfx/menu/bigfont2.lmp", NULL);
 	if (!pic)
@@ -397,7 +397,7 @@ void Draw_Init (void)
 		Sys_Error ("Missing big menu font");
 	SwapPic (pic);
 	bigfont_texture = Draw_LoadPicTexture ("bigfont", pic->data, pic->width,
-			pic->height, false, true);
+			pic->height, true, true);
 
 	pic = (qpic_t *)FS_LoadTempFile ("gfx/menu/conback.lmp", NULL);
 	if (!pic)

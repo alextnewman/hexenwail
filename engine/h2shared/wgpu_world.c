@@ -709,7 +709,8 @@ void WGPUWorld_DrawWorld (wgpuscene_t *scene)
 
 	if (!nitro_world_ready || !cl.worldmodel)
 	{
-		Nitro_DrawScene (scene, NULL, 0, NULL, 0);
+		Nitro_DrawScene (scene, NULL, 0, NULL, 0,
+				wgpu_particles, wgpu_particle_count);
 		return;
 	}
 
@@ -739,7 +740,8 @@ void WGPUWorld_DrawWorld (wgpuscene_t *scene)
 	 * opaque and unwarped.  Both are reported as approximations. */
 
 	wgpu_frame_batches = batchcount;
-	Nitro_DrawScene (scene, nitro_frame_indices, cursor, nitro_batches, batchcount);
+	Nitro_DrawScene (scene, nitro_frame_indices, cursor, nitro_batches, batchcount,
+			wgpu_particles, wgpu_particle_count);
 	if (cursor > 0)
 		WebPerf_CountUpload ((size_t)cursor * sizeof(unsigned int));
 }
@@ -813,7 +815,7 @@ void WGPUWorld_NewMap (void)
 ================
 WGPUWorld_ReportGaps
 
-The first slice draws the static world and nothing else.  That is a
+The renderer still has deliberate content gaps.  They are stated out loud
 deliberate scope, not an accident, so it is stated out loud once per map
 rather than left for the player to discover by walking into an invisible
 monster.  Silence it with r_nitro_report 0.
@@ -825,9 +827,9 @@ void WGPUWorld_ReportGaps (void)
 		return;
 	nitro_reported = true;
 
-	Con_Printf ("WebGlideNitro: static world only (%d surfaces, %d lightmap pages)\n",
+	Con_Printf ("WebGlideNitro: world and particles (%d surfaces, %d lightmap pages)\n",
 			nitro_numsurfaces, nitro_numlightmaps);
-	Con_Printf ("  not drawn: brush entities, alias models, sprites, particles\n");
+	Con_Printf ("  not drawn: brush entities, alias models, sprites\n");
 	Con_Printf ("  not applied: dynamic lights, animated light styles, fog\n");
 	Con_Printf ("  approximated: sky is its solid layer unscrolled; liquids are opaque and unwarped\n");
 }

@@ -127,9 +127,12 @@ mleaf_t *wgpu_viewleaf;
 vec3_t wgpu_modelorg;
 int wgpu_frame_batches;
 int wgpu_frame_polys;
+wgpuparticle_t *wgpu_particles;
+int wgpu_particle_count;
 
 static qboolean wgpu_frame_open;
 static qboolean wgpu_initialized;
+static int wgpu_particle_max;
 
 /*
 =============================================================================
@@ -514,6 +517,9 @@ static void WGPU_SetupScene (wgpuscene_t *scene)
 
 	if (r_fullbright.integer || r_lightmap.integer)
 		scene->flags |= NITROSCENE_FULLBRIGHT;
+
+		VectorScale (vright, 1.5f, scene->particle_right);
+		VectorScale (vup, 1.5f, scene->particle_up);
 }
 
 /*
@@ -589,6 +595,10 @@ void WebGPU_Shutdown (void)
 		return;
 	WGPUWorld_Shutdown ();
 	Nitro_Shutdown ();
+	free (wgpu_particles);
+	wgpu_particles = NULL;
+	wgpu_particle_count = 0;
+	wgpu_particle_max = 0;
 	wgpu_initialized = false;
 	wgpu_frame_open = false;
 }
@@ -688,9 +698,14 @@ void R_RenderView (void)
 	WebGPU_BeginFrame ();
 	WGPU_SetupFrame ();
 	WGPU_SetupScene (&scene);
+	wgpu_particle_count = 0;
+	R_DrawParticles ();
 
 	if (r_drawworld.integer)
 		WGPUWorld_DrawWorld (&scene);
+	else
+		Nitro_DrawScene (&scene, NULL, 0, NULL, 0,
+				wgpu_particles, wgpu_particle_count);
 
 	if (wgpu_viewleaf)
 		V_SetContentsColor(wgpu_viewleaf->contents);
@@ -783,12 +798,52 @@ void Fog_ParseServerMessage (void)
 ================
 WebGPU_DrawParticles
 
-Particles are not in the first slice.  This is a deliberate no-op rather
-than a missing symbol so that the gap is visible here and in the per-map
-report, not as a link error.
+Builds one compact instance per particle.  WebGPU expands each instance into
+a camera-facing quad in the vertex shader, avoiding six CPU-transformed
+vertices per particle while retaining the software renderer's palette colour
+and distance-scaled size.
 ================
 */
 void WebGPU_DrawParticles (particle_t *first)
 {
-	(void) first;
+	particle_t	*particle;
+
+	if (!first || !gl_particles.integer)
+		return;
+
+	for (particle = first; particle; particle = particle->next)
+	{
+		wgpuparticle_t	*out;
+		unsigned int	color;
+		vec3_t		delta;
+		int		index = (int)particle->color & 0x01ff;
+		float		scale;
+
+		if (wgpu_particle_count == wgpu_particle_max)
+		{
+			wgpu_particle_max = wgpu_particle_max ? wgpu_particle_max * 2 : 1024;
+			wgpu_particles = (wgpuparticle_t *) realloc (wgpu_particles,
+				(size_t)wgpu_particle_max * sizeof(*wgpu_particles));
+			if (!wgpu_particles)
+				Sys_Error ("WebGlideNitro: out of memory for %d particles",
+						wgpu_particle_max);
+		}
+
+		color = index < 256 ? d_8to24table[index] :
+				d_8to24TranslucentTable[index - 256];
+		if (index < 256)
+			color |= 0xff000000u;
+
+		VectorSubtract (particle->org, r_origin, delta);
+		scale = 1.0f + DotProduct (delta, vpn) * 0.004f;
+		scale = CLAMP(1.0f, scale, 12.0f);
+
+		out = &wgpu_particles[wgpu_particle_count++];
+		VectorCopy (particle->org, out->position);
+		out->scale = scale;
+		out->color = color;
+	}
+
+	WebPerf_CountDraw (wgpu_particle_count * 2);
+	WebPerf_CountUpload ((size_t)wgpu_particle_count * sizeof(*wgpu_particles));
 }
