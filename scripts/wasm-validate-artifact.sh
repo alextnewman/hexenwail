@@ -21,6 +21,7 @@ require() {
 	else
 		echo "OK: $DIST_DIR/$path"
 	fi
+
 }
 
 require "hexenwail.js"
@@ -70,6 +71,26 @@ elif [ -s "$gl_js" ] || [ -s "$gl_wasm" ]; then
 else
 	echo "info: optional artifact not present: $DIST_DIR/hexenwail-webglide.js" \
 		"(WebGlide GPU bundle; software-only artifact)"
+fi
+
+# The WebGPU presenter preview follows the same optional-pair rule.
+gpu_js="$DIST_DIR/hexenwail-webgpu.js"
+gpu_wasm="$DIST_DIR/hexenwail-webgpu.wasm"
+if [ -s "$gpu_js" ] && [ -s "$gpu_wasm" ]; then
+	echo "OK (optional present): $gpu_js"
+	echo "OK (optional present): $gpu_wasm"
+	for optional in hexenwail-webgpu.data hexenwail-webgpu.worker.js engine-shell-debug-webgpu.html; do
+		if [ -s "$DIST_DIR/$optional" ]; then
+			echo "OK (optional present): $DIST_DIR/$optional"
+		fi
+	done
+elif [ -s "$gpu_js" ] || [ -s "$gpu_wasm" ]; then
+	echo "INVALID: only one half of the WebGPU presenter bundle is present" \
+		"(hexenwail-webgpu.js and hexenwail-webgpu.wasm must ship together)" >&2
+	missing=1
+else
+	echo "info: optional artifact not present: $DIST_DIR/hexenwail-webgpu.js" \
+		"(WebGPU presenter feasibility bundle)"
 fi
 
 if [ "$missing" -ne 0 ]; then

@@ -8,6 +8,9 @@ const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
 const html = readFileSync(join(repoRoot, 'web/index.html'), 'utf8');
 const assembleScript = readFileSync(join(repoRoot, 'scripts/wasm-assemble-artifact.sh'), 'utf8');
 const validateScript = readFileSync(join(repoRoot, 'scripts/wasm-validate-artifact.sh'), 'utf8');
+const cmake = readFileSync(join(repoRoot, 'engine/CMakeLists.txt'), 'utf8');
+const webgpuPresenter = readFileSync(join(repoRoot, 'engine/web/webgpu_present.js'), 'utf8');
+const wasmAction = readFileSync(join(repoRoot, '.github/actions/wasm-build/action.yml'), 'utf8');
 
 test('renderer preference defaults to the shipping software bundle', () => {
   const prefsBlock = app.match(/preferences: \{([\s\S]*?)\},\n {2}touchOnlyEnvironment/)?.[1];
@@ -19,7 +22,7 @@ test('renderer preference defaults to the shipping software bundle', () => {
 test('loadPreferences accepts renderer values and migrates the perf preference', () => {
   const load = app.match(/function loadPreferences\(\) \{([\s\S]*?)\n\}/)?.[1];
   assert.ok(load, 'loadPreferences is defined');
-  assert.match(load, /\['software', 'webglide'\]\.includes\(saved\.renderer\)/,
+  assert.match(load, /\['software', 'webglide', 'webgpu'\]\.includes\(saved\.renderer\)/,
     'unknown renderer strings must fall back to the default');
   assert.match(load, /typeof saved\.perfCapture === 'boolean'/);
   assert.match(load, /Number\(saved\.perfOverlay\) > 0/,
@@ -44,7 +47,9 @@ test('ensureEngineScriptLoaded routes the WebGlide preference to the GPU bundle 
   // Emscripten .js finds its own .wasm sibling by basename; the loader
   // picks one based on the persisted preference.
   assert.match(loader, /state\.preferences\.renderer === 'webglide'/);
+  assert.match(loader, /state\.preferences\.renderer === 'webgpu'/);
   assert.match(loader, /'\.\/hexenwail-webglide\.js'/);
+  assert.match(loader, /'\.\/hexenwail-webgpu\.js'/);
   assert.match(loader, /'\.\/hexenwail\.js'/);
   // The choice is logged through the runtime log so a bug report shows
   // which bundle was in use.
@@ -75,6 +80,7 @@ test('the launcher exposes an experimental, non-default WebGlide toggle', () => 
   assert.match(html, /id="renderer-setting"/);
   assert.match(html, /<option value="software">/);
   assert.match(html, /<option value="webglide">/);
+  assert.match(html, /<option value="webgpu">/);
   // The old "gl"/"glide" values must not reappear in the DOM: user-facing
   // wording is WebGlide, and the persisted preference string is
   // "webglide". Renaming the old spelling silently would leave a stale
@@ -96,6 +102,7 @@ test('the launcher exposes an experimental, non-default WebGlide toggle', () => 
   assert.match(card, /modern shaders/,
     'the card must frame WebGlide as modern shaders chasing the 3Dfx look, not a Voodoo-limits emulator');
   assert.match(card, /may render incorrectly/);
+  assert.match(card, /target-feasibility step/);
 });
 
 test('changing the toggle mid-play does not yank the tab out from a running game', () => {
@@ -112,6 +119,7 @@ test('changing the toggle mid-play does not yank the tab out from a running game
   // The user-facing label in the runtime log and hint text must be the
   // canonical name.
   assert.match(handler, /WebGlide experimental GPU renderer/);
+  assert.match(handler, /experimental WebGPU presenter/);
 });
 
 test('the assemble script picks up the WebGlide bundle when the webgl2 build is present', () => {
@@ -124,6 +132,8 @@ test('the assemble script picks up the WebGlide bundle when the webgl2 build is 
   // The old spelling must not linger in either the copy or the
   // filenames -- CMake now names the bundle "hexenwail-webglide".
   assert.doesNotMatch(assembleScript, /hexenwail-gl\./);
+  assert.match(assembleScript, /hexenwail-webgpu\.js/);
+  assert.match(assembleScript, /hexenwail-webgpu\.wasm/);
 });
 
 test('the validate script accepts a software-only artifact but rejects a half-shipped pair', () => {
@@ -136,4 +146,20 @@ test('the validate script accepts a software-only artifact but rejects a half-sh
   assert.match(validateScript, /only one half of the WebGlide bundle is present/);
   assert.match(validateScript, /software-only artifact/);
   assert.doesNotMatch(validateScript, /hexenwail-gl\./);
+  assert.match(validateScript, /hexenwail-webgpu\.js/);
+  assert.match(validateScript, /hexenwail-webgpu\.wasm/);
+  assert.match(validateScript, /only one half of the WebGPU presenter bundle is present/);
+});
+
+test('WebGPU is an isolated software presenter, not a renamed Nitro renderer', () => {
+  assert.match(cmake, /set\(WEB_PRESENTER "webgl2"/);
+  assert.match(cmake, /WEB_PRESENTER STREQUAL "webgpu"/);
+  assert.match(cmake, /add_compile_definitions\(WEBGPU_PRESENT\)/);
+  assert.match(cmake, /web_canvas_wgpu\.c/);
+  assert.match(cmake, /webgpu_present\.js/);
+  assert.doesNotMatch(cmake, /add_compile_definitions\(WEBGPUQUAKE\)/,
+    'the presenter feasibility build must not claim to be the Nitro renderer');
+  assert.match(wasmAction, /wasm-build\.sh webgpu engine\/build-webgpu/);
+  assert.doesNotMatch(webgpuPresenter, /\bsmooth:\s*u32/,
+    'WGSL reserves the word smooth');
 });

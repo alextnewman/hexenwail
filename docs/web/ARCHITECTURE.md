@@ -62,7 +62,7 @@ software rasteriser presented through an accelerated canvas.
              v                       v
    +---------------------------------------------+
    |  presenter backends (web_canvas.h)          |
-   |   web_canvas_gl2.c   [ future: WebGPU ]     |
+   |   web_canvas_gl2.c   web_canvas_wgpu.c      |
    +---------------------------------------------+
              |
              v
@@ -90,6 +90,17 @@ must not be deleted. The build option value is `webgl2` and the macro is
 `WEBGL2QUAKE`, but the shipped bundle basename (`hexenwail-webglide.*`) and
 every user-facing name are WebGlide — see [`WEBGLIDE.md`](WEBGLIDE.md).
 
+The software renderer also has an opt-in WebGPU presenter feasibility build:
+
+```bash
+./scripts/wasm-build.sh webgpu engine/build-webgpu
+```
+
+This changes only indexed framebuffer scan-out and retains `WEBSOFT`; it is not
+the future WebGlideNitro renderer. The launcher acquires the asynchronous
+WebGPU device before `callMain` and hands it to the linked presenter through
+`Module.hexenwailWebGPU`.
+
 ### Macro contract
 
 `WEBQUAKE` used to mean both "the web platform" and "the WebGL2 renderer".
@@ -101,6 +112,7 @@ Those are now separate:
 | `WEBQUAKE` | web *platform* client: web VID/input/sound, extended 2D API surface | both configurations |
 | `WEBGL2QUAKE` | the WebGlide GPU *renderer* | `-DWEB_RENDERER=webgl2` only |
 | `WEBSOFT` | the software *renderer* | default configuration only |
+| `WEBGPU_PRESENT` | WebGPU presenter under the software renderer | `WEB_PRESENTER=webgpu` only |
 | `GLQUAKE` | the desktop OpenGL renderer | never (no desktop target is built) |
 
 Rules of thumb when adding a guard:
@@ -207,5 +219,5 @@ actually play.
   presenter design, resolution ladder, and cvars.
 * [`WEBGLIDE.md`](WEBGLIDE.md) — the experimental WebGlide GPU renderer.
 * [`PERF_CAPTURE.md`](PERF_CAPTURE.md) — copyable raw web performance capture.
-* [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md) — an idea, gated on a finished WebGlide.
+* [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md) — the separate WebGPU renderer design, gated on a finished WebGlide.
 * [`../PWA.md`](../PWA.md) — PWA shell, asset import, deployment.

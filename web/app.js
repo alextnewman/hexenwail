@@ -5,6 +5,7 @@ import {
 } from './lib/save-bundle.js';
 import { PhoneControls, PHONE_CONTROL_KEYCODES } from './lib/phone-controls.js';
 import { runWebGLDiagnostics } from './lib/webgl-diagnostics.js';
+import { probeWebGPU } from './lib/webgpu-probe.js';
 
 const BASE_DIR = '/persistent';
 const ENGINE_ARGUMENTS = ['-basedir', BASE_DIR];
@@ -59,6 +60,7 @@ const state = {
     /* Which WebAssembly bundle to load at launcher startup:
      *   'software' -> ./hexenwail.js            (shipping, supported default)
      *   'webglide' -> ./hexenwail-webglide.js   (experimental GPU renderer)
+     *   'webgpu'   -> ./hexenwail-webgpu.js     (software + WebGPU presenter)
      * The engine script is loaded once during init(), so a change here
      * takes effect on the next launcher load; savePreferences() is what
      * makes the choice survive that reload. */
@@ -700,7 +702,7 @@ function loadPreferences() {
       ? saved.perfCapture
       : Number(saved.perfOverlay) > 0;
     state.preferences.phoneHintSeen = Boolean(saved.phoneHintSeen);
-    if (['software', 'webglide'].includes(saved.renderer)) state.preferences.renderer = saved.renderer;
+    if (['software', 'webglide', 'webgpu'].includes(saved.renderer)) state.preferences.renderer = saved.renderer;
   } catch (error) {
     console.warn('Could not load launcher preferences', error);
   }
@@ -1286,7 +1288,10 @@ async function ensureEngineScriptLoaded() {
    * this URL is what routes the whole runtime. Log the choice through the
    * runtime log so a bug report shows which bundle was in use. */
   const useWebGlide = state.preferences.renderer === 'webglide';
-  const scriptUrl = useWebGlide ? './hexenwail-webglide.js' : './hexenwail.js';
+  const useWebGPU = state.preferences.renderer === 'webgpu';
+  const scriptUrl = useWebGlide
+    ? './hexenwail-webglide.js'
+    : useWebGPU ? './hexenwail-webgpu.js' : './hexenwail.js';
   logToConsole('[launcher]', `Loading engine bundle: ${scriptUrl} (renderer=${state.preferences.renderer})`);
 
   await new Promise((resolve, reject) => {
@@ -1306,6 +1311,10 @@ async function ensureEngineScriptLoaded() {
         ? `Failed to load ${scriptUrl}. The WebGlide GPU bundle is missing from this artifact.`
           + ' Open the "Renderer (experimental)" card, switch back to "Software (default, stable)",'
           + ' and the launcher will reload with the shipping renderer.'
+        : useWebGPU
+          ? `Failed to load ${scriptUrl}. The WebGPU presenter preview is missing from this artifact.`
+            + ' Open the "Renderer (experimental)" card, switch back to "Software (default, stable)",'
+            + ' and the launcher will reload with the shipping presenter.'
         : `Failed to load ${scriptUrl}. Build the WASM target before serving this directory.`;
       reject(new Error(detail));
     };
@@ -1438,12 +1447,17 @@ function bindUi() {
    * data-engine-state are the same signal handleEngineQuit() sets, so a
    * finished game (runtimeExited) counts as "not running" here. */
   ui.rendererSetting?.addEventListener('change', () => {
-    const next = ui.rendererSetting.value === 'webglide' ? 'webglide' : 'software';
+    const next = ['webglide', 'webgpu'].includes(ui.rendererSetting.value)
+      ? ui.rendererSetting.value : 'software';
     if (next === state.preferences.renderer) return;
     state.preferences.renderer = next;
     savePreferences();
     applyPreferences();
-    const label = next === 'webglide' ? 'WebGlide experimental GPU renderer' : 'software renderer';
+    const label = next === 'webglide'
+      ? 'WebGlide experimental GPU renderer'
+      : next === 'webgpu'
+        ? 'software renderer with the experimental WebGPU presenter'
+        : 'software renderer';
     appendRuntimeLog('[launcher]', `Renderer preference changed to ${next} (${label}).`);
     const enginePlaying = state.engineStarted && !state.runtimeExited;
     if (enginePlaying) {
@@ -1579,20 +1593,47 @@ async function init() {
     state.perfReport = '';
   }
   bindUi();
-  try {
-    const report = runWebGLDiagnostics();
-    state.rendererReady = true;
-    logToConsole('[renderer]', `${report.profile}; GLSL ${report.shadingLanguage}; `
-      + `shaders=${report.shaders.length}; RGBA8-FBO=${report.framebuffer.width}x${report.framebuffer.height}; `
-      + `visible=${(report.framebuffer.nonBlackRatio * 100).toFixed(0)}%; `
-      + `postprocess=gamma/palette pass; `
-      + `HDR=${report.extensions.colorBufferFloat ? 'available' : 'disabled'}; `
-      + `OIT=${report.extensions.indexedBlend ? 'extension present' : 'sorted fallback'}`);
-  } catch (error) {
-    state.rendererReady = false;
-    setEngineState('fatal');
-    logToConsole('[renderer:error]', error.message, true);
-    setStatus(`WebGL2 renderer self-test failed: ${error.message}`, 'error');
+  if (state.preferences.renderer === 'webgpu') {
+    const report = await probeWebGPU({ canvas: ui.canvas });
+    if (report.ok) {
+      const limits = report.handoff.limits;
+      report.handoff.onLost = (info) => {
+        const detail = info?.message ? `: ${info.message}` : '';
+        logToConsole('[renderer:error]',
+          `WebGPU device lost (${info?.reason ?? 'unknown'})${detail}`, true);
+        setStatus('WebGPU device lost. Reload the launcher to recover.', 'error');
+      };
+      getModule().hexenwailWebGPU = report.handoff;
+      state.rendererReady = true;
+      logToConsole('[renderer]', `WebGPU ${report.handoff.format}; `
+        + `max2D=${limits.maxTextureDimension2D}; layers=${limits.maxTextureArrayLayers}; `
+        + `bindGroups=${limits.maxBindGroups}; maxBuffer=${limits.maxBufferSize}`);
+    } else {
+      state.preferences.renderer = 'software';
+      savePreferences();
+      applyPreferences();
+      logToConsole('[renderer:warn]',
+        `${report.reason} Reloading with the WebGL2 software presenter.`);
+      setStatus(`${report.reason} Reloading with the shipping renderer…`, 'warn');
+      setTimeout(() => location.reload(), 60);
+      return;
+    }
+  } else {
+    try {
+      const report = runWebGLDiagnostics();
+      state.rendererReady = true;
+      logToConsole('[renderer]', `${report.profile}; GLSL ${report.shadingLanguage}; `
+        + `shaders=${report.shaders.length}; RGBA8-FBO=${report.framebuffer.width}x${report.framebuffer.height}; `
+        + `visible=${(report.framebuffer.nonBlackRatio * 100).toFixed(0)}%; `
+        + `postprocess=gamma/palette pass; `
+        + `HDR=${report.extensions.colorBufferFloat ? 'available' : 'disabled'}; `
+        + `OIT=${report.extensions.indexedBlend ? 'extension present' : 'sorted fallback'}`);
+    } catch (error) {
+      state.rendererReady = false;
+      setEngineState('fatal');
+      logToConsole('[renderer:error]', error.message, true);
+      setStatus(`WebGL2 renderer self-test failed: ${error.message}`, 'error');
+    }
   }
   updateTouchOnlyEnvironment();
   bindBootCallbacks();

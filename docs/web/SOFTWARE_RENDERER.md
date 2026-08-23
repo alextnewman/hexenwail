@@ -36,7 +36,8 @@ deprecated.
 | `engine/h2shared/d_*.c`, `r_*.c`, `engine/hexen2/r_{main,misc,alias}.c` | The restored rasteriser. Verbatim uHexen2 apart from one documented fix (see [Deviations](#deviations-from-upstream)). |
 | `engine/h2shared/vid_soft_web.c` | VID backend: owns the framebuffer, z-buffer and surface cache; the resolution ladder; aspect/letterbox policy; palette upload; `Web_ResizeCanvas`; the video menu. |
 | `engine/h2shared/web_canvas.h` | Backend-agnostic presenter interface. |
-| `engine/h2shared/web_canvas_gl2.c` | WebGL2 presenter backend. |
+| `engine/h2shared/web_canvas_gl2.c` | Shipping WebGL2 presenter backend. |
+| `engine/h2shared/web_canvas_wgpu.c`, `engine/web/webgpu_present.js` | Opt-in WebGPU presenter preview; the launcher owns asynchronous device acquisition. |
 | `engine/h2shared/draw_soft_web.c` | Extended 2D API (alpha pics/fills, glyph batching, UI canvases, intermission art) implemented on the 8bpp framebuffer. |
 | `engine/hexen2/r_soft_web.c` | Renderer-policy cvars and the per-entity PimpModel override table, mirroring `r_webgl2.c`. |
 | `engine/h2shared/soft_web.h` | The symbols shared client code expects from a web renderer; pulled in by `quakeinc.h`. |
@@ -96,10 +97,17 @@ on indices.
 * **PBO ring upload.** Emscripten's GL binding copies the JS-side heap view
   anyway, so a PBO ring adds complexity without removing the copy. Revisit
   only if profiling shows upload stalls.
-* **WebGPU backend.** `web_canvas.h` exists precisely so this can be added as
-  `web_canvas_gpu.c` with a runtime probe and a WebGL2 fallback. Nothing in
-  the rasteriser or VID layer needs to change. Not worth doing until Safari's
-  WebGPU is broadly shipped on iPadOS.
+The **WebGPU presenter preview** is now implemented behind
+`WEB_PRESENTER=webgpu` (or `./scripts/wasm-build.sh webgpu
+engine/build-webgpu`). It leaves the rasteriser and VID layer unchanged,
+uploads the R8Uint framebuffer and palette through `queue.writeTexture`, and
+uses the same nearest/sharp-bilinear policy in WGSL. It is optional while the
+path is qualified on the target and does not replace the shipping WebGL2
+presenter.
+
+This presenter is not WebGlideNitro. It proves the asynchronous device handoff,
+indexed texture and scan-out pieces without weakening Nitro's requirement to be
+a separate WebGPU 3D backend.
 
 ## Resolution ladder
 
