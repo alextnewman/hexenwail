@@ -37,6 +37,10 @@ const OPTIONAL_ASSETS = [
   './hexenwail-webgpu.wasm',
   './hexenwail-webgpu.data',
   './hexenwail-webgpu.worker.js',
+  './hexenwail-nitro.js',
+  './hexenwail-nitro.wasm',
+  './hexenwail-nitro.data',
+  './hexenwail-nitro.worker.js',
 ];
 const CORE_ASSET_URLS = CORE_ASSETS.map((asset) => new URL(asset, self.location).href);
 const OPTIONAL_ASSET_URLS = OPTIONAL_ASSETS.map((asset) => new URL(asset, self.location).href);

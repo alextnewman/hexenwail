@@ -26,8 +26,14 @@ the presenter cost scales with the *panel* resolution, which we do not, but
 it is one textured triangle, so it is free in practice.
 
 The WebGlide GPU renderer remains in-tree and buildable
-(`-DWEB_RENDERER=webgl2`, see [`WEBGLIDE.md`](WEBGLIDE.md)). It is not
-deprecated.
+(`-DWEB_RENDERER=webgl2`, see [`WEBGLIDE.md`](WEBGLIDE.md)). It is an abortive
+experiment that is kept compiling rather than an actively pursued renderer, and
+its frame cost is not a baseline for anything. A third configuration,
+WebGlideNitro
+(`-DWEB_RENDERER=webgpu`, see [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md)), is a
+native WebGPU technology preview that currently draws only the static world.
+Neither changes the default: `WEB_RENDERER` defaults to `software`, and the
+shipped `hexenwail.*` bundle is this renderer.
 
 ## Files
 
@@ -301,11 +307,14 @@ emmake  make  -C build-soft -j"$(nproc)"
 emcmake cmake -S engine -B build-gl -DWEB_RENDERER=webgl2    # WebGlide
 emmake  make  -C build-gl -j"$(nproc)"
 
+emcmake cmake -S engine -B build-nitro -DWEB_RENDERER=webgpu  # WebGlideNitro
+emmake  make  -C build-nitro -j"$(nproc)"
+
 npm test                                                     # PWA shell tests
 ```
 
-Both configurations must build. CI pins emsdk `4.0.23`; older emsdk releases
-reject `-sSTACK_SIZE`.
+All three configurations must build. CI pins emsdk `4.0.23`; older emsdk
+releases reject `-sSTACK_SIZE`.
 
 ## Known gaps
 

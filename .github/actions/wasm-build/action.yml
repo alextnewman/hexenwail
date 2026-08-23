@@ -2,9 +2,10 @@ name: 'Build hexenwail WebAssembly + PWA artifact'
 description: >-
   Installs a pinned Emscripten SDK (with caching), prefetches the ogg/vorbis
   ports, runs the lightweight Node PWA tests, builds the full WebAssembly
-  client with both renderer configurations (both shipped in the PWA
-  artifact — software as the launch default and the experimental WebGlide
-  GPU bundle as an opt-in), and assembles the static Pages/PWA artifact.
+  client with every renderer configuration (all shipped in the PWA artifact
+  — software as the launch default, the experimental WebGlide GPU bundle,
+  the WebGPU presenter preview and the native WebGlideNitro WebGPU bundle
+  as opt-ins), and assembles the static Pages/PWA artifact.
   Single source of truth shared by the PR "PWA / WebAssembly" check and the
   GitHub Pages deployment workflow so the two build recipes cannot drift
   apart.
@@ -155,6 +156,15 @@ runs:
         source "$PWD/emsdk/emsdk_env.sh"
         ./scripts/wasm-build.sh webgpu engine/build-webgpu
 
+    # WebGlideNitro: a native WebGPU renderer that pushes real engine
+    # geometry rather than scanning out the software framebuffer. Its first
+    # slice draws the static world only; see docs/web/WEBGLIDE_NITRO.md.
+    - name: Build WebAssembly client (WebGlideNitro native WebGPU renderer)
+      shell: bash
+      run: |
+        source "$PWD/emsdk/emsdk_env.sh"
+        ./scripts/wasm-build.sh nitro engine/build-nitro
+
     - name: Assemble PWA artifact
       shell: bash
       run: ./scripts/wasm-assemble-artifact.sh "${{ inputs.dist-dir }}"
@@ -186,3 +196,11 @@ runs:
           fi
         done
         echo "WebGPU presenter preview present in $dist."
+
+        for required in hexenwail-nitro.js hexenwail-nitro.wasm; do
+          if [ ! -s "$dist/$required" ]; then
+            echo "::error::CI artefact is missing the WebGlideNitro bundle: $dist/$required"
+            exit 1
+          fi
+        done
+        echo "WebGlideNitro bundle present in $dist."

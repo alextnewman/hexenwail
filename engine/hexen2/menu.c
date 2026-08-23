@@ -2816,8 +2816,9 @@ static qboolean M_Rendering_IsSkip (int i)
 {
 	if (i < 0 || i >= REND_ITEMS)
 		return true;
-#if defined(WEBSOFT)
-	/* GPU-only rows have no counterpart in the software rasteriser. */
+#if defined(WEBSOFT) || defined(WEBGPUQUAKE)
+	/* Rows with no counterpart in the software rasteriser, and none in
+	 * the WebGlideNitro slice either -- see docs/web/WEBGLIDE_NITRO.md. */
 	switch (i)
 	{
 	case REND_RENDERSCALE:

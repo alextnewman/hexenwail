@@ -51,6 +51,8 @@ static const char *WebPerf_RendererName (void)
 {
 #if defined(WEBGL2QUAKE)
 	return "webglide";
+#elif defined(WEBGPUQUAKE)
+	return "webglidenitro";
 #else
 	return "software";
 #endif

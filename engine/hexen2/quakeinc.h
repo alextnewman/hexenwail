@@ -84,6 +84,12 @@
 #include "model.h"
 #include "particle.h"
 #include "r_webgl2.h"
+#elif defined(WEBGPUQUAKE)
+/* WebGlideNitro: the native WebGPU renderer.
+ * See docs/web/WEBGLIDE_NITRO.md */
+#include "model.h"
+#include "particle.h"
+#include "r_webgpu.h"
 #elif defined(WEBQUAKE)
 /* Web software renderer: classic 8bpp rasterizer on an accelerated canvas.
  * See docs/web/SOFTWARE_RENDERER.md */

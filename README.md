@@ -120,7 +120,7 @@ Two ways to attach music to a custom map:
 ### Platform
 - Emscripten/WebAssembly, deployed as an installable iOS PWA
 - CMake build with a build-time renderer selector (`WEB_RENDERER`)
-- GitHub Actions CI builds both renderer configurations and validates the PWA artifact
+- GitHub Actions CI builds every renderer configuration and validates the PWA artifact
 - Continuous GitHub Pages deployment; tagged releases publish the PWA bundle
 - Console log to disk (OPFS), HiDPI-aware canvas presentation
 
@@ -133,8 +133,10 @@ deployment target is an installed iOS PWA; see
 [docs/PWA.md](docs/PWA.md) for the shell, asset import, and deployment notes.
 
 The web build renders with uHexen2's **classic 8bpp software rasteriser**, presented
-through an accelerated canvas (a WebGL2 palette-lookup blit). WebGlide, the
-experimental GPU renderer, is retained and selectable at build time.
+through an accelerated canvas (a WebGL2 palette-lookup blit). Two GPU
+renderers are retained and selectable at build time: WebGlide (WebGL2, an
+abortive experiment kept buildable) and WebGlideNitro (native WebGPU, a
+technology preview that currently draws only the static world).
 
 **Requirements:** the [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html)
 (CI pins `4.0.23`) and Node.js 22+ for the PWA shell tests.
@@ -143,7 +145,8 @@ experimental GPU renderer, is retained and selectable at build time.
 source "$EMSDK/emsdk_env.sh"
 
 make build          # software renderer (the shipping default)
-make build-webgl2   # WebGlide, the experimental GPU renderer
+make build-webgl2   # WebGlide, the abortive GPU experiment (kept buildable)
+make build-nitro    # WebGlideNitro, the native WebGPU renderer
 make dist           # assemble + validate the static PWA artifact in dist/
 make test           # PWA shell tests
 ```
@@ -153,6 +156,7 @@ Those targets wrap the scripts CI uses, so local and CI builds cannot drift:
 ```bash
 ./scripts/wasm-build.sh software
 ./scripts/wasm-build.sh webgl2 engine/build-webgl2   # -> hexenwail-webglide.*
+./scripts/wasm-build.sh nitro  engine/build-nitro    # -> hexenwail-nitro.*
 ./scripts/wasm-assemble-artifact.sh dist
 ./scripts/wasm-validate-artifact.sh dist
 ```
@@ -162,6 +166,7 @@ To configure CMake directly:
 ```bash
 emcmake cmake -S engine -B build                       # software (default)
 emcmake cmake -S engine -B build -DWEB_RENDERER=webgl2 # WebGlide
+emcmake cmake -S engine -B build -DWEB_RENDERER=webgpu # WebGlideNitro
 ```
 
 **Nix** (developer convenience; CI uses the pinned emsdk, not the flake):
@@ -173,7 +178,8 @@ nix build       # best-effort WASM build -> installable PWA tree
 
 Design documents: [docs/web/ARCHITECTURE.md](docs/web/ARCHITECTURE.md),
 [docs/web/SOFTWARE_RENDERER.md](docs/web/SOFTWARE_RENDERER.md),
-[docs/web/WEBGLIDE.md](docs/web/WEBGLIDE.md) and
+[docs/web/WEBGLIDE.md](docs/web/WEBGLIDE.md),
+[docs/web/WEBGLIDE_NITRO.md](docs/web/WEBGLIDE_NITRO.md) and
 [docs/web/PERF_CAPTURE.md](docs/web/PERF_CAPTURE.md).
 
 ## Contributing

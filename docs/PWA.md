@@ -192,7 +192,7 @@ rotate or resize back above the breakpoint and the chrome returns on its own.
 
 ## Renderer (experimental)
 
-The launcher ships two WebAssembly engine bundles side by side and picks
+The launcher ships several WebAssembly engine bundles side by side and picks
 which one to load at startup. The choice lives in the **Renderer
 (experimental)** card in the launcher panel:
 
@@ -200,15 +200,24 @@ which one to load at startup. The choice lives in the **Renderer
   presented on an accelerated canvas. This is the shipping, supported path
   and what every fresh install loads. Unless the card explicitly opts into
   WebGlide, this is what runs.
-- **WebGlide (experimental GPU)** — an experimental GPU renderer that
-  chases the mid-90s 3Dfx look — filtered textures, coloured light,
+- **WebGlide (experimental GPU)** — an abortive experiment at a GPU renderer
+  chasing the mid-90s 3Dfx look — filtered textures, coloured light,
   translucent water, fog, optional CRT scan-out — with modern shaders
-  under it. It is **off by default**: it may render incorrectly, produce
+  under it. It is kept building but is not actively pursued, and it is
+  **off by default**: it may render incorrectly, produce
   visual glitches, or fail to start entirely. Use only if you are actively
   trying it out. WebGlide is deliberately distinct from any previous
   "maximum GL2" WebGL2 profile — the shared build option value stays
   `webgl2`, but the shipped bundle basename (`hexenwail-webglide.*`) and
   the user-facing renderer name are WebGlide.
+- **WebGlideNitro (native WebGPU, technology preview)** — a separate,
+  genuinely native WebGPU renderer that draws the world as batched engine
+  polygons from immutable buffers, keeping the indexed palette and colormap
+  look. Its first slice implements **only the static world and the 2D
+  layer**: brush entities, alias models, sprites, particles, dynamic lights
+  and fog are simply not drawn, and it prints its own gaps once per map. It
+  needs a device with WebGPU support and is not playable yet. Build option
+  value `webgpu`, macro `WEBGPUQUAKE`, bundle `hexenwail-nitro.*`.
 
 The engine bundle is chosen once per launcher load, so a change reloads
 the launcher automatically when no game is running; if the engine is
@@ -217,21 +226,22 @@ launcher load (exit to the launcher via ☰ → **Sync & exit to launcher**).
 The preference is stored in the same local browser storage as the touch
 controls settings, alongside your other launcher preferences.
 
-If the WebGlide bundle is missing from the artifact (a local `make dist`
-builds only the software renderer by default), the launcher fails loudly
-on load, names the toggle, and explains how to switch back to the
-software renderer so the launcher never ends up dead. To ship both
-bundles locally, build the second configuration explicitly before
+If a selected non-default bundle is missing from the artifact (a local
+`make dist` builds only the software renderer by default), the launcher
+fails loudly on load, names the toggle, and explains how to switch back to
+the software renderer so the launcher never ends up dead. To ship the
+other bundles locally, build those configurations explicitly before
 assembling `dist/`:
 
 ```bash
 ./scripts/wasm-build.sh software                    # shipping default
 ./scripts/wasm-build.sh webgl2 engine/build-webgl2  # WebGlide bundle
+./scripts/wasm-build.sh nitro  engine/build-nitro   # WebGlideNitro bundle
 ./scripts/wasm-assemble-artifact.sh dist
 ```
 
-CI builds both configurations on every run, so a deployed Pages artifact
-always ships both bundles regardless of the launcher's default.
+CI builds every configuration on every run, so a deployed Pages artifact
+always ships all the bundles regardless of the launcher's default.
 
 ## Performance capture
 

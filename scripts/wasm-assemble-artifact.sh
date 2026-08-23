@@ -26,8 +26,12 @@ BUILD_BIN="engine/build/bin"
 # runtime fetch.
 GL_BUILD_BIN="${GL_BUILD_BIN:-engine/build-webgl2/bin}"
 # Optional WebGPU presenter feasibility bundle. This still contains the
-# software rasterizer; it is not the future WebGlideNitro renderer.
+# software rasterizer; it is not the WebGlideNitro renderer.
 GPU_BUILD_BIN="${GPU_BUILD_BIN:-engine/build-webgpu/bin}"
+# Optional WebGlideNitro bundle: the native WebGPU renderer, which has no
+# software framebuffer and no GL context at all. Built with
+# `./scripts/wasm-build.sh nitro engine/build-nitro`.
+NITRO_BUILD_BIN="${NITRO_BUILD_BIN:-engine/build-nitro/bin}"
 
 if [[ ! "$BUILD_VERSION" =~ ^[A-Za-z0-9._-]+$ ]]; then
 	echo "Invalid PWA build version: $BUILD_VERSION" >&2
@@ -96,6 +100,23 @@ if [ -d "$GPU_BUILD_BIN" ]; then
 else
 	echo "notice: WebGPU presenter build directory not found at $GPU_BUILD_BIN;" \
 		"continuing without the optional feasibility bundle."
+fi
+
+if [ -d "$NITRO_BUILD_BIN" ]; then
+	cp "$NITRO_BUILD_BIN/hexenwail-nitro.js" "$DIST_DIR/"
+	cp "$NITRO_BUILD_BIN/hexenwail-nitro.wasm" "$DIST_DIR/"
+	if [ -f "$NITRO_BUILD_BIN/hexenwail-nitro.data" ]; then
+		cp "$NITRO_BUILD_BIN/hexenwail-nitro.data" "$DIST_DIR/"
+	fi
+	if [ -f "$NITRO_BUILD_BIN/hexenwail-nitro.worker.js" ]; then
+		cp "$NITRO_BUILD_BIN/hexenwail-nitro.worker.js" "$DIST_DIR/"
+	fi
+	if [ -f "$NITRO_BUILD_BIN/hexenwail-nitro.html" ]; then
+		cp "$NITRO_BUILD_BIN/hexenwail-nitro.html" "$DIST_DIR/engine-shell-debug-nitro.html"
+	fi
+else
+	echo "notice: WebGlideNitro build directory not found at $NITRO_BUILD_BIN;" \
+		"continuing without the optional native WebGPU bundle."
 fi
 
 echo "Assembled PWA artifact in $DIST_DIR:"

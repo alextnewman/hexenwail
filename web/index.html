@@ -503,12 +503,13 @@
         </section>
         <section class="card">
           <h2>Renderer (experimental)</h2>
-          <p>The classic 8bpp <strong>Software renderer</strong> is the shipping, supported path and is what the launcher loads by default. <strong>WebGlide</strong> is an experimental GPU renderer that chases the mid-90s 3Dfx look — filtered textures, coloured light, translucent water, fog, optional CRT scan-out — with modern shaders under it. <strong>WebGPU presenter preview</strong> keeps the classic software rasterizer and changes only its final indexed-framebuffer scan-out; it is a target-feasibility step, not WebGlideNitro. Experimental paths may render incorrectly or fail to start and are off by default.</p>
+          <p>The classic 8bpp <strong>Software renderer</strong> is the shipping, supported path and is what the launcher loads by default. <strong>WebGlide</strong> is an experimental GPU renderer that chases the mid-90s 3Dfx look — filtered textures, coloured light, translucent water, fog, optional CRT scan-out — with modern shaders under it. <strong>WebGPU presenter preview</strong> keeps the classic software rasterizer and changes only its final indexed-framebuffer scan-out; it is a target-feasibility step, not WebGlideNitro. <strong>WebGlideNitro</strong> is a native WebGPU renderer that builds its own batched scene geometry instead of scanning out a framebuffer; its first slice draws the static world and nothing else — no monsters, items, projectiles or particles — so it is a technology preview, not a way to play. Experimental paths may render incorrectly or fail to start and are off by default.</p>
           <label class="setting">Rendering pipeline
             <select id="renderer-setting">
               <option value="software">Software (default, stable)</option>
               <option value="webglide">WebGlide (experimental GPU)</option>
               <option value="webgpu">Software + WebGPU presenter (preview)</option>
+              <option value="nitro">WebGlideNitro (native WebGPU, static world only)</option>
             </select>
           </label>
           <small id="renderer-message" class="muted">The engine bundle is chosen once at launcher load. Changing this reloads the launcher; changes made during play take effect on the next launch.</small>

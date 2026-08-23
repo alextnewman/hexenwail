@@ -1,7 +1,8 @@
 # Raw web performance capture
 
-**Status:** shipping, off by default. Shared by the software renderer and
-WebGlide.
+**Status:** shipping, off by default. Shared by every renderer: the software
+renderer, WebGlide and WebGlideNitro. The `renderer` field in the report says
+which one produced the rows (`software`, `webglide` or `webglidenitro`).
 
 ## Purpose
 
@@ -26,6 +27,13 @@ the in-game menu, then **Copy latest report**. The text includes:
 The latest engine report is retained in session storage so it survives an exit
 back to the launcher.
 
+Compare a capture with **another capture from the same renderer**. The three
+renderers draw different work in different ways, so cross-renderer numbers are
+not a scoreboard, and WebGlide's numbers in particular are not a baseline for
+anything: it is an abortive experiment (see [`WEBGLIDE.md`](WEBGLIDE.md)).
+WebGlideNitro is judged on the target iPad against its own earlier captures —
+change one thing, capture again.
+
 ## Columns
 
 | Column | Meaning |
@@ -37,8 +45,8 @@ back to the launcher.
 | `ui_ms` | HUD, menus and console. |
 | `present_ms` | `VID_Update`, including software framebuffer upload. |
 | `engine_other_ms` | Host CPU time outside those three measured stages. |
-| `draws`, `tris` | WebGlide GPU submissions. |
-| `uploads`, `upload_kb` | Software presenter uploads. |
+| `draws`, `tris` | GPU submissions, counted by WebGlide and WebGlideNitro. Under Nitro one `draws` is one `drawIndexed`, so it is directly the batch count the design aims to keep low. |
+| `uploads`, `upload_kb` | Software presenter uploads, and load-time GPU uploads under WebGlideNitro. |
 
 Intervals of one second or more are treated as loading/background stalls and
 excluded. Collection and integer counters are the only per-frame overhead;
@@ -49,7 +57,9 @@ delivery is excluded from the following frame's timing baseline.
 
 ## Implementation
 
-`engine/h2shared/web_perf.{c,h}` owns timing and report generation.
+`engine/h2shared/web_perf.{c,h}` owns timing and report generation, including
+`WebPerf_RendererName()`, which is the only place a renderer's reported name is
+decided.
 `engine/hexen2/sys_web.c` brackets the complete host callback, while
 `engine/h2shared/screen.c` brackets the rendering stages. The engine dispatches
 one `hexenwailperf` browser event per window; `web/app.js` stores and displays
