@@ -313,7 +313,7 @@ reject `-sSTACK_SIZE`.
   GPU-only rows are hidden under the software renderer, but the menus have
   not been reorganised around the software knobs.
 * Auto mode has no runtime performance feedback; it picks purely from canvas
-  geometry. The `scr_perf` overlay ([`PERF_OVERLAY.md`](PERF_OVERLAY.md))
+  geometry. The raw frame capture ([`PERF_CAPTURE.md`](PERF_CAPTURE.md))
   reports the frame cost but nothing reads it back.
 
 Track these in `bd`, not here.

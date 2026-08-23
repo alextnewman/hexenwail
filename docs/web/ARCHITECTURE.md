@@ -218,6 +218,6 @@ actually play.
 * [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md) — the default renderer and
   presenter design, resolution ladder, and cvars.
 * [`WEBGLIDE.md`](WEBGLIDE.md) — the experimental WebGlide GPU renderer.
-* [`PERF_OVERLAY.md`](PERF_OVERLAY.md) — the shared in-game performance overlay.
+* [`PERF_CAPTURE.md`](PERF_CAPTURE.md) — copyable raw web performance capture.
 * [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md) — the separate WebGPU renderer design, gated on a finished WebGlide.
 * [`../PWA.md`](../PWA.md) — PWA shell, asset import, deployment.

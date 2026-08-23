@@ -29,3 +29,10 @@ test('manual WASM launch keeps configured arguments and fails explicitly', () =>
   assert.doesNotMatch(app, /callMain\?\.\(\[\]\)/);
   assert.doesNotMatch(app, /String\(text\)\.includes\('Unable to find a proper Hexen II installation'\)/);
 });
+
+test('raw performance reports are captured lazily and copy with runtime logs', () => {
+  assert.match(app, /addEventListener\('hexenwailperf', handlePerfReport\)/);
+  assert.match(app, /sessionStorage\.setItem\(PERF_REPORT_KEY/);
+  assert.match(app, /navigator\.clipboard\.writeText\(ui\.perfOutput\.value\)/);
+  assert.match(app, /runtime_log/);
+});
