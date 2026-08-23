@@ -141,6 +141,16 @@ typedef struct
 	unsigned int	color;		/* RGBA bytes, little endian */
 } wgpuui_vertex_t;
 
+typedef struct
+{
+	float		position[3];
+	float		scale;
+	unsigned int	color;		/* RGBA bytes, little endian */
+} wgpuparticle_t;
+
+extern wgpuparticle_t	*wgpu_particles;
+extern int		wgpu_particle_count;
+
 /* One drawIndexed (world) or one draw (2D). */
 typedef struct
 {
@@ -166,6 +176,8 @@ typedef struct
 	int	dest_width;
 	int	dest_height;
 	int	flags;
+	float	particle_right[4];
+	float	particle_up[4];
 } wgpuscene_t;
 
 typedef struct
@@ -189,7 +201,8 @@ extern void Nitro_UploadLightmap (int layer, const byte *texels);
 extern void Nitro_DestroyWorld (void);
 extern void Nitro_BeginFrame (void);
 extern void Nitro_DrawScene (const wgpuscene_t *params, const unsigned int *indices,
-			int indexcount, const wgpubatch_t *batches, int batchcount);
+			int indexcount, const wgpubatch_t *batches, int batchcount,
+			const wgpuparticle_t *particles, int particlecount);
 extern void Nitro_EndFrame (const wgpuui_params_t *params, const wgpuui_vertex_t *vertices,
 			int vertexcount, const wgpubatch_t *runs, int runcount);
 

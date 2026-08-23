@@ -7,7 +7,8 @@ The renderer now exists as a real build configuration
 (`-DWEB_RENDERER=webgpu`, macro `WEBGPUQUAKE`, bundle `hexenwail-nitro`) that
 draws the static world as batched engine polygons through native WebGPU. It is
 a **technology preview**: only the static world and the 2D layer are
-implemented, so it is not yet playable. See "Where the slice stops" below.
+implemented, with GPU-expanded particles as the first dynamic scene content,
+so it is not yet playable. See "Where the slice stops" below.
 
 The WebGPU *presenter* preview remains a separate thing: it is part of the
 software-renderer configuration (`-DWEB_PRESENTER=webgpu`, macro
@@ -190,7 +191,9 @@ specification here.
 The renderer prints its own gaps once per map (`r_nitro_report 0` silences
 it) so a running build never quietly implies more than it does.
 
-Not drawn at all: brush entities, alias models, sprites, particles. Not
+Not drawn at all: brush entities, alias models and sprites. Particles are
+uploaded as compact instances and expanded into camera-facing quads by the
+WebGPU vertex shader. Not
 applied: dynamic lights, animated light styles, fog. Approximated: sky is its
 solid layer drawn unscrolled, liquids are opaque and unwarped. Texture
 *animation* is implemented, so it is deliberately absent from that list.
@@ -218,7 +221,8 @@ scan-out and complete batched UI. Its bar is the software renderer's output,
 and GPU-driven visibility or model transforms come after content correctness,
 not after a comparison with WebGlide.
 
-Progress: steps 1–4 are delivered by the slice described in "As built" —
+Progress: steps 1–4 and the particle part of step 5 are delivered by the slice
+described in "As built" —
 device acquisition and resize via the launcher handoff, offscreen scene
 scan-out with explicit failure reporting, a fully batched 2D layer, and the
 static world drawn from immutable geometry with one lightmap texture array
