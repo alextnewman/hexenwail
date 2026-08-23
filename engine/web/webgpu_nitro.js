@@ -1321,7 +1321,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         const first = batches[i * 4 + 1];
         const count = batches[i * 4 + 2];
         const entity = batches[i * 4 + 3];
-        if (!entry || count <= 0 || entity >= entityCount) continue;
+        if (!entry || count <= 0 || entity < 0 || entity >= entityCount) continue;
         if (textureId !== boundTexture) {
           pass.setBindGroup(1, entry.bindGroup);
           boundTexture = textureId;
