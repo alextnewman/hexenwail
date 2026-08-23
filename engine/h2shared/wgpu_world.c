@@ -816,9 +816,8 @@ void WGPUWorld_NewMap (void)
 WGPUWorld_ReportGaps
 
 The renderer still has deliberate content gaps.  They are stated out loud
-deliberate scope, not an accident, so it is stated out loud once per map
-rather than left for the player to discover by walking into an invisible
-monster.  Silence it with r_nitro_report 0.
+once per map rather than left for the player to discover by walking into an
+invisible monster.  Silence it with r_nitro_report 0.
 ================
 */
 void WGPUWorld_ReportGaps (void)
