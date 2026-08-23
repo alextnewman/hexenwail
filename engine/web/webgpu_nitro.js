@@ -1265,7 +1265,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     /* A brush entity re-walks a submodel that the world already listed, so
      * a frame can need more indices than the map's own worst case. */
     let indexBuffer = state.worldIndexBuffer;
-    if (state.world && indexCount > 0) {
+    if (state.world && indexPointer && indexCount > 0) {
       indexBuffer = Nitro.ensureUploadBuffer('worldIndexBuffer', indexCount * 4,
         GPUBufferUsage.INDEX);
       state.device.queue.writeBuffer(indexBuffer, 0, HEAPU8, indexPointer,

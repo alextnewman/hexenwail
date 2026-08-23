@@ -206,6 +206,8 @@ typedef struct
 	float	pad[2];
 	float	align[NITRO_ENTITY_ALIGN / 4 - 20];
 } wgpuentity_t;
+_Static_assert (sizeof(wgpuentity_t) == NITRO_ENTITY_ALIGN,
+		"wgpuentity_t must match WebGPU's dynamic uniform stride");
 
 /* The whole per-frame scene description, uploaded in one go. */
 #define NITROSCENE_FULLBRIGHT	1
