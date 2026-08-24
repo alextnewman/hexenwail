@@ -142,6 +142,11 @@ test('phone mode DOM includes playing layout, touch visibility rules, and quit h
   assert.match(html, /id="phone-exit-button"/);
   assert.match(html, /data-touch-only="true"/);
   assert.match(html, /data-phone-mode="true"/);
+  assert.match(html, /data-phone-action="jump"[^>]*>A<\/button>/);
+  assert.match(html, /data-phone-action="attack"[^>]*>B<\/button>/);
+  assert.match(html, /data-phone-action="use"[^>]*>X<\/button>/);
+  assert.match(html, /data-phone-action="nextWeapon"[^>]*>Y<\/button>/);
+  assert.match(html, /data-phone-action="menu"[^>]*>Start<\/button>/);
   assert.match(html, /@media \(pointer: coarse\) and \(hover: none\) \{/);
   assert.match(app, /isLikelyTouchOnlyEnvironment/);
   assert.match(app, /isPhoneModeEnvironment/);

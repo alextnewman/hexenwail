@@ -1,16 +1,19 @@
 export const PHONE_CONTROL_KEYCODES = Object.freeze({
-  forward: 'w'.charCodeAt(0),
-  back: 's'.charCodeAt(0),
-  left: 'a'.charCodeAt(0),
-  right: 'd'.charCodeAt(0),
-  attack: 200, // K_MOUSE1
-  jump: 32, // K_SPACE
-  use: 251, // K_GP_LTHUMB, default binding "impulse 13" lift/use
-  backButton: 253, // K_GP_BACK
-  menu: 27, // K_ESCAPE
-  nextWeapon: 248, // K_GP_RSHOULDER, default binding "impulse 10"
-  prevWeapon: 247, // K_GP_LSHOULDER, default binding "impulse 12"
-  run: 134, // K_SHIFT
+  /* Treat the virtual pad as a real controller, not a hybrid keyboard/mouse
+   * shim. The engine's canonical menu action is Start, not the console's
+   * Back button, so the menu button must route through K_GP_START. */
+  forward: 268, // K_GP_DPAD_UP
+  back: 269, // K_GP_DPAD_DOWN
+  left: 270, // K_GP_DPAD_LEFT
+  right: 271, // K_GP_DPAD_RIGHT
+  attack: 250, // K_GP_RTRIGGER
+  jump: 243, // K_GP_A
+  use: 245, // K_GP_X
+  backButton: 254, // K_GP_START (menu toggle; K_GP_BACK is console/console-only)
+  menu: 254, // K_GP_START
+  nextWeapon: 248, // K_GP_RSHOULDER
+  prevWeapon: 247, // K_GP_LSHOULDER
+  run: 251, // K_GP_LTHUMB
 });
 
 export const DEFAULT_PHONE_CONTROL_OPTIONS = Object.freeze({
