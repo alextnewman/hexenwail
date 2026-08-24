@@ -75,8 +75,8 @@ struct Frame {
   mvp : mat4x4f,
   fullbright : f32,
   modelFullbrights : f32,
-  pad1 : f32,
-  pad2 : f32,
+  fogBands : f32,
+  haze : f32,
   eye : vec3f,
   time : f32,
   fogColor : vec3f,
@@ -117,6 +117,7 @@ struct VertexOutput {
   @location(0) uv : vec2f,
   @location(1) lightmap : vec3f,
   @location(2) fogDistance : f32,
+  @location(3) worldPosition : vec3f,
 }
 
 fn paletteQuantize(rgb : vec3f) -> vec3f {
@@ -124,6 +125,24 @@ fn paletteQuantize(rgb : vec3f) -> vec3f {
   let index = textureLoad(paletteLutTexture,
       vec2i(quantized.x + quantized.z * 32, quantized.y), 0).r;
   return textureLoad(paletteTexture, vec2i(i32(index), 0), 0).rgb;
+}
+
+fn atmosphereFog(distance : f32, position : vec3f) -> f32 {
+  var fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
+      distance * distance), 0.0, 1.0);
+  if (frame.fogBands >= 2.0) {
+    let steps = floor(frame.fogBands);
+    fog = floor(fog * steps + 0.5) / steps;
+  }
+  if (frame.haze > 0.0) {
+    let field = 0.5 + (sin(position.x * 0.021 + frame.time * 0.11) +
+        sin(position.y * 0.017 - frame.time * 0.07) +
+        sin(position.z * 0.025)) * (1.0 / 6.0);
+    let pocket = smoothstep(0.58, 0.82, field) *
+        smoothstep(48.0, 512.0, distance);
+    fog = max(fog, pocket * frame.haze * 0.45);
+  }
+  return fog;
 }
 
 @vertex
@@ -135,6 +154,7 @@ fn vertexMain(@location(0) position : vec3f,
   output.uv = uv;
   output.lightmap = lightmap;
   output.fogDistance = abs(output.position.w);
+  output.worldPosition = position;
   return output;
 }
 
@@ -183,9 +203,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   if (length(lightColor - vec3f(1.0)) > 0.01) {
     rgb = paletteQuantize(rgb * lightColor);
   }
-  let fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
-      input.fogDistance * input.fogDistance), 0.0, 1.0);
-  return vec4f(mix(rgb, frame.fogColor, fog), entity.alpha);
+  let fog = atmosphereFog(input.fogDistance, input.worldPosition);
+  return vec4f(paletteQuantize(mix(rgb, frame.fogColor, fog)), entity.alpha);
 }`,
 
     /*
@@ -200,8 +219,8 @@ struct Frame {
   mvp : mat4x4f,
   fullbright : f32,
   modelFullbrights : f32,
-  pad1 : f32,
-  pad2 : f32,
+  fogBands : f32,
+  haze : f32,
   eye : vec3f,
   time : f32,
   fogColor : vec3f,
@@ -218,6 +237,7 @@ struct Entity {
 
 @group(0) @binding(1) var paletteTexture : texture_2d<f32>;
 @group(0) @binding(0) var<uniform> frame : Frame;
+@group(0) @binding(6) var paletteLutTexture : texture_2d<u32>;
 @group(1) @binding(0) var solidTexture : texture_2d<u32>;
 @group(1) @binding(1) var cloudTexture : texture_2d<u32>;
 @group(2) @binding(0) var<uniform> entity : Entity;
@@ -242,6 +262,13 @@ fn skyIndex(texture : texture_2d<u32>, coordinate : vec2f) -> u32 {
   return textureLoad(texture, wrapped, 0).r;
 }
 
+fn paletteQuantize(rgb : vec3f) -> vec3f {
+  let quantized = vec3i(clamp(round(rgb * 31.0), vec3f(0.0), vec3f(31.0)));
+  let index = textureLoad(paletteLutTexture,
+      vec2i(quantized.x + quantized.z * 32, quantized.y), 0).r;
+  return textureLoad(paletteTexture, vec2i(i32(index), 0), 0).rgb;
+}
+
 @fragment
 fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   var direction = input.worldPosition - frame.eye;
@@ -253,9 +280,13 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   let index = select(solid, cloud, cloud != 0u);
   let rgb = textureLoad(paletteTexture, vec2i(i32(index), 0), 0).rgb;
   let distance = length(direction);
-  let fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
+  var fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
       distance * distance), 0.0, 1.0);
-  return vec4f(mix(rgb, frame.fogColor, fog), 1.0);
+  if (frame.fogBands >= 2.0) {
+    let steps = floor(frame.fogBands);
+    fog = floor(fog * steps + 0.5) / steps;
+  }
+  return vec4f(paletteQuantize(mix(rgb, frame.fogColor, fog)), 1.0);
 }`,
 
     /*
@@ -271,8 +302,8 @@ struct Frame {
   mvp : mat4x4f,
   fullbright : f32,
   modelFullbrights : f32,
-  pad1 : f32,
-  pad2 : f32,
+  fogBands : f32,
+  haze : f32,
   eye : vec3f,
   time : f32,
   fogColor : vec3f,
@@ -303,6 +334,7 @@ struct VertexOutput {
   @location(4) fogDistance : f32,
   @location(5) @interpolate(flat) fullbright : u32,
   @location(6) @interpolate(flat) lightColor : vec3f,
+  @location(7) worldPosition : vec3f,
 }
 
 fn paletteQuantize(rgb : vec3f) -> vec3f {
@@ -310,6 +342,24 @@ fn paletteQuantize(rgb : vec3f) -> vec3f {
   let index = textureLoad(paletteLutTexture,
       vec2i(quantized.x + quantized.z * 32, quantized.y), 0).r;
   return textureLoad(paletteTexture, vec2i(i32(index), 0), 0).rgb;
+}
+
+fn atmosphereFog(distance : f32, position : vec3f) -> f32 {
+  var fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
+      distance * distance), 0.0, 1.0);
+  if (frame.fogBands >= 2.0) {
+    let steps = floor(frame.fogBands);
+    fog = floor(fog * steps + 0.5) / steps;
+  }
+  if (frame.haze > 0.0) {
+    let field = 0.5 + (sin(position.x * 0.021 + frame.time * 0.11) +
+        sin(position.y * 0.017 - frame.time * 0.07) +
+        sin(position.z * 0.025)) * (1.0 / 6.0);
+    let pocket = smoothstep(0.58, 0.82, field) *
+        smoothstep(48.0, 512.0, distance);
+    fog = max(fog, pocket * frame.haze * 0.45);
+  }
+  return fog;
 }
 
 @vertex
@@ -327,6 +377,7 @@ fn vertexMain(@location(0) position : vec3f,
   output.fogDistance = abs(output.position.w);
   output.fullbright = shade.z;
   output.lightColor = vec3f(lightColor.xyz) * (1.0 / 64.0);
+  output.worldPosition = position;
   return output;
 }
 
@@ -363,9 +414,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   if (receivesLight && length(input.lightColor - vec3f(1.0)) > 0.01) {
     rgb = paletteQuantize(rgb * input.lightColor);
   }
-  let fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
-      input.fogDistance * input.fogDistance), 0.0, 1.0);
-  return vec4f(mix(rgb, frame.fogColor, fog), input.alpha);
+  let fog = atmosphereFog(input.fogDistance, input.worldPosition);
+  return vec4f(paletteQuantize(mix(rgb, frame.fogColor, fog)), input.alpha);
 }`,
 
     effectShader: `
@@ -373,8 +423,8 @@ struct Frame {
   mvp : mat4x4f,
   fullbright : f32,
   modelFullbrights : f32,
-  pad1 : f32,
-  pad2 : f32,
+  fogBands : f32,
+  haze : f32,
   eye : vec3f,
   time : f32,
   fogColor : vec3f,
@@ -447,8 +497,8 @@ struct Frame {
   mvp : mat4x4f,
   fullbright : f32,
   modelFullbrights : f32,
-  pad1 : f32,
-  pad2 : f32,
+  fogBands : f32,
+  haze : f32,
   eye : vec3f,
   time : f32,
   fogColor : vec3f,
@@ -502,7 +552,7 @@ struct ScanParams {
   resolve : f32,
   tint : vec4f,
   persistence : f32,
-  pad0 : f32,
+  paletteShifts : f32,
   pad1 : f32,
   pad2 : f32,
 }
@@ -511,10 +561,19 @@ struct ScanParams {
 @group(0) @binding(1) var sceneSampler : sampler;
 @group(0) @binding(2) var<uniform> scan : ScanParams;
 @group(0) @binding(3) var historyTexture : texture_2d<f32>;
+@group(0) @binding(4) var paletteTexture : texture_2d<f32>;
+@group(0) @binding(5) var paletteLutTexture : texture_2d<u32>;
 
 struct VertexOutput {
   @builtin(position) position : vec4f,
   @location(0) uv : vec2f,
+}
+
+fn paletteQuantize(rgb : vec3f) -> vec3f {
+  let quantized = vec3i(clamp(round(rgb * 31.0), vec3f(0.0), vec3f(31.0)));
+  let index = textureLoad(paletteLutTexture,
+      vec2i(quantized.x + quantized.z * 32, quantized.y), 0).r;
+  return textureLoad(paletteTexture, vec2i(i32(index), 0), 0).rgb;
 }
 
 @vertex
@@ -561,6 +620,9 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   rgb = mix(rgb, max(rgb, history * 0.94), scan.persistence * lightTrail);
 
   rgb = mix(rgb, scan.tint.rgb, scan.tint.a);
+  if (scan.paletteShifts != 0.0 && scan.tint.a > 0.0) {
+    rgb = paletteQuantize(rgb);
+  }
   rgb = (rgb - vec3f(0.5)) * scan.contrast + vec3f(0.5);
   rgb = pow(max(rgb, vec3f(0.0)), vec3f(scan.gamma));
 
@@ -750,6 +812,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           { binding: 1, resource: state.sceneSampler },
           { binding: 2, resource: { buffer: state.scanoutUniform } },
           { binding: 3, resource: state.historyColorView },
+          { binding: 4, resource: state.paletteTexture.createView() },
+          { binding: 5, resource: state.paletteLutTexture.createView() },
         ],
       });
       state.sceneWidth = width;
@@ -847,6 +911,10 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           { binding: 2, visibility: GPUShaderStage.FRAGMENT,
             buffer: { type: 'uniform' } },
           { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: {} },
+          { binding: 4, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: 'float' } },
+          { binding: 5, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: 'uint' } },
         ],
       });
       const particleGroupLayout = device.createBindGroupLayout({
@@ -1660,7 +1728,9 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
    *   [33..36] particle up basis vector
    *   [37..39] sky eye position    [40] sky time
    *   [41..43] fog colour          [44] fog density
-   *   [45] dither  [46] 2x2 resolve  [47] retained-frame persistence
+   *   [45] fog bands               [46] localized haze
+   *   [47] dither  [48] 2x2 resolve  [49] retained-frame persistence
+   *   [50] palette-domain contents and flash shifts
    *
    * data (see wgpuscenedata_t in wgpu_nitro.h) is fourteen ints:
    *   [0]  world index arena     [1]  index count
@@ -1682,7 +1752,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     const state = Nitro.checkDevice();
     if (!state?.encoder) return;
 
-    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 48);
+    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 51);
     const integers = HEAP32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 29);
     const data = HEAP32.subarray(dataPointer >> 2, (dataPointer >> 2) + 14);
     const indexPointer = data[0], indexCount = data[1];
@@ -1707,6 +1777,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     frame.set(floats.subarray(0, 16));
     frame[16] = (integers[28] & 1) ? 1.0 : 0.0;
     frame[17] = (integers[28] & 2) ? 1.0 : 0.0;
+    frame[18] = floats[45];
+    frame[19] = floats[46];
     frame.set(floats.subarray(37, 41), 20);
     frame.set(floats.subarray(41, 45), 24);
     state.device.queue.writeBuffer(state.frameUniform, 0, frame);
@@ -1714,10 +1786,11 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     const scan = new Float32Array(12);
     scan[0] = floats[20];
     scan[1] = floats[21];
-    scan[2] = floats[45];
-    scan[3] = floats[46];
+    scan[2] = floats[47];
+    scan[3] = floats[48];
     scan.set(floats.subarray(16, 20), 4);
-    scan[8] = state.historyValid ? floats[47] : 0.0;
+    scan[8] = state.historyValid ? floats[49] : 0.0;
+    scan[9] = floats[50];
     state.device.queue.writeBuffer(state.scanoutUniform, 0, scan);
 
     /* Every entity's transform, alpha and flat light level in one upload;
