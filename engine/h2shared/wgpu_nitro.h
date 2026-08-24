@@ -227,6 +227,8 @@ typedef struct
 	int	flags;
 	float	particle_right[4];
 	float	particle_up[4];
+	float	sky_eye[3];
+	float	sky_time;
 } wgpuscene_t;
 
 typedef struct
@@ -273,6 +275,8 @@ extern void Nitro_SetColormap (const byte *colormap, int rows);
 extern void Nitro_SetTintTable (const byte *table);
 extern int  Nitro_CreateTexture (const char *name, int width, int height,
 			const byte *pixels, unsigned int flags);
+extern int  Nitro_CreateSky (const char *name, int width, int height,
+			const byte *solid, const byte *clouds);
 extern void Nitro_UpdateTexture (int texture, const byte *pixels);
 extern void Nitro_DestroyTexture (int texture);
 extern int  Nitro_CreateWorld (const float *vertices, int vertexcount,

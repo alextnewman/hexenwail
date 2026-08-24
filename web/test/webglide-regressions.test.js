@@ -5,8 +5,25 @@ import { join } from 'node:path';
 
 const repoRoot = process.cwd();
 const aliasRenderer = readFileSync(join(repoRoot, 'engine/h2shared/gl2_alias.c'), 'utf8');
+const webglRenderer = readFileSync(join(repoRoot, 'engine/hexen2/r_webgl2.c'), 'utf8');
+const nitroEntityRenderer = readFileSync(join(repoRoot, 'engine/h2shared/wgpu_entity.c'), 'utf8');
 const worldRenderer = readFileSync(join(repoRoot, 'engine/h2shared/gl2_world.c'), 'utf8');
 const audioBackend = readFileSync(join(repoRoot, 'engine/h2shared/snd_web.c'), 'utf8');
+
+function functionBody(source, signature) {
+  const start = source.indexOf(signature);
+  assert.ok(start >= 0, `${signature} is present`);
+  const open = source.indexOf('{', start + signature.length);
+  assert.ok(open >= 0, `${signature} has a body`);
+
+  let depth = 1;
+  for (let i = open + 1; i < source.length; i += 1) {
+    if (source[i] === '{') depth += 1;
+    if (source[i] === '}') depth -= 1;
+    if (depth === 0) return source.slice(open + 1, i);
+  }
+  assert.fail(`${signature} has a complete body`);
+}
 
 test('WebGlide converts alias 16.16 skin coordinates to normalized UVs', () => {
   const sScale = aliasRenderer.match(
@@ -54,4 +71,17 @@ test('WebGlide streams dynamic geometry through non-overlapping buffer ranges', 
     /glBufferSubData \(GL_ARRAY_BUFFER,\s*\n\s*\(GLintptr\)gl2_model_vbo_offset/);
   assert.match(aliasRenderer,
     /glDrawArrays \(GL_TRIANGLES, gl2_model_vbo_offset, gl2_batch_count\)/);
+});
+
+test('GPU renderers publish player light levels before view-model draw guards', () => {
+  const webglViewModel = functionBody(webglRenderer, 'static void GL2_DrawViewModel (void)');
+  const nitroViewModel = functionBody(nitroEntityRenderer, 'void WGPUEntity_DrawViewModel (void)');
+
+  for (const viewModel of [webglViewModel, nitroViewModel]) {
+    const lightLevel = viewModel.indexOf('cl.light_level =');
+    const drawGuard = viewModel.indexOf('cl.v.health <= 0');
+    assert.ok(lightLevel >= 0, 'player light level is published');
+    assert.ok(drawGuard >= 0, 'optional view-model draw guard is present');
+    assert.ok(lightLevel < drawGuard, 'light level is published before optional drawing exits');
+  }
 });

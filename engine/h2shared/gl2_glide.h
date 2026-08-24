@@ -329,6 +329,7 @@ void GL2_FlushModelBatch (void);
 void GL2_DrawAliasModel (entity_t *entity);
 void GL2_DrawSpriteModel (entity_t *entity);
 void GL2_DrawParticleList (particle_t *first);
+int GL2_ViewModelLightLevel (entity_t *entity);
 
 /*
 =============================================================================
