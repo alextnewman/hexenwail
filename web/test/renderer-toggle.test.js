@@ -25,11 +25,11 @@ test('renderer preference defaults to the primary WebGlideNitro bundle', () => {
     'renderer preference must default to WebGlideNitro');
 });
 
-test('loadPreferences accepts renderer values and migrates the perf preference', () => {
+test('loadPreferences accepts the supported renderer values and migrates the perf preference', () => {
   const load = app.match(/function loadPreferences\(\) \{([\s\S]*?)\n\}/)?.[1];
   assert.ok(load, 'loadPreferences is defined');
-  assert.match(load, /\['software', 'webglide', 'webgpu', 'nitro'\]\.includes\(saved\.renderer\)/,
-    'unknown renderer strings must fall back to the default');
+  assert.match(load, /\['software', 'nitro'\]\.includes\(saved\.renderer\)/,
+    'only the supported renderer strings should be accepted');
   assert.match(load, /typeof saved\.perfCapture === 'boolean'/);
   assert.match(load, /Number\(saved\.perfOverlay\) > 0/,
     'an enabled legacy overlay preference should migrate to capture');
@@ -46,33 +46,23 @@ test('launcher passes the configured perf capture to the engine on startup', () 
     'the launcher must explicitly disable an archived capture setting');
 });
 
-test('ensureEngineScriptLoaded routes the WebGlide preference to the GPU bundle URL', () => {
+test('ensureEngineScriptLoaded routes the supported renderer preferences to the right bundle URL', () => {
   const loader = app.match(/async function ensureEngineScriptLoaded\(\) \{([\s\S]*?)\n\}/)?.[1];
   assert.ok(loader, 'ensureEngineScriptLoaded is defined');
-  // The two engine bundles ship under distinct basenames so the
-  // Emscripten .js finds its own .wasm sibling by basename; the loader
-  // picks one based on the persisted preference.
-  assert.match(loader, /state\.preferences\.renderer === 'webglide'/);
-  assert.match(loader, /state\.preferences\.renderer === 'webgpu'/);
   assert.match(loader, /state\.preferences\.renderer === 'nitro'/);
-  assert.match(loader, /'\.\/hexenwail-webglide\.js'/);
-  assert.match(loader, /'\.\/hexenwail-webgpu\.js'/);
+  assert.match(loader, /state\.preferences\.renderer === 'software'/);
   assert.match(loader, /'\.\/hexenwail-nitro\.js'/);
   assert.match(loader, /'\.\/hexenwail\.js'/);
-  // The choice is logged through the runtime log so a bug report shows
-  // which bundle was in use.
   assert.match(loader, /logToConsole\('\[launcher\]',/);
   assert.match(loader, /Loading engine bundle/);
 });
 
-test('a missing WebGlide bundle fails loudly and names the toggle', () => {
+test('a missing Nitro bundle fails loudly and names the shipping toggle', () => {
   const loader = app.match(/async function ensureEngineScriptLoaded\(\) \{([\s\S]*?)\n\}/)?.[1];
   assert.ok(loader, 'ensureEngineScriptLoaded is defined');
-  // The error path must not leave a dead launcher: name the card the
-  // user actually sees, and tell them how to get to the parked software
-  // renderer.
   assert.match(loader, /Renderer/);
   assert.match(loader, /Software \(parked reference\)/);
+  assert.match(loader, /WebGlideNitro bundle is missing/);
 });
 
 test('the launcher exposes copyable raw performance capture', () => {
@@ -84,24 +74,16 @@ test('the launcher exposes copyable raw performance capture', () => {
   assert.doesNotMatch(html, /Frame-time graph/);
 });
 
-test('the launcher exposes Nitro as primary and keeps parked renderers selectable', () => {
+test('the launcher exposes the supported shipping pair for software and Nitro', () => {
   assert.match(html, /id="renderer-setting"/);
   assert.match(html, /<option value="software">/);
-  assert.match(html, /<option value="webglide">/);
-  assert.match(html, /<option value="webgpu">/);
   assert.match(html, /<option value="nitro">/);
-  // The old "gl"/"glide" values must not reappear in the DOM: user-facing
-  // wording is WebGlide, and the persisted preference string is
-  // "webglide". Renaming the old spelling silently would leave a stale
-  // preference in a browser localStorage.
-  assert.doesNotMatch(html, /<option value="glide">/);
-  assert.doesNotMatch(html, /<option value="gl">/);
+  assert.doesNotMatch(html, /<option value="webglide">/);
+  assert.doesNotMatch(html, /<option value="webgpu">/);
   const card = html.match(/<h2>Renderer<\/h2>([\s\S]*?)<\/section>/)?.[1];
   assert.ok(card, 'the Renderer card is defined');
   assert.match(card, /Software renderer/);
   assert.match(card, /parked/);
-  assert.match(card, /WebGlide/);
-  assert.match(card, /abortive/);
   assert.match(card, /WebGlideNitro/);
   assert.match(card, /primary renderer/);
   assert.match(card, /WebGlideNitro \(default\)/);

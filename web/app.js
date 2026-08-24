@@ -701,9 +701,7 @@ function loadPreferences() {
       ? saved.perfCapture
       : Number(saved.perfOverlay) > 0;
     state.preferences.phoneHintSeen = Boolean(saved.phoneHintSeen);
-    if (saved.renderer === 'webglide' || saved.renderer === 'webgpu') {
-      state.preferences.renderer = 'nitro';
-    } else if (['software', 'nitro'].includes(saved.renderer)) {
+    if (['software', 'nitro'].includes(saved.renderer)) {
       state.preferences.renderer = saved.renderer;
     }
   } catch (error) {
@@ -1591,7 +1589,7 @@ async function init() {
   /* Both WebGPU bundles take the device from here rather than opening one
    * of their own: the canvas can only ever have a single configured
    * context, and the launcher is what owns the canvas. */
-  if (state.preferences.renderer === 'webgpu' || state.preferences.renderer === 'nitro') {
+  if (state.preferences.renderer === 'nitro') {
     const report = await probeWebGPU({ canvas: ui.canvas });
     if (report.ok) {
       const limits = report.handoff.limits;
@@ -1611,7 +1609,7 @@ async function init() {
       savePreferences();
       applyPreferences();
       logToConsole('[renderer:warn]',
-        `${report.reason} Reloading with the WebGL2 software presenter.`);
+        `${report.reason} Reloading with the shipping software renderer.`);
       setStatus(`${report.reason} Reloading with the shipping renderer…`, 'warn');
       setTimeout(() => location.reload(), 60);
       return;
@@ -1630,7 +1628,7 @@ async function init() {
       state.rendererReady = false;
       setEngineState('fatal');
       logToConsole('[renderer:error]', error.message, true);
-      setStatus(`WebGL2 renderer self-test failed: ${error.message}`, 'error');
+      setStatus(`Software renderer self-test failed: ${error.message}`, 'error');
     }
   }
   updateTouchOnlyEnvironment();
