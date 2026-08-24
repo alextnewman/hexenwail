@@ -81,3 +81,32 @@ test('white and disabled coloured lights retain neutral colormap shading', () =>
   assert.match(backend, /length\(lightColor - vec3f\(1\.0\)\) > 0\.01/);
   assert.match(backend, /length\(input\.lightColor - vec3f\(1\.0\)\) > 0\.01/);
 });
+
+test('coloured-light runtime changes rebuild both world and actor caches', () => {
+  assert.match(world,
+    /colored_changed = nitro_cached_coloredlight != gl_coloredlight\.integer/);
+  assert.match(world, /if \(colored_changed\)\s+WGPULightVol_NewMap \(\)/);
+  assert.match(world, /qboolean\s+changed = colored_changed/);
+});
+
+test('dark and overlapping lights mix in contribution space', () => {
+  assert.match(world, /sign = light->dark \? -1\.0f : 1\.0f/);
+  assert.match(world, /blocklights\[j \+ 3\] \+= \(int\)add/);
+  assert.match(volume,
+    /sample->color\[0\] -= add;\s+sample->color\[1\] -= add;\s+sample->color\[2\] -= add/);
+  assert.match(volume, /VectorMA \(sample->color, add, color, sample->color\)/);
+});
+
+test('lit files are versioned, bounded, and keep BSP intensity authoritative', () => {
+  assert.match(world, /fs_filesize < 8/);
+  assert.match(world, /required > \(fs_filesize - 8\) \/ 3/);
+  assert.match(world, /version != 1/);
+  assert.match(world, /blocklights\[i \* 4 \+ 3\] \+= add/);
+});
+
+test('fullbright alias pixels bypass coloured quantization', () => {
+  assert.match(backend,
+    /frame\.modelFullbrights != 0\.0 && input\.fullbright != 0u &&\s+index >= 224u/);
+  assert.match(backend,
+    /if \(receivesLight && length\(input\.lightColor - vec3f\(1\.0\)\) > 0\.01\)/);
+});

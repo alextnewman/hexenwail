@@ -113,7 +113,8 @@ static void WGPUWorld_LoadLitFile (qmodel_t *world)
 	char		litname[MAX_QPATH];
 	unsigned int	path_id = 0;
 	byte		*data;
-	int		version;
+	ptrdiff_t	required;
+	int		version, surfnum;
 
 	nitro_litdata = NULL;
 	nitro_lit_loaded = false;
@@ -125,6 +126,11 @@ static void WGPUWorld_LoadLitFile (qmodel_t *world)
 	data = (byte *) FS_LoadHunkFile (litname, &path_id);
 	if (!data)
 		return;
+	if (fs_filesize < 8)
+	{
+		Con_Printf ("WebGlideNitro: %s is truncated\n", litname);
+		return;
+	}
 	if (path_id < world->path_id)
 	{
 		Con_DPrintf ("WebGlideNitro: ignoring %s from a lower priority gamedir\n",
@@ -141,6 +147,33 @@ static void WGPUWorld_LoadLitFile (qmodel_t *world)
 	{
 		Con_Printf ("WebGlideNitro: %s is .lit version %d, expected 1\n",
 				litname, version);
+		return;
+	}
+
+	required = 0;
+	for (surfnum = 0; surfnum < world->numsurfaces; surfnum++)
+	{
+		const msurface_t	*surf = &world->surfaces[surfnum];
+		ptrdiff_t	offset;
+		int		maps, size;
+
+		if (!surf->samples)
+			continue;
+		offset = surf->samples - world->lightdata;
+		if (offset < 0)
+			continue;
+		size = ((surf->extents[0] >> 4) + 1) *
+			((surf->extents[1] >> 4) + 1);
+		for (maps = 0; maps < MAXLIGHTMAPS && surf->styles[maps] != 255; maps++)
+			;
+		if (required < offset + (ptrdiff_t)size * maps)
+			required = offset + (ptrdiff_t)size * maps;
+	}
+	if (required > (fs_filesize - 8) / 3)
+	{
+		Con_Printf ("WebGlideNitro: %s is truncated (%ld colour samples, "
+				"%td required)\n", litname, (fs_filesize - 8) / 3,
+				required);
 		return;
 	}
 
@@ -213,11 +246,9 @@ qboolean WGPUWorld_LineVisible (const vec3_t start, const vec3_t end)
 
 	lightmap atlas
 
-	One byte per texel.  An RGBA atlas would keep RGB for coloured light and
-	put the neutral intensity in alpha; Nitro only ever consumes that
-	intensity, because the colormap row it selects is what makes the result
-	look like the software renderer instead of like GLQuake.  So the atlas is
-	r8unorm and a quarter the size.
+	Four bytes per texel. Alpha retains the neutral intensity that selects the
+	software renderer's colormap row. RGB carries only the luminance-normalised
+	chroma applied after that lookup and snapped back into the game palette.
 
 =============================================================================
 */
@@ -505,6 +536,8 @@ void WGPUWorld_UpdateLightstyles (void)
 	numsurfaces = q_min(nitro_numsurfaces, cl.worldmodel->numsurfaces);
 	colored_changed = nitro_cached_coloredlight != gl_coloredlight.integer;
 	nitro_cached_coloredlight = gl_coloredlight.integer;
+	if (colored_changed)
+		WGPULightVol_NewMap ();
 	memset (dirty, 0, sizeof(dirty));
 	for (surfnum = 0; surfnum < numsurfaces; surfnum++)
 	{
