@@ -6,6 +6,7 @@ import { join } from 'node:path';
 const repoRoot = process.cwd();
 const html = readFileSync(join(repoRoot, 'web/index.html'), 'utf8');
 const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
+const shell = readFileSync(join(repoRoot, 'engine/web/shell.html'), 'utf8');
 const inputBackend = readFileSync(join(repoRoot, 'engine/h2shared/in_web.c'), 'utf8');
 const keys = readFileSync(join(repoRoot, 'engine/hexen2/keys.c'), 'utf8');
 const menu = readFileSync(join(repoRoot, 'engine/hexen2/menu.c'), 'utf8');
@@ -28,6 +29,10 @@ test('starting the game is what enters fullscreen play', () => {
     'the game surface, not the bare canvas, is the fullscreen element');
   assert.match(html, /maximum-scale=1/,
     'fullscreen play must disable browser zooming so double-taps cannot steal the view');
+  assert.match(shell, /maximum-scale=1/,
+    'the generated engine shell must apply the same zoom restriction');
+  assert.match(app, /viewport\?\.addEventListener\('dblclick', \(event\) => event\.preventDefault\(\)\)/,
+    'the play surface must consume the browser double-tap gesture');
 });
 
 test('fullscreen transitions resize the canvas and restore the launcher', () => {
@@ -131,4 +136,14 @@ test('the gamepad Start button always reaches the menu', () => {
 
   // ...and the alt-modifier layer must not divert it either.
   assert.match(keys, /joy_altmodifier_pressed && key >= K_GP_A && key < K_GP_START/);
+});
+
+test('touch controls switch safely between gameplay and menu layouts', () => {
+  assert.match(inputBackend, /static int\s+touch_key_down\[MAX_KEYS\]/);
+  assert.match(inputBackend, /Key_Event\(touch_key_down\[key\], false\)/,
+    'touch releases must target the key emitted before a menu transition');
+  assert.match(inputBackend, /Web_SetTouchMenuMode\(menu\)/);
+  assert.match(inputBackend, /hexenwailtouchmode/);
+  assert.match(inputBackend, /queueMicrotask/,
+    'menu-mode callbacks must not re-enter WebAssembly from IN_Commands');
 });

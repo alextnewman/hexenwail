@@ -1,19 +1,18 @@
 export const PHONE_CONTROL_KEYCODES = Object.freeze({
-  /* Treat the virtual pad as a real controller, not a hybrid keyboard/mouse
-   * shim. The engine's canonical menu action is Start, not the console's
-   * Back button, so the menu button must route through K_GP_START. */
-  forward: 268, // K_GP_DPAD_UP
-  back: 269, // K_GP_DPAD_DOWN
-  left: 270, // K_GP_DPAD_LEFT
-  right: 271, // K_GP_DPAD_RIGHT
+  /* Movement stays on the normal keyboard bindings in game. The web input
+   * bridge translates these to menu navigation while a menu owns input. */
+  forward: 119, // W
+  back: 115, // S
+  left: 97, // A
+  right: 100, // D
   attack: 250, // K_GP_RTRIGGER
   jump: 243, // K_GP_A
-  use: 245, // K_GP_X
-  backButton: 254, // K_GP_START (menu toggle; K_GP_BACK is console/console-only)
+  use: 251, // K_GP_LTHUMB (lift/use interaction)
   menu: 254, // K_GP_START
+  menuBack: 244, // K_GP_B
+  menuSelect: 243, // K_GP_A
   nextWeapon: 248, // K_GP_RSHOULDER
   prevWeapon: 247, // K_GP_LSHOULDER
-  run: 251, // K_GP_LTHUMB
 });
 
 export const DEFAULT_PHONE_CONTROL_OPTIONS = Object.freeze({
@@ -24,7 +23,10 @@ export const DEFAULT_PHONE_CONTROL_OPTIONS = Object.freeze({
   keys: PHONE_CONTROL_KEYCODES,
 });
 
-const BUTTON_ACTIONS = new Set(['attack', 'jump', 'use', 'backButton', 'menu', 'nextWeapon', 'prevWeapon', 'run']);
+const BUTTON_ACTIONS = new Set([
+  'attack', 'jump', 'use', 'menu', 'menuBack', 'menuSelect',
+  'nextWeapon', 'prevWeapon',
+]);
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));

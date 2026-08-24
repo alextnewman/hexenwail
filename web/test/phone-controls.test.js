@@ -74,9 +74,9 @@ test('multi-touch buttons and look region keep independent pointer ownership', (
   assert.deepEqual(looks, [[20, -20]], 'look deltas are clamped before sensitivity scaling');
 });
 
-test('phone back button presses the virtual controller back key', () => {
+test('menu back button presses the controller B key', () => {
   const root = makeElement(null);
-  const back = makeElement('backButton');
+  const back = makeElement('menuBack');
   const events = [];
   const controls = new PhoneControls(root, { key: (key, down) => events.push([key, down]), look() {} });
   controls.attach();
@@ -85,9 +85,29 @@ test('phone back button presses the virtual controller back key', () => {
   root.dispatch('pointerup', pointer(back, 11, 10, 10));
 
   assert.deepEqual(events, [
-    [PHONE_CONTROL_KEYCODES.backButton, true],
-    [PHONE_CONTROL_KEYCODES.backButton, false],
+    [PHONE_CONTROL_KEYCODES.menuBack, true],
+    [PHONE_CONTROL_KEYCODES.menuBack, false],
   ]);
+});
+
+test('gameplay controls use movement and action bindings that match their labels', () => {
+  assert.deepEqual({
+    forward: PHONE_CONTROL_KEYCODES.forward,
+    back: PHONE_CONTROL_KEYCODES.back,
+    left: PHONE_CONTROL_KEYCODES.left,
+    right: PHONE_CONTROL_KEYCODES.right,
+    attack: PHONE_CONTROL_KEYCODES.attack,
+    jump: PHONE_CONTROL_KEYCODES.jump,
+    use: PHONE_CONTROL_KEYCODES.use,
+  }, {
+    forward: 'w'.charCodeAt(0),
+    back: 's'.charCodeAt(0),
+    left: 'a'.charCodeAt(0),
+    right: 'd'.charCodeAt(0),
+    attack: 250, // K_GP_RTRIGGER
+    jump: 243, // K_GP_A
+    use: 251, // K_GP_LTHUMB
+  });
 });
 
 test('each touch action rejects a second pointer', () => {
@@ -142,11 +162,16 @@ test('phone mode DOM includes playing layout, touch visibility rules, and quit h
   assert.match(html, /id="phone-exit-button"/);
   assert.match(html, /data-touch-only="true"/);
   assert.match(html, /data-phone-mode="true"/);
-  assert.match(html, /data-phone-action="jump"[^>]*>A<\/button>/);
-  assert.match(html, /data-phone-action="attack"[^>]*>B<\/button>/);
-  assert.match(html, /data-phone-action="use"[^>]*>X<\/button>/);
-  assert.match(html, /data-phone-action="nextWeapon"[^>]*>Y<\/button>/);
-  assert.match(html, /data-phone-action="menu"[^>]*>Start<\/button>/);
+  assert.match(html, /data-phone-action="jump"[^>]*>Jump<\/button>/);
+  assert.match(html, /data-phone-action="attack"[^>]*>Atk<\/button>/);
+  assert.match(html, /data-phone-action="use"[^>]*>Use<\/button>/);
+  assert.match(html, /data-phone-action="nextWeapon"[^>]*>Next<\/button>/);
+  assert.match(html, /data-phone-action="menu"[^>]*>Menu<\/button>/);
+  assert.match(html, /data-phone-action="menuBack"[^>]*>Back<\/button>/);
+  assert.match(html, /data-phone-action="menuSelect"[^>]*>Select<\/button>/);
+  assert.match(html, /data-phone-action="menu"[^>]*>Resume<\/button>/);
+  assert.match(html, /body\[data-touch-menu="true"\] \.phone-game-control \{ display: none; \}/);
+  assert.match(app, /addEventListener\('hexenwailtouchmode'/);
   assert.match(html, /@media \(pointer: coarse\) and \(hover: none\) \{/);
   assert.match(app, /isLikelyTouchOnlyEnvironment/);
   assert.match(app, /isPhoneModeEnvironment/);

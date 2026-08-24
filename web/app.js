@@ -1387,6 +1387,14 @@ function bindUi() {
     look: engineLook,
   }, { lookSensitivity: state.preferences.lookSensitivity });
   state.phoneControls.attach();
+  addEventListener('hexenwailtouchmode', (event) => {
+    const menu = Boolean(event.detail?.menu);
+    if ((document.body.dataset.touchMenu === 'true') !== menu) {
+      releasePhoneInputs();
+    }
+    document.body.dataset.touchMenu = menu ? 'true' : 'false';
+  });
+  ui.viewport?.addEventListener('dblclick', (event) => event.preventDefault());
 
   ui.importButton?.addEventListener('click', () => ui.fileInput?.click());
   ui.directoryButton?.addEventListener('click', () => ui.directoryInput?.click());

@@ -266,6 +266,10 @@
     .phone-button {
       pointer-events: auto;
     }
+    .phone-menu-control.phone-button { display: none; }
+    body[data-touch-menu="true"] .phone-game-control { display: none; }
+    body[data-touch-menu="true"] .phone-menu-control.phone-stick { display: block; }
+    body[data-touch-menu="true"] .phone-menu-control.phone-button { display: grid; }
     .phone-stick {
       position: absolute;
       left: max(1rem, var(--safe-left));
@@ -348,6 +352,10 @@
       bottom: max(5rem, calc(var(--safe-bottom) + 4.5rem));
       min-width: 3.4rem;
       min-height: 3.4rem;
+    }
+    .phone-button.prev,
+    .phone-button.next {
+      font-size: 0.75rem;
     }
     body[data-handedness="left"] .phone-stick {
       left: auto;
@@ -459,7 +467,7 @@
     };
   </script>
 </head>
-<body data-engine-state="ready" data-immersive="false">
+<body data-engine-state="ready" data-immersive="false" data-touch-menu="false">
   <header class="topbar">
     <div>
       <h1>Hexenwail PWA</h1>
@@ -589,15 +597,19 @@
       <canvas id="canvas" tabindex="0" aria-label="Hexenwail game canvas"></canvas>
       <div class="canvas-hint">Tap/click the canvas to focus input. On platforms without Pointer Lock (notably iPadOS Safari), mouselook remains limited.</div>
       <button id="phone-menu-button" class="phone-top-button" type="button" aria-label="Open in-game menu">☰</button>
-      <div id="phone-controls" class="phone-controls" aria-label="Touch game controls">
-        <div class="phone-look" data-phone-action="look" aria-label="Drag to look"></div>
-        <div class="phone-stick" data-phone-action="stick" aria-label="Move: forward, back, strafe left and right"></div>
-        <button class="phone-button attack" type="button" data-phone-action="attack" aria-label="Attack">B</button>
-        <button class="phone-button jump" type="button" data-phone-action="jump" aria-label="Jump">A</button>
-        <button class="phone-button back" type="button" data-phone-action="menu" aria-label="Menu">Start</button>
-        <button class="phone-button use" type="button" data-phone-action="use" aria-label="Use or interact">X</button>
-        <button class="phone-button prev" type="button" data-phone-action="prevWeapon" aria-label="Previous weapon">◀</button>
-        <button class="phone-button next" type="button" data-phone-action="nextWeapon" aria-label="Next weapon">Y</button>
+      <div id="phone-controls" class="phone-controls" aria-label="Touch controls">
+        <div class="phone-look phone-game-control" data-phone-action="look" aria-label="Drag to look"></div>
+        <div class="phone-stick phone-game-control" data-phone-action="stick" aria-label="Move forward, back, left, and right"></div>
+        <div class="phone-stick phone-menu-control" data-phone-action="stick" aria-label="Navigate menu up, down, left, and right"></div>
+        <button class="phone-button attack phone-game-control" type="button" data-phone-action="attack" aria-label="Attack">Atk</button>
+        <button class="phone-button jump phone-game-control" type="button" data-phone-action="jump" aria-label="Jump">Jump</button>
+        <button class="phone-button back phone-game-control" type="button" data-phone-action="menu" aria-label="Open menu">Menu</button>
+        <button class="phone-button use phone-game-control" type="button" data-phone-action="use" aria-label="Use or interact">Use</button>
+        <button class="phone-button prev phone-game-control" type="button" data-phone-action="prevWeapon" aria-label="Previous weapon">Prev</button>
+        <button class="phone-button next phone-game-control" type="button" data-phone-action="nextWeapon" aria-label="Next weapon">Next</button>
+        <button class="phone-button attack phone-menu-control" type="button" data-phone-action="menuBack" aria-label="Go back one menu">Back</button>
+        <button class="phone-button jump phone-menu-control" type="button" data-phone-action="menuSelect" aria-label="Select menu item">Select</button>
+        <button class="phone-button back phone-menu-control" type="button" data-phone-action="menu" aria-label="Close menu and resume game">Resume</button>
       </div>
       <div id="phone-overlay" class="phone-overlay" role="dialog" aria-modal="true" aria-labelledby="phone-overlay-title" aria-hidden="true">
         <div class="phone-overlay-card">
