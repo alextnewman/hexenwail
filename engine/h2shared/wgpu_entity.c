@@ -91,6 +91,8 @@ static int		nitro_batch_texture;
 static unsigned int	nitro_batch_flags;
 static int		nitro_batch_open;
 
+extern cvar_t	r_shadows;
+
 static void WGPUEntity_FlushBatch (void)
 {
 	wgpumodelbatch_t	*batch;
@@ -846,6 +848,119 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 
 	c_alias_polys += numtris;
 	wgpu_frame_polys += numtris;
+
+	if (r_shadows.integer && entity != &cl.viewent &&
+	    !(flags & (NITROMODEL_BLEND_ALPHA | NITROMODEL_BLEND_ADD)))
+	{
+		float	shadowz = entity->origin[2] + model->mins[2] + 0.25f;
+
+		ptri = (const mtriangle_t *)((const byte *)paliashdr + paliashdr->triangles);
+		WGPUEntity_BeginBatch (skin, NITROMODEL_SHADOW);
+		out = WGPUEntity_Vertices (numtris * 3);
+		for (i = 0; i < numtris; i++, ptri++)
+		{
+			int	j;
+
+			for (j = 0; j < 3; j++)
+			{
+				const trivertx_t	*vert = &poseverts[ptri->vertindex[j]];
+				vec3_t			local, world;
+				float			height;
+
+				local[0] = vert->v[0] * scale[0] + offset[0];
+				local[1] = vert->v[1] * scale[1] + offset[1];
+				local[2] = vert->v[2] * scale[2] + offset[2];
+				world[0] = entity->origin[0] + local[0] * forward[0] +
+					local[1] * right[0] + local[2] * up[0];
+				world[1] = entity->origin[1] + local[0] * forward[1] +
+					local[1] * right[1] + local[2] * up[1];
+				world[2] = entity->origin[2] + local[0] * forward[2] +
+					local[1] * right[2] + local[2] * up[2];
+				height = world[2] - shadowz;
+				out->position[0] = world[0] - height * 0.25f;
+				out->position[1] = world[1] - height * 0.25f;
+				out->position[2] = shadowz;
+				out->texcoord[0] = out->texcoord[1] = 0.5f;
+				out->light = -1.0f;
+				out->shade = 96u << 24;
+				out++;
+			}
+		}
+		wgpu_frame_polys += numtris;
+	}
+}
+
+static unsigned int WGPUEntity_GlowColor (const float *settings, float intensity)
+{
+	unsigned int	r, g, b, a;
+
+	r = (unsigned int)(CLAMP(0.0f, settings[COLOR_R] * intensity, 1.0f) * 255.0f);
+	g = (unsigned int)(CLAMP(0.0f, settings[COLOR_G] * intensity, 1.0f) * 255.0f);
+	b = (unsigned int)(CLAMP(0.0f, settings[COLOR_B] * intensity, 1.0f) * 255.0f);
+	a = (unsigned int)(CLAMP(0.0f, settings[COLOR_A], 1.0f) * 255.0f);
+	return r | (g << 8) | (b << 16) | (a << 24);
+}
+
+static void WGPUEntity_DrawGlow (entity_t *entity)
+{
+	static const float	corners[6][2] = {
+		{-1, -1}, {-1, 1}, {1, 1}, {-1, -1}, {1, 1}, {1, -1}
+	};
+	float		*settings;
+	wgpumodel_vertex_t *out;
+	vec3_t		origin, point, delta;
+	float		radius, distance, intensity;
+	unsigned int	color;
+	int		flags, style, i, texture;
+	byte		white = 15;
+
+	flags = R_GetPimpFlags (entity, &settings);
+	if (!((gl_glows.integer && (flags & XF_TORCH_GLOW)) ||
+	      (gl_missile_glows.integer && (flags & XF_MISSILE_GLOW)) ||
+	      (gl_other_glows.integer && (flags & (XF_GLOW | EF_GLOW)))))
+		return;
+
+	VectorCopy (entity->origin, origin);
+	origin[0] += settings[ORB_OFFSET_X];
+	origin[1] += settings[ORB_OFFSET_Y];
+	origin[2] += settings[ORB_OFFSET_Z];
+	if (flags & XF_TORCH_GLOW)
+		origin[2] += (flags & XF_TORCH_GLOW_EGYPT) ? 16.0f : 8.0f;
+	if ((entity->model->flags & EF_ROTATE) || (flags & EF_FLOAT))
+		origin[2] += (float)sin (entity->origin[0] + entity->origin[1] +
+					cl.time * 3.0) * 5.5f;
+
+	radius = (settings[ORB_RADIUS] > 1.0f) ? settings[ORB_RADIUS] : 20.0f;
+	VectorSubtract (origin, r_origin, delta);
+	distance = VectorLengthFast (delta);
+	if (distance <= radius)
+		return;
+	intensity = CLAMP(0.0f, distance / 1024.0f, 1.0f);
+	style = (int)settings[LIGHT_STYLE];
+	if (style < 0 || style >= MAX_LIGHTSTYLES)
+		style = 0;
+	intensity *= CLAMP(0.0f, d_lightstylevalue[style] / 255.0f, 1.0f);
+	if (!(flags & XF_TORCH_GLOW))
+		intensity *= CLAMP(0.0f, gl_glow_intensity.value, 1.0f);
+	color = WGPUEntity_GlowColor (settings, intensity);
+
+	texture = WGPUEntity_LoadSkin ("__nitro_glow", 1, 1, &white, 0, 1u);
+	if (texture <= 0)
+		return;
+	WGPUEntity_BeginBatch (texture, NITROMODEL_GLOW);
+	out = WGPUEntity_Vertices (6);
+	for (i = 0; i < 6; i++)
+	{
+		VectorMA (origin, corners[i][0] * radius, vright, point);
+		VectorMA (point, corners[i][1] * radius, vup, point);
+		VectorCopy (point, out->position);
+		out->texcoord[0] = corners[i][0] * 0.5f + 0.5f;
+		out->texcoord[1] = corners[i][1] * 0.5f + 0.5f;
+		out->light = -1.0f;
+		out->shade = color;
+		out++;
+	}
+	wgpu_frame_polys += 2;
 }
 
 /*
@@ -1118,6 +1233,7 @@ void WGPUEntity_DrawEntitiesOnList (qboolean translucent)
 		if (WGPUEntity_IsTranslucent (entity) != translucent)
 			continue;
 		WGPUEntity_DrawEntity (entity, 0);
+		WGPUEntity_DrawGlow (entity);
 	}
 
 	WGPUEntity_FlushBatch ();

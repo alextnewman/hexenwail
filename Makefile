@@ -5,7 +5,7 @@
 # Linux/Windows binary, so the former nix-linux/nix-win64/nix-release
 # targets have been removed. See docs/web/ARCHITECTURE.md.
 
-.PHONY: help build build-webgl2 build-webgpu build-nitro dist test clean
+.PHONY: help build build-software build-webgl2 build-webgpu build-nitro dist test clean
 
 help:
 	@echo "Hexenwail Build Targets"
@@ -14,7 +14,8 @@ help:
 	@echo "Requires emcmake/emmake on PATH:"
 	@echo "  source \"\$$EMSDK/emsdk_env.sh\""
 	@echo ""
-	@echo "  make build          - Build the WebAssembly client (software renderer)"
+	@echo "  make build          - Build WebGlideNitro, the primary renderer"
+	@echo "  make build-software - Build the parked software reference"
 	@echo "  make build-webgl2   - Build the retained WebGL2 renderer"
 	@echo "  make build-webgpu   - Build the WebGPU software-presenter preview"
 	@echo "  make build-nitro    - Build WebGlideNitro, the native WebGPU renderer"
@@ -26,9 +27,11 @@ help:
 # Default target
 all: help
 
-# The shipping configuration: classic 8bpp software renderer presented on
-# an accelerated canvas.
-build:
+# The primary WebGlideNitro renderer.
+build: build-nitro
+
+# Parked classic 8bpp software renderer presented on an accelerated canvas.
+build-software:
 	./scripts/wasm-build.sh software
 
 # The WebGL2 renderer is retained and must keep compiling.
@@ -46,7 +49,7 @@ build-nitro:
 	./scripts/wasm-build.sh nitro engine/build-nitro
 
 # Static PWA artifact, the same one CI validates and Pages deploys.
-dist: build
+dist: build build-software
 	./scripts/wasm-assemble-artifact.sh dist
 	./scripts/wasm-validate-artifact.sh dist
 

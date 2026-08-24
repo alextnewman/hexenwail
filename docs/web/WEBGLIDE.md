@@ -440,7 +440,7 @@ goal — there is no desktop build.
 ## Related documents
 
 * [`ARCHITECTURE.md`](ARCHITECTURE.md) — layering, the macro contract, non-goals.
-* [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md) — the default renderer.
+* [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md) — the parked reference renderer.
 * [`PERF_CAPTURE.md`](PERF_CAPTURE.md) — copyable raw capture used to measure this renderer.
 * [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md) — the separate native WebGPU
   renderer. It is **not** gated on this renderer and is **not** measured

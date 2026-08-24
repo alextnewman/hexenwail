@@ -1,6 +1,6 @@
 # Software rendering on an accelerated canvas
 
-**Status:** canonical, and the **default** web renderer. Read
+**Status:** parked correctness reference. Read
 [`ARCHITECTURE.md`](ARCHITECTURE.md) first for the macro contract and the
 non-goals.
 
@@ -13,7 +13,7 @@ animation, colormap lighting, stipple translucency. That look is the
 work — and more Safari-specific risk — than simply running the original
 rasteriser.
 
-So the design is:
+This path remains available as the exact authored-pixel reference:
 
 1. **Render** with the classic 8bpp software rasteriser, restored verbatim
    from uHexen2. One CPU core, no GPU state, no driver surprises.
@@ -31,10 +31,10 @@ experiment that is kept compiling rather than an actively pursued renderer, and
 its frame cost is not a baseline for anything. A third configuration,
 WebGlideNitro
 (`-DWEB_RENDERER=webgpu`, see [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md)), is a
-native WebGPU technology preview that draws the complete playable scene while
-its remaining visual effects are developed.
-Neither changes the default: `WEB_RENDERER` defaults to `software`, and the
-shipped `hexenwail.*` bundle is this renderer.
+native WebGPU renderer that draws the complete playable scene and is now the
+primary renderer.
+`WEB_RENDERER` defaults to `webgpu`; select this parked path explicitly with
+`-DWEB_RENDERER=software`.
 
 ## Files
 
@@ -302,7 +302,7 @@ across map changes.
 ## Building and validating
 
 ```bash
-emcmake cmake -S engine -B build-soft                        # software (default)
+emcmake cmake -S engine -B build-soft -DWEB_RENDERER=software
 emmake  make  -C build-soft -j"$(nproc)"
 
 emcmake cmake -S engine -B build-gl -DWEB_RENDERER=webgl2    # WebGlide

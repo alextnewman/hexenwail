@@ -58,17 +58,17 @@ const state = {
     perfCapture: false,
     phoneHintSeen: false,
     /* Which WebAssembly bundle to load at launcher startup:
-     *   'software' -> ./hexenwail.js            (shipping, supported default)
+     *   'software' -> ./hexenwail.js            (parked reference renderer)
      *   'webglide' -> ./hexenwail-webglide.js   (experimental GPU renderer)
      *   'webgpu'   -> ./hexenwail-webgpu.js     (software + WebGPU presenter)
-     *   'nitro'    -> ./hexenwail-nitro.js      (WebGlideNitro, native WebGPU)
+     *   'nitro'    -> ./hexenwail-nitro.js      (shipping WebGlideNitro default)
      * 'webgpu' and 'nitro' share the launcher's WebGPU device handoff but
      * are otherwise unrelated: the first scans out the software
      * framebuffer, the second builds and draws its own scene geometry.
      * The engine script is loaded once during init(), so a change here
      * takes effect on the next launcher load; savePreferences() is what
      * makes the choice survive that reload. */
-    renderer: 'software',
+    renderer: 'nitro',
   },
   touchOnlyEnvironment: false,
   gamepadConnected: false,
@@ -1315,15 +1315,15 @@ async function ensureEngineScriptLoaded() {
        * script and no obvious way back. */
       const detail = useWebGlide
         ? `Failed to load ${scriptUrl}. The WebGlide GPU bundle is missing from this artifact.`
-          + ' Open the "Renderer (experimental)" card, switch back to "Software (default, stable)",'
+          + ' Open the "Renderer" card, switch to "Software (parked reference)",'
           + ' and the launcher will reload with the shipping renderer.'
         : useWebGPU
           ? `Failed to load ${scriptUrl}. The WebGPU presenter preview is missing from this artifact.`
-            + ' Open the "Renderer (experimental)" card, switch back to "Software (default, stable)",'
+            + ' Open the "Renderer" card, switch to "Software (parked reference)",'
             + ' and the launcher will reload with the shipping presenter.'
         : useNitro
           ? `Failed to load ${scriptUrl}. The WebGlideNitro bundle is missing from this artifact.`
-            + ' Open the "Renderer (experimental)" card, switch back to "Software (default, stable)",'
+            + ' Open the "Renderer" card, switch to "Software (parked reference)",'
             + ' and the launcher will reload with the shipping renderer.'
         : `Failed to load ${scriptUrl}. Build the WASM target before serving this directory.`;
       reject(new Error(detail));
@@ -1468,7 +1468,7 @@ function bindUi() {
       : next === 'webgpu'
         ? 'software renderer with the experimental WebGPU presenter'
         : next === 'nitro'
-          ? 'WebGlideNitro native WebGPU renderer (technology preview)'
+          ? 'WebGlideNitro primary native WebGPU renderer'
           : 'software renderer';
     appendRuntimeLog('[launcher]', `Renderer preference changed to ${next} (${label}).`);
     const enginePlaying = state.engineStarted && !state.runtimeExited;

@@ -18,11 +18,11 @@ const nitroEntity = readFileSync(join(repoRoot, 'engine/h2shared/wgpu_entity.c')
 const nitroWorld = readFileSync(join(repoRoot, 'engine/h2shared/wgpu_world.c'), 'utf8');
 const nitroFront = readFileSync(join(repoRoot, 'engine/hexen2/r_webgpu.c'), 'utf8');
 
-test('renderer preference defaults to the shipping software bundle', () => {
+test('renderer preference defaults to the primary WebGlideNitro bundle', () => {
   const prefsBlock = app.match(/preferences: \{([\s\S]*?)\},\n {2}touchOnlyEnvironment/)?.[1];
   assert.ok(prefsBlock, 'the preferences literal is defined');
-  assert.match(prefsBlock, /renderer:\s*'software'/,
-    'renderer preference must default to the shipping software bundle');
+  assert.match(prefsBlock, /renderer:\s*'nitro'/,
+    'renderer preference must default to WebGlideNitro');
 });
 
 test('loadPreferences accepts renderer values and migrates the perf preference', () => {
@@ -69,10 +69,10 @@ test('a missing WebGlide bundle fails loudly and names the toggle', () => {
   const loader = app.match(/async function ensureEngineScriptLoaded\(\) \{([\s\S]*?)\n\}/)?.[1];
   assert.ok(loader, 'ensureEngineScriptLoaded is defined');
   // The error path must not leave a dead launcher: name the card the
-  // user actually sees, and tell them how to get back to the software
+  // user actually sees, and tell them how to get to the parked software
   // renderer.
-  assert.match(loader, /Renderer \(experimental\)/);
-  assert.match(loader, /Software \(default, stable\)/);
+  assert.match(loader, /Renderer/);
+  assert.match(loader, /Software \(parked reference\)/);
 });
 
 test('the launcher exposes copyable raw performance capture', () => {
@@ -84,7 +84,7 @@ test('the launcher exposes copyable raw performance capture', () => {
   assert.doesNotMatch(html, /Frame-time graph/);
 });
 
-test('the launcher exposes an experimental, non-default WebGlide toggle', () => {
+test('the launcher exposes Nitro as primary and keeps parked renderers selectable', () => {
   assert.match(html, /id="renderer-setting"/);
   assert.match(html, /<option value="software">/);
   assert.match(html, /<option value="webglide">/);
@@ -96,30 +96,15 @@ test('the launcher exposes an experimental, non-default WebGlide toggle', () => 
   // preference in a browser localStorage.
   assert.doesNotMatch(html, /<option value="glide">/);
   assert.doesNotMatch(html, /<option value="gl">/);
-  // Honest copy: experimental, off by default, may not work. WebGlide
-  // is the mid-90s 3Dfx *look* realised on modern hardware, not a
-  // Voodoo-limits emulator, so the copy must not promise retro accuracy
-  // or omit the modern-shaders framing.
-  const card = html.match(/<h2>Renderer \(experimental\)<\/h2>([\s\S]*?)<\/section>/)?.[1];
-  assert.ok(card, 'the Renderer (experimental) card is defined');
+  const card = html.match(/<h2>Renderer<\/h2>([\s\S]*?)<\/section>/)?.[1];
+  assert.ok(card, 'the Renderer card is defined');
   assert.match(card, /Software renderer/);
-  assert.match(card, /shipping/);
+  assert.match(card, /parked/);
   assert.match(card, /WebGlide/);
-  assert.match(card, /experimental/);
-  assert.match(card, /3Dfx/,
-    'the card must call out the mid-90s 3Dfx look so users know what to expect');
-  assert.match(card, /modern shaders/,
-    'the card must frame WebGlide as modern shaders chasing the 3Dfx look, not a Voodoo-limits emulator');
-  assert.match(card, /may render incorrectly/);
-  assert.match(card, /target-feasibility step/);
-  // WebGlideNitro is a third, separate path. It now draws entities and the
-  // view weapon, so the card must name what is still missing rather than
-  // let a user assume it is finished.
+  assert.match(card, /abortive/);
   assert.match(card, /WebGlideNitro/);
-  assert.match(card, /brush entities/);
-  assert.match(card, /technology preview/);
-  assert.match(card, /fog/,
-    'the card must still list the gaps that remain after the entity slice');
+  assert.match(card, /primary renderer/);
+  assert.match(card, /WebGlideNitro \(default\)/);
 });
 
 test('changing the toggle mid-play does not yank the tab out from a running game', () => {
@@ -137,7 +122,7 @@ test('changing the toggle mid-play does not yank the tab out from a running game
   // canonical name.
   assert.match(handler, /WebGlide experimental GPU renderer/);
   assert.match(handler, /experimental WebGPU presenter/);
-  assert.match(handler, /WebGlideNitro native WebGPU renderer/);
+  assert.match(handler, /WebGlideNitro primary native WebGPU renderer/);
 });
 
 test('the assemble script picks up the WebGlide bundle when the webgl2 build is present', () => {
@@ -146,7 +131,7 @@ test('the assemble script picks up the WebGlide bundle when the webgl2 build is 
   assert.match(assembleScript, /hexenwail-webglide\.js/);
   assert.match(assembleScript, /hexenwail-webglide\.wasm/);
   assert.match(assembleScript, /if \[ -d "\$GL_BUILD_BIN" \]/);
-  assert.match(assembleScript, /assembling a software-only PWA artifact/);
+  assert.match(assembleScript, /assembling the PWA artifact without WebGlide/);
   // The old spelling must not linger in either the copy or the
   // filenames -- CMake now names the bundle "hexenwail-webglide".
   assert.doesNotMatch(assembleScript, /hexenwail-gl\./);
@@ -154,7 +139,7 @@ test('the assemble script picks up the WebGlide bundle when the webgl2 build is 
   assert.match(assembleScript, /hexenwail-webgpu\.wasm/);
 });
 
-test('the validate script accepts a software-only artifact but rejects a half-shipped pair', () => {
+test('the validate script requires Nitro and rejects half-shipped parked bundles', () => {
   // Informational when both files are absent (matches the .data /
   // .worker.js contract already in the script); hard failure when only
   // one half of the pair is present, because that is always a broken
@@ -162,7 +147,7 @@ test('the validate script accepts a software-only artifact but rejects a half-sh
   assert.match(validateScript, /hexenwail-webglide\.js/);
   assert.match(validateScript, /hexenwail-webglide\.wasm/);
   assert.match(validateScript, /only one half of the WebGlide bundle is present/);
-  assert.match(validateScript, /software-only artifact/);
+  assert.match(validateScript, /require "hexenwail-nitro\.js"/);
   assert.doesNotMatch(validateScript, /hexenwail-gl\./);
   assert.match(validateScript, /hexenwail-webgpu\.js/);
   assert.match(validateScript, /hexenwail-webgpu\.wasm/);
@@ -282,20 +267,33 @@ test('WebGlideNitro draws entities, sprites and the view weapon its own way', ()
   assert.match(nitroWorld, /cached_style/);
 });
 
+test('WebGlideNitro implements the authored visual effects', () => {
+  assert.match(nitroFront, /WGPUWorld_PushDlights \(\)/);
+  assert.match(nitroFront, /Fog_SetupFrame \(\)/);
+  assert.match(nitroWorld, /surf->dlightbits/);
+  assert.match(nitroWorld, /NITROTEX_TURB/);
+  assert.match(webgpuNitro, /sin\(input\.uv\.y/);
+  assert.match(webgpuNitro, /exp2\(-frame\.fogDensity/);
+  assert.match(webgpuNitro, /index >= 224u/);
+  assert.match(nitroEntity, /NITROMODEL_GLOW/);
+  assert.match(nitroEntity, /NITROMODEL_SHADOW/);
+  assert.match(webgpuNitro, /alphaFilter === 'blend'/,
+    'translucent liquids must be deferred until opaque models are drawn');
+});
+
 test('the nitro build is reachable from the scripts, CI and the offline shell', () => {
   assert.match(buildScript, /nitro\)/);
   assert.match(buildScript, /renderer="webgpu"/);
   assert.match(assembleScript, /hexenwail-nitro\.js/);
   assert.match(assembleScript, /hexenwail-nitro\.wasm/);
-  assert.match(validateScript, /only one half of the WebGlideNitro bundle is present/);
+  assert.match(validateScript, /require "hexenwail-nitro\.js"/);
+  assert.match(validateScript, /require "hexenwail-nitro\.wasm"/);
   assert.match(wasmAction, /wasm-build\.sh nitro engine\/build-nitro/);
   assert.match(wasmAction, /missing the WebGlideNitro bundle/);
-  // Optional, not core: precaching it would slow every fresh install and
-  // a 404 from a software-only build would abort the whole SW install.
   assert.match(serviceWorker, /'\.\/hexenwail-nitro\.js'/);
   const core = serviceWorker.match(/const CORE_ASSETS = \[([\s\S]*?)\];/)?.[1];
   assert.ok(core, 'CORE_ASSETS is defined');
-  assert.doesNotMatch(core, /hexenwail-nitro/);
+  assert.match(core, /hexenwail-nitro/);
 });
 
 test('the canonical docs do not make WebGlide a Nitro gate or performance baseline', () => {

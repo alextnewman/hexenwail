@@ -21,14 +21,13 @@ option(USE_SOUND "Enable the browser audio backend" ON)
 option(USE_CODEC_VORBIS "Decode Ogg Vorbis music via the Emscripten vorbis port" ON)
 set(GAME_DATA_DIR "" CACHE PATH "Optional game data directory to preload")
 
-# Renderer selection. "software" is the shipping configuration: the classic
-# 8bpp software rasterizer presented through an accelerated canvas. "webgl2"
-# keeps the experimental WebGlide GPU renderer buildable. "webgpu" builds
-# WebGlideNitro, the native WebGPU renderer -- not a translation of WebGlide
-# and not a presenter for the software rasterizer.
+# Renderer selection. "webgpu" is the primary shipping configuration:
+# WebGlideNitro, the native WebGPU renderer. "software" keeps the parked
+# classic 8bpp rasterizer buildable and "webgl2" keeps the abortive WebGlide
+# experiment buildable.
 # See docs/web/SOFTWARE_RENDERER.md, docs/web/WEBGLIDE.md,
 # docs/web/WEBGLIDE_NITRO.md and docs/web/ARCHITECTURE.md.
-set(WEB_RENDERER "software" CACHE STRING "Web renderer: software, webgl2 or webgpu")
+set(WEB_RENDERER "webgpu" CACHE STRING "Web renderer: software, webgl2 or webgpu")
 set_property(CACHE WEB_RENDERER PROPERTY STRINGS software webgl2 webgpu)
 if(NOT WEB_RENDERER STREQUAL "software" AND NOT WEB_RENDERER STREQUAL "webgl2"
         AND NOT WEB_RENDERER STREQUAL "webgpu")
@@ -111,6 +110,7 @@ elseif(WEB_RENDERER STREQUAL "webgpu")
         ${COMMONDIR}/draw_webgpu.c
         ${COMMONDIR}/wgpu_world.c
         ${COMMONDIR}/wgpu_entity.c
+        ${COMMONDIR}/gl_fog.c
         ${COMMONDIR}/gl_refrag.c
     )
 else()

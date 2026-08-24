@@ -1,14 +1,14 @@
 # WebGlideNitro — WebGPU renderer design
 
-**Status: playable; visual-horizon work has begun.** Nitro is no longer gated
+**Status: primary renderer; correctness completion is under way.** Nitro is no longer gated
 on WebGlide in any way, and WebGlide is
 explicitly *not* its performance baseline (see "How Nitro is measured").
 The renderer now exists as a real build configuration
 (`-DWEB_RENDERER=webgpu`, macro `WEBGPUQUAKE`, bundle `hexenwail-nitro`) that
 draws the world, its brush entities, alias models, sprites, particles and the
-view weapon as batched engine polygons through native WebGPU. It is still a
-**technology preview**: world dynamic lights, shadows, model glows and fog are
-missing. See "Where it stops" below.
+view weapon as batched engine polygons through native WebGPU. World dynamic lights,
+fog, liquid warp and alpha, fullbright skin pixels, authored glows and projected
+model shadows are implemented. See "Where it stops" below.
 
 The WebGPU *presenter* preview remains a separate thing: it is part of the
 software-renderer configuration (`-DWEB_PRESENTER=webgpu`, macro
@@ -17,9 +17,9 @@ never share a build.
 
 This document exists so the idea stops being re-derived from scratch in every
 session. It is not a third rendering plan. The settled decisions in
-[`ARCHITECTURE.md`](ARCHITECTURE.md) still hold: the software renderer is the
-default, WebGlide stays in-tree and buildable, and an Ironwail-class modern
-renderer is a non-goal.
+[`ARCHITECTURE.md`](ARCHITECTURE.md) still hold: Nitro is primary, the software
+renderer is parked as a reference, WebGlide stays in-tree and buildable, and an
+Ironwail-class modern renderer is a non-goal.
 
 ## Vision
 
@@ -267,9 +267,8 @@ specification here.
 The renderer prints its own gaps once per map (`r_nitro_report 0` silences
 it) so a running build never quietly implies more than it does.
 
-Not drawn: model shadows, model glows and fullbright skin pixels. Not applied:
-world dynamic lights (model lighting *does* take dlights), fog. Approximated:
-liquids are opaque and unwarped, and model frames step rather than interpolate.
+Model frames still step rather than interpolate. Projected shadows are planar
+and deliberately cheap rather than traced against sloped world geometry.
 Sky uses both authored palette-indexed layers, projected from the eye direction
 and scrolled independently. Authored light styles animate world lightmaps and
 model-light-style entities; touched atlas pages are rebuilt and uploaded only
@@ -283,8 +282,8 @@ models and sprites rather than interleaved in visedict order. That is a
 deliberate batching choice, not an oversight: it keeps a translucent door to
 one `drawIndexed` and it is invisible unless two translucent things overlap.
 
-This is why the launcher still labels `nitro` a technology preview, and why
-the bundle is optional in the service worker rather than precached.
+The launcher labels Nitro as the default and the service worker precaches its
+core bundle.
 
 ## Delivery order
 
@@ -391,5 +390,5 @@ judge it against *that*. WebGlide's frame cost is not an input to any of them.
   and usable as an optional visual reference. Not a performance baseline.
 * [`PERF_CAPTURE.md`](PERF_CAPTURE.md) — the instrument used to measure Nitro
   on the target iPad, against Nitro's own earlier captures.
-* [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md) — the default renderer, and
-  the specification Nitro's output answers to.
+* [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md) — the parked renderer, and the
+  specification Nitro's output answers to.

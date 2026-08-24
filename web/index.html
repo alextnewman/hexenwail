@@ -502,14 +502,14 @@
           <small id="pointer-lock-hint" class="muted">Starting the game hides the launcher chrome and asks the browser for fullscreen. Press <code>☰</code> in-game to leave fullscreen or return to the launcher; with a controller connected the <code>☰</code> button steps aside and <code>Start</code> opens the menu.</small>
         </section>
         <section class="card">
-          <h2>Renderer (experimental)</h2>
-          <p>The classic 8bpp <strong>Software renderer</strong> is the shipping, supported path and is what the launcher loads by default. <strong>WebGlide</strong> is an experimental GPU renderer that chases the mid-90s 3Dfx look — filtered textures, coloured light, translucent water, fog, optional CRT scan-out — with modern shaders under it. <strong>WebGPU presenter preview</strong> keeps the classic software rasterizer and changes only its final indexed-framebuffer scan-out; it is a target-feasibility step, not WebGlideNitro. <strong>WebGlideNitro</strong> is a native WebGPU renderer that builds its own batched scene geometry instead of scanning out a framebuffer; it now draws the world, brush entities, monsters and items, sprites, particles and your weapon, so a map is playable, but animated light styles, dynamic world lights, shadows, model glows and fog are still missing and it remains a technology preview. Experimental paths may render incorrectly or fail to start and are off by default.</p>
+          <h2>Renderer</h2>
+          <p><strong>WebGlideNitro</strong> is the primary renderer. It is a native WebGPU path that builds its own batched scene geometry and preserves Hexen II's indexed palette and colormap semantics. The classic 8bpp <strong>Software renderer</strong> is parked as a correctness reference, and <strong>WebGlide</strong> remains an abortive WebGL2 experiment kept buildable. <strong>WebGPU presenter preview</strong> keeps the software rasterizer and changes only its final indexed-framebuffer scan-out.</p>
           <label class="setting">Rendering pipeline
             <select id="renderer-setting">
-              <option value="software">Software (default, stable)</option>
+              <option value="nitro">WebGlideNitro (default)</option>
+              <option value="software">Software (parked reference)</option>
               <option value="webglide">WebGlide (experimental GPU)</option>
               <option value="webgpu">Software + WebGPU presenter (preview)</option>
-              <option value="nitro">WebGlideNitro (native WebGPU, technology preview)</option>
             </select>
           </label>
           <small id="renderer-message" class="muted">The engine bundle is chosen once at launcher load. Changing this reloads the launcher; changes made during play take effect on the next launch.</small>

@@ -6,7 +6,7 @@
 # workflow, so the two never drift apart.
 #
 # Usage: wasm-build.sh [renderer] [build-dir]
-#   renderer   software (default) | webgl2 | webgpu | nitro
+#   renderer   nitro (default) | software | webgl2 | webgpu
 #              webgpu is the software rasterizer with its WebGPU presenter;
 #              nitro is WebGlideNitro, the native WebGPU renderer.
 #   build-dir  defaults to engine/build
@@ -17,8 +17,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 repo_root="$PWD"
 
-renderer="${1:-software}"
-build_dir="${2:-engine/build}"
+renderer="${1:-nitro}"
+if [ -n "${2:-}" ]; then
+	build_dir="$2"
+elif [ "$renderer" = "nitro" ]; then
+	build_dir="engine/build-nitro"
+else
+	build_dir="engine/build"
+fi
 presenter="webgl2"
 
 case "$renderer" in

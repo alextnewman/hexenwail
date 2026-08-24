@@ -1,7 +1,7 @@
 # Web port architecture
 
 **Status:** canonical. This document, together with
-[`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md), is the agreed design for the
+[`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md), is the agreed design for the
 hexenwail web target. Read both before changing anything under `engine/`,
 `web/`, or `docs/web/`. If reality and these documents disagree, one of them
 is a bug — say so explicitly rather than quietly re-deriving a new plan.
@@ -42,9 +42,10 @@ Treat the browser as a game console with a fixed, known hardware profile:
   legally-owned Hexen II data.
 
 Under that model the interesting question is not "how do we express Hexen II
-in modern GL?" but "what is the cheapest, most predictable way to get correct
-Hexen II pixels onto this panel?". The answer we settled on is the classic
-software rasteriser presented through an accelerated canvas.
+in modern GL?" but "what is the most direct way to get correct Hexen II pixels
+onto this panel?". WebGlideNitro is the primary renderer; it retains indexed
+textures and colormap lighting while owning the native WebGPU path end to end.
+The classic software rasteriser is parked as a correctness reference.
 
 ## Layering
 
@@ -55,7 +56,7 @@ software rasteriser presented through an accelerated canvas.
              v
    +---------------------+-----------------+-------------------+
    |  software renderer  |  WebGlide       |  WebGlideNitro    |  picked at
-   |  (default)          |  (WebGL2, exp.) |  (WebGPU, preview)|  build time
+   |  (parked reference) |  (WebGL2, exp.) |  (WebGPU, primary)|  build time
    +---------------------+-----------------+-------------------+
              |                    |                  |
              |  WebCanvas_*       |  direct GL       |  Nitro_* -> WebGPU
@@ -84,13 +85,16 @@ not appear above `web_canvas.h`.
 ## Build-time renderer selection
 
 ```bash
-# default: classic software rasteriser on an accelerated canvas
+# default: WebGlideNitro, the native WebGPU renderer
 emcmake cmake -S engine -B build
+
+# parked classic software rasteriser on an accelerated canvas
+emcmake cmake -S engine -B build -DWEB_RENDERER=software
 
 # WebGlide, the experimental GPU renderer
 emcmake cmake -S engine -B build -DWEB_RENDERER=webgl2
 
-# WebGlideNitro, the native WebGPU renderer (technology preview)
+# explicit WebGlideNitro selection
 emcmake cmake -S engine -B build -DWEB_RENDERER=webgpu
 ```
 
@@ -104,9 +108,9 @@ most an optional visual and behavioural reference.
 
 | `WEB_RENDERER` | Macro | Bundle | Build helper | Status |
 | --- | --- | --- | --- | --- |
-| `software` (default) | `WEBSOFT` | `hexenwail.*` | `make build` | The supported renderer |
+| `software` | `WEBSOFT` | `hexenwail.*` | `make build-software` | Parked correctness reference |
 | `webgl2` | `WEBGL2QUAKE` | `hexenwail-webglide.*` | `make build-webgl2` | Abortive experiment, kept buildable |
-| `webgpu` | `WEBGPUQUAKE` | `hexenwail-nitro.*` | `make build-nitro` | Technology preview; world, entities and particles |
+| `webgpu` (default) | `WEBGPUQUAKE` | `hexenwail-nitro.*` | `make build` / `make build-nitro` | Primary renderer |
 
 The option value is `webgl2` and the macro is `WEBGL2QUAKE`, but the shipped
 bundle basename and every user-facing name are WebGlide — see
@@ -142,7 +146,7 @@ Those are now separate:
 | `WEBQUAKE` | web *platform* client: web VID/input/sound, extended 2D API surface | every configuration |
 | `WEBGL2QUAKE` | the WebGlide GPU *renderer* | `-DWEB_RENDERER=webgl2` only |
 | `WEBGPUQUAKE` | the WebGlideNitro native WebGPU *renderer* | `-DWEB_RENDERER=webgpu` only |
-| `WEBSOFT` | the software *renderer* | default configuration only |
+| `WEBSOFT` | the software *renderer* | `-DWEB_RENDERER=software` only |
 | `WEBGPU_PRESENT` | WebGPU presenter under the software renderer | `WEB_PRESENTER=webgpu` only |
 | `GLQUAKE` | the desktop OpenGL renderer | never (no desktop target is built) |
 
@@ -251,12 +255,12 @@ actually play.
 
 ## Related documents
 
-* [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md) — the default renderer and
-  presenter design, resolution ladder, and cvars.
+* [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md) — the parked reference
+  renderer and presenter design, resolution ladder, and cvars.
 * [`WEBGLIDE.md`](WEBGLIDE.md) — WebGlide, the abortive WebGL2 experiment that
   stays buildable.
 * [`PERF_CAPTURE.md`](PERF_CAPTURE.md) — copyable raw web performance capture.
-* [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md) — the separate native WebGPU
+* [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md) — the primary native WebGPU
   renderer. Not gated on WebGlide; measured on the target iPad against its own
   captures.
 * [`../PWA.md`](../PWA.md) — PWA shell, asset import, deployment.

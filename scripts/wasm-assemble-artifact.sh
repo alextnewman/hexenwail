@@ -28,7 +28,7 @@ GL_BUILD_BIN="${GL_BUILD_BIN:-engine/build-webgl2/bin}"
 # Optional WebGPU presenter feasibility bundle. This still contains the
 # software rasterizer; it is not the WebGlideNitro renderer.
 GPU_BUILD_BIN="${GPU_BUILD_BIN:-engine/build-webgpu/bin}"
-# Optional WebGlideNitro bundle: the native WebGPU renderer, which has no
+# Primary WebGlideNitro bundle: the native WebGPU renderer, which has no
 # software framebuffer and no GL context at all. Built with
 # `./scripts/wasm-build.sh nitro engine/build-nitro`.
 NITRO_BUILD_BIN="${NITRO_BUILD_BIN:-engine/build-nitro/bin}"
@@ -60,12 +60,8 @@ cp "$BUILD_BIN/hexenwail.html" "$DIST_DIR/engine-shell-debug.html"
 
 # The WebGlide experimental GPU bundle ships alongside the software one
 # when the second CMake configuration has been built. It is optional here
-# because a local developer normally builds only the shipping default (see
-# Makefile: `make build` runs `wasm-build.sh software`), so a `make dist`
-# from a fresh clone assembles a software-only artifact rather than
-# failing. CI builds both configurations, so its artifact is complete;
-# .github/actions/wasm-build enforces the "both bundles shipped" contract
-# from there.
+# because it is retained only as an experimental reference. CI builds every
+# configuration, while a local artifact may omit this one.
 if [ -d "$GL_BUILD_BIN" ]; then
 	cp "$GL_BUILD_BIN/hexenwail-webglide.js" "$DIST_DIR/"
 	cp "$GL_BUILD_BIN/hexenwail-webglide.wasm" "$DIST_DIR/"
@@ -80,7 +76,7 @@ if [ -d "$GL_BUILD_BIN" ]; then
 	fi
 else
 	echo "notice: WebGlide GPU build directory not found at $GL_BUILD_BIN;" \
-		"assembling a software-only PWA artifact." \
+		"assembling the PWA artifact without WebGlide." \
 		"Run './scripts/wasm-build.sh webgl2 engine/build-webgl2' before" \
 		"re-running this script to ship the experimental WebGlide bundle too."
 fi
@@ -115,8 +111,8 @@ if [ -d "$NITRO_BUILD_BIN" ]; then
 		cp "$NITRO_BUILD_BIN/hexenwail-nitro.html" "$DIST_DIR/engine-shell-debug-nitro.html"
 	fi
 else
-	echo "notice: WebGlideNitro build directory not found at $NITRO_BUILD_BIN;" \
-		"continuing without the optional native WebGPU bundle."
+	echo "error: primary WebGlideNitro build directory not found at $NITRO_BUILD_BIN." >&2
+	exit 1
 fi
 
 echo "Assembled PWA artifact in $DIST_DIR:"
