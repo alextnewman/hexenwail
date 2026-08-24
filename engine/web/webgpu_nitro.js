@@ -358,16 +358,39 @@ struct VertexOutput {
   @location(2) fogDistance : f32,
 }
 
-@vertex
-fn vertexMain(@location(0) position : vec3f,
-              @location(1) uv : vec2f,
-              /* Location 2 is model light; effects carry packed RGBA at 3. */
-              @location(3) color : vec4f) -> VertexOutput {
+fn buildEffectVertex(position : vec3f, uv : vec2f,
+                     color : vec4f) -> VertexOutput {
   var output : VertexOutput;
   output.position = frame.mvp * vec4f(position, 1.0);
   output.uv = uv;
   output.color = color;
   output.fogDistance = abs(output.position.w);
+  return output;
+}
+
+@vertex
+fn vertexMain(@location(0) position : vec3f,
+              @location(1) uv : vec2f,
+              /* Location 2 is model light; effects carry packed RGBA at 3. */
+              @location(3) color : vec4f) -> VertexOutput {
+  return buildEffectVertex(position, uv, color);
+}
+
+@vertex
+fn shadowBack(@location(0) position : vec3f,
+              @location(1) uv : vec2f,
+              @location(3) color : vec4f) -> VertexOutput {
+  var output = buildEffectVertex(position, uv, color);
+  output.position.z += 0.0001 * output.position.w;
+  return output;
+}
+
+@vertex
+fn shadowFront(@location(0) position : vec3f,
+               @location(1) uv : vec2f,
+               @location(3) color : vec4f) -> VertexOutput {
+  var output = buildEffectVertex(position, uv, color);
+  output.position.z -= 0.0001 * output.position.w;
   return output;
 }
 
@@ -915,15 +938,16 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         }],
       };
       const effectPipeline = (label, entryPoint, blend, stencil = false,
-          depthCompare = 'less-equal') =>
+          depthCompare = 'less-equal', vertexEntryPoint = 'vertexMain',
+          writeMask = GPUColorWrite.ALL) =>
         device.createRenderPipeline({
           label,
           layout: modelLayout,
-          vertex: effectVertex,
+          vertex: { ...effectVertex, entryPoint: vertexEntryPoint },
           fragment: {
             module: effectModule,
             entryPoint,
-            targets: [{ format: 'rgba8unorm', blend }],
+            targets: [{ format: 'rgba8unorm', blend, writeMask }],
           },
           primitive: modelPrimitive,
           depthStencil: {
@@ -950,9 +974,12 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         });
       const modelGlowPipeline =
         effectPipeline('WebGlideNitro glows', 'glowMain', ADD_BLEND);
+      const modelShadowMaskPipeline =
+        effectPipeline('WebGlideNitro shadow receiver mask', 'shadowMain',
+          ALPHA_BLEND, true, 'greater-equal', 'shadowBack', 0);
       const modelShadowPipeline =
         effectPipeline('WebGlideNitro shadows', 'shadowMain', ALPHA_BLEND, true,
-          'greater-equal');
+          'less-equal', 'shadowFront');
 
       const scanoutPipeline = device.createRenderPipeline({
         label: 'WebGlideNitro scan-out',
@@ -1108,7 +1135,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         particlePipeline, scanoutPipeline,
         uiPipeline,
         modelOpaquePipeline, modelAlphaPipeline, modelAddPipeline,
-        modelGlowPipeline, modelShadowPipeline,
+        modelGlowPipeline, modelShadowMaskPipeline, modelShadowPipeline,
         frameUniform, scanoutUniform, uiUniform, particleUniform,
         paletteTexture, colormapTexture, tintTexture, lightmapSampler, sceneSampler,
         placeholderLightmap,
@@ -1672,9 +1699,10 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         if (!entry || count <= 0) continue;
         if ((blendFilter === 'opaque' && blends) ||
             (blendFilter === 'blend' && !blends)) continue;
+        const shadow = (flags & Nitro.MODEL_SHADOW) !== 0;
         const pipeline = (flags & Nitro.MODEL_GLOW)
           ? state.modelGlowPipeline
-          : (flags & Nitro.MODEL_SHADOW) ? state.modelShadowPipeline
+          : shadow ? state.modelShadowMaskPipeline
           : (flags & Nitro.MODEL_BLEND_ADD)
           ? state.modelAddPipeline
           : (flags & Nitro.MODEL_BLEND_ALPHA) ? state.modelAlphaPipeline
@@ -1704,6 +1732,14 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           boundTexture = textureId;
         }
         pass.draw(count, 1, first, 0);
+        if (shadow) {
+          pass.setStencilReference(1);
+          pass.setPipeline(state.modelShadowPipeline);
+          pass.setBindGroup(0, state.frameBindGroup);
+          pass.draw(count, 1, first, 0);
+          pass.setStencilReference(0);
+          boundPipeline = state.modelShadowPipeline;
+        }
       }
       if (viewmodel) pass.setViewport(0, 0, sceneWidth, sceneHeight, 0, 1);
     };

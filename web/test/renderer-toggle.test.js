@@ -291,8 +291,12 @@ test('WebGlideNitro implements the authored visual effects', () => {
     'only explicitly luminous models may mark their high skin indices fullbright');
   assert.match(webgpuNitro, /input\.fullbright != 0u/,
     'incidental high skin indices must remain colormap-lit');
-  assert.match(webgpuNitro, /'greater-equal'/,
-    'shadows must be clipped where the sampled receiver does not exist');
+  assert.match(webgpuNitro, /modelShadowMaskPipeline/);
+  assert.match(webgpuNitro, /'greater-equal', 'shadowBack', 0/,
+    'the shadow mask must reject pixels with no receiver');
+  assert.match(webgpuNitro, /'less-equal', 'shadowFront'/,
+    'the shadow draw must reject nearer occluding geometry');
+  assert.match(webgpuNitro, /pass\.setStencilReference\(1\)/);
   assert.match(webgpuNitro, /format: 'depth24plus-stencil8'/);
   assert.match(webgpuNitro, /stencilLoadOp: 'clear'/);
   assert.match(webgpuNitro, /passOp: 'increment-clamp'/,

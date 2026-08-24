@@ -882,10 +882,7 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 		lightspot[2] += model->mins[2];
 		WGPUWorld_LightPoint (sample, lightspot);
 
-		/* Place the silhouette just behind its receiver.  The shadow
-		 * pipeline uses the inverse depth comparison to reject every
-		 * fragment that has no world geometry in front of it. */
-		shadowz = lightspot[2] - 0.25f;
+		shadowz = lightspot[2];
 		an = entity->angles[YAW] / 180.0f * M_PI;
 		shadevector[0] = cos (-an);
 		shadevector[1] = sin (-an);
