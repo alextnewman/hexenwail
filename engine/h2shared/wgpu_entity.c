@@ -853,22 +853,27 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 	if (r_shadows.integer && entity != &cl.viewent &&
 	    !(flags & (NITROMODEL_BLEND_ALPHA | NITROMODEL_BLEND_ADD)))
 	{
-		vec3_t	lightspot, sample, shadevector;
-		float	an, lheight, height;
+		vec3_t	lightspot, sample, shadevector, shadowvector;
+		float	an, shadowz;
 
 		VectorCopy (entity->origin, sample);
 		sample[2] += (model->mins[2] + model->maxs[2]) * 0.5f;
+		/* The model foot is the fallback when no world surface lies below it. */
 		VectorCopy (entity->origin, lightspot);
 		lightspot[2] += model->mins[2];
 		WGPUWorld_LightPoint (sample, lightspot);
 
-		lheight = entity->origin[2] - lightspot[2];
-		height = -lheight + 1.0f;
+		shadowz = lightspot[2] + 1.0f;
 		an = entity->angles[YAW] / 180.0f * M_PI;
 		shadevector[0] = cos (-an);
 		shadevector[1] = sin (-an);
 		shadevector[2] = 1.0f;
 		VectorNormalize (shadevector);
+		shadowvector[0] = shadevector[0] * forward[0] +
+			shadevector[1] * right[0] + shadevector[2] * up[0];
+		shadowvector[1] = shadevector[0] * forward[1] +
+			shadevector[1] * right[1] + shadevector[2] * up[1];
+		shadowvector[2] = 0.0f;
 
 		ptri = (const mtriangle_t *)((const byte *)paliashdr + paliashdr->triangles);
 		WGPUEntity_BeginBatch (skin, NITROMODEL_SHADOW);
@@ -880,20 +885,22 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 			for (j = 0; j < 3; j++)
 			{
 				const trivertx_t	*vert = &poseverts[ptri->vertindex[j]];
-				vec3_t			local;
+				vec3_t			local, world;
+				float			height;
 
 				local[0] = vert->v[0] * scale[0] + offset[0];
 				local[1] = vert->v[1] * scale[1] + offset[1];
 				local[2] = vert->v[2] * scale[2] + offset[2];
-				local[0] -= shadevector[0] * (local[2] + lheight);
-				local[1] -= shadevector[1] * (local[2] + lheight);
-				local[2] = height;
-				out->position[0] = entity->origin[0] + local[0] * forward[0] +
+				world[0] = entity->origin[0] + local[0] * forward[0] +
 					local[1] * right[0] + local[2] * up[0];
-				out->position[1] = entity->origin[1] + local[0] * forward[1] +
+				world[1] = entity->origin[1] + local[0] * forward[1] +
 					local[1] * right[1] + local[2] * up[1];
-				out->position[2] = entity->origin[2] + local[0] * forward[2] +
+				world[2] = entity->origin[2] + local[0] * forward[2] +
 					local[1] * right[2] + local[2] * up[2];
+				height = world[2] - shadowz;
+				out->position[0] = world[0] - shadowvector[0] * height;
+				out->position[1] = world[1] - shadowvector[1] * height;
+				out->position[2] = shadowz;
 				out->texcoord[0] = out->texcoord[1] = 0.5f;
 				out->light = -1.0f;
 				out->shade = 96u << 24;
