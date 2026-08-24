@@ -111,6 +111,9 @@ cvar_t r_softemu = {"r_softemu", "0", CVAR_ARCHIVE};
  * place to resolve that. */
 cvar_t r_nitro_scenescale = {"r_nitro_scenescale", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_report = {"r_nitro_report", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_lightvol = {"r_nitro_lightvol", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_lightvol_cell = {"r_nitro_lightvol_cell", "64", CVAR_ARCHIVE};
+cvar_t r_nitro_lightvol_budget = {"r_nitro_lightvol_budget", "32", CVAR_ARCHIVE};
 
 int gl_filter_idx;
 int gl_max_anisotropy = 1;
@@ -590,6 +593,9 @@ static void Web_RegisterRendererCvars (void)
 	Cvar_RegisterVariable(&r_scale);
 	Cvar_RegisterVariable(&r_softemu);
 
+	Cvar_RegisterVariable(&r_nitro_lightvol);
+	Cvar_RegisterVariable(&r_nitro_lightvol_cell);
+	Cvar_RegisterVariable(&r_nitro_lightvol_budget);
 	Cvar_RegisterVariable(&r_nitro_scenescale);
 	Cvar_RegisterVariable(&r_nitro_report);
 }
@@ -760,6 +766,7 @@ void R_RenderView (void)
 	WebGPU_BeginFrame ();
 	WGPU_SetupFrame ();
 	WGPU_AnimateLight ();
+	WGPULightVol_BeginFrame ();
 	Fog_SetupFrame ();
 	WGPU_SetupScene (&scene);
 	WGPUWorld_UpdateLightstyles ();

@@ -1337,6 +1337,13 @@ loc0:
 	return WGPUWorld_RecursiveLightPoint (node->children[!side], mid, end, lightspot);
 }
 
+int WGPUWorld_TraceLight (const vec3_t start, const vec3_t end, vec3_t lightspot)
+{
+	if (!cl.worldmodel || !cl.worldmodel->nodes)
+		return -1;
+	return WGPUWorld_RecursiveLightPoint (cl.worldmodel->nodes, start, end, lightspot);
+}
+
 int WGPUWorld_LightPoint (const vec3_t point, vec3_t lightspot)
 {
 	vec3_t	start, end;
@@ -1350,7 +1357,7 @@ int WGPUWorld_LightPoint (const vec3_t point, vec3_t lightspot)
 	end[1] = point[1];
 	end[2] = point[2] - 2048;
 
-	r = WGPUWorld_RecursiveLightPoint (cl.worldmodel->nodes, start, end, lightspot);
+	r = WGPUWorld_TraceLight (start, end, lightspot);
 	if (!cl.worldmodel->lightdata)
 		return 255;
 	if (r < 0)
@@ -1377,6 +1384,7 @@ void WGPUWorld_Shutdown (void)
 {
 	int	i;
 
+	WGPULightVol_Shutdown ();
 	Nitro_DestroyWorld ();
 
 	free (nitro_surfaces);
@@ -1435,6 +1443,7 @@ void WGPUWorld_NewMap (void)
 
 	WGPUWorld_LoadTextures (world);
 	WGPUWorld_BuildBuffers (world);
+	WGPULightVol_NewMap ();
 }
 
 /*
@@ -1447,11 +1456,20 @@ map. Silence it with r_nitro_report 0.
 */
 void WGPUWorld_ReportGaps (void)
 {
+	int	cells, resolved, cellsize;
+
 	if (nitro_reported || !r_nitro_report.integer)
 		return;
 	nitro_reported = true;
 
 	Con_Printf ("WebGlideNitro: world, entities and particles (%d surfaces, %d lightmap pages)\n",
 			nitro_numsurfaces, nitro_numlightmaps);
+	WGPULightVol_Stats (&cells, &resolved, &cellsize);
+	if (cells)
+	{
+		Con_Printf ("  light volume: %d cells at %d units (%d resolved lazily)\n",
+				cells, cellsize, resolved);
+		Con_Printf ("  legacy projected shadows disabled while the light volume is active\n");
+	}
 	Con_Printf ("  approximated: model frames step rather than interpolate\n");
 }

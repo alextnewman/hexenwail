@@ -61,6 +61,9 @@
 
 extern cvar_t	r_nitro_scenescale;	/* scene buffer scale, 0.25..2 */
 extern cvar_t	r_nitro_report;		/* print the slice's content gaps per map */
+extern cvar_t	r_nitro_lightvol;	/* shared coarse world/entity irradiance */
+extern cvar_t	r_nitro_lightvol_cell;	/* map-space cell size */
+extern cvar_t	r_nitro_lightvol_budget; /* cells resolved per frame */
 
 /*
 =============================================================================
@@ -315,6 +318,36 @@ void WGPUWorld_SubmitScene (wgpuscene_t *scene);
 qboolean WGPUWorld_Ready (void);
 void WGPUWorld_ReportGaps (void);
 int  WGPUWorld_LightPoint (const vec3_t point, vec3_t lightspot);
+int  WGPUWorld_TraceLight (const vec3_t start, const vec3_t end, vec3_t lightspot);
+
+/*
+=============================================================================
+
+	the shared coarse light volume (wgpu_lightvol.c)
+
+=============================================================================
+*/
+
+typedef struct
+{
+	byte	direction[3];	/* incoming light vector, encoded from [-1,1] */
+	byte	ambient;
+} wgpulightcell_t;
+_Static_assert (sizeof(wgpulightcell_t) == 4, "light cells must stay compact");
+
+typedef struct
+{
+	float	ambient;
+	float	shade;
+	vec3_t	direction;
+} wgpulightsample_t;
+
+void WGPULightVol_NewMap (void);
+void WGPULightVol_Shutdown (void);
+void WGPULightVol_BeginFrame (void);
+qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample);
+qboolean WGPULightVol_Active (void);
+void WGPULightVol_Stats (int *cells, int *resolved, int *cellsize);
 
 /*
 =============================================================================
