@@ -64,6 +64,9 @@ extern cvar_t	r_nitro_report;		/* print the slice's content gaps per map */
 extern cvar_t	r_nitro_dither;		/* mood-weighted ordered RGB565 dither */
 extern cvar_t	r_nitro_resolve;	/* restrained edge-aware 2x2 resolve */
 extern cvar_t	r_nitro_persistence;	/* coloured-light history, 0 disables */
+extern cvar_t	r_nitro_fogbands;	/* depth steps in authored fog, 0 is smooth */
+extern cvar_t	r_nitro_haze;		/* world-space fog pockets, 0 disables */
+extern cvar_t	r_nitro_paletteshifts;	/* palette-snap contents and flash shifts */
 extern cvar_t	r_nitro_lightvol;	/* shared coarse world/entity irradiance */
 extern cvar_t	r_nitro_lightvol_cell;	/* map-space cell size */
 extern cvar_t	r_nitro_lightvol_budget; /* cells resolved per frame */
@@ -243,9 +246,12 @@ typedef struct
 	float	sky_time;
 	float	fog_color[3];
 	float	fog_density;
+	float	fog_bands;
+	float	haze;
 	float	scan_dither;
 	float	scan_resolve;
 	float	scan_persistence;
+	float	scan_paletteshifts;
 } wgpuscene_t;
 
 typedef struct

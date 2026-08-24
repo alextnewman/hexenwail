@@ -114,6 +114,9 @@ cvar_t r_nitro_report = {"r_nitro_report", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_dither = {"r_nitro_dither", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_resolve = {"r_nitro_resolve", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_persistence = {"r_nitro_persistence", "0.06", CVAR_ARCHIVE};
+cvar_t r_nitro_fogbands = {"r_nitro_fogbands", "8", CVAR_ARCHIVE};
+cvar_t r_nitro_haze = {"r_nitro_haze", "0", CVAR_ARCHIVE};
+cvar_t r_nitro_paletteshifts = {"r_nitro_paletteshifts", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol = {"r_nitro_lightvol", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol_cell = {"r_nitro_lightvol_cell", "64", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol_budget = {"r_nitro_lightvol_budget", "32", CVAR_ARCHIVE};
@@ -539,9 +542,12 @@ static void WGPU_SetupScene (wgpuscene_t *scene)
 	scene->sky_time = (float)fmod (cl.time, 32768.0);
 	VectorCopy (r_fog_color, scene->fog_color);
 	scene->fog_density = r_fog_density;
+	scene->fog_bands = CLAMP (0.0f, r_nitro_fogbands.value, 16.0f);
+	scene->haze = CLAMP (0.0f, r_nitro_haze.value, 1.0f);
 	scene->scan_dither = CLAMP (0.0f, r_nitro_dither.value, 1.0f);
 	scene->scan_resolve = CLAMP (0.0f, r_nitro_resolve.value, 1.0f);
 	scene->scan_persistence = CLAMP (0.0f, r_nitro_persistence.value, 0.25f);
+	scene->scan_paletteshifts = r_nitro_paletteshifts.integer ? 1.0f : 0.0f;
 }
 
 /*
@@ -607,6 +613,9 @@ static void Web_RegisterRendererCvars (void)
 	Cvar_RegisterVariable(&r_nitro_dither);
 	Cvar_RegisterVariable(&r_nitro_resolve);
 	Cvar_RegisterVariable(&r_nitro_persistence);
+	Cvar_RegisterVariable(&r_nitro_fogbands);
+	Cvar_RegisterVariable(&r_nitro_haze);
+	Cvar_RegisterVariable(&r_nitro_paletteshifts);
 }
 
 void WebGPU_Init (void)
@@ -778,6 +787,8 @@ void R_RenderView (void)
 	WGPU_AnimateLight ();
 	WGPULightVol_BeginFrame ();
 	Fog_SetupFrame ();
+	if (wgpu_viewleaf)
+		V_SetContentsColor(wgpu_viewleaf->contents);
 	WGPU_SetupScene (&scene);
 	WGPUWorld_UpdateLightstyles ();
 	wgpu_particle_count = 0;
@@ -802,8 +813,6 @@ void R_RenderView (void)
 
 	WGPUWorld_SubmitScene (&scene);
 
-	if (wgpu_viewleaf)
-		V_SetContentsColor(wgpu_viewleaf->contents);
 }
 
 void R_ViewChanged (float aspect) { (void)aspect; }
