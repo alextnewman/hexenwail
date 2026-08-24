@@ -296,7 +296,7 @@ every visible label describes what that control actually does:
 - **Atk**: primary attack (`K_GP_RTRIGGER`)
 - **Jump**: jump (`K_GP_A`)
 - **Use**: lift/use interaction (`K_GP_LTHUMB`, default `impulse 13`)
-- **Prev / Next**: previous/next weapon (`K_GP_LSHOULDER` / `K_GP_RSHOULDER`)
+- **Previous / Next**: previous/next weapon (`K_GP_LSHOULDER` / `K_GP_RSHOULDER`)
 - **Menu**: open the engine menu (`K_GP_START`)
 - in-game overlay **Send Esc/Menu**: Escape
 

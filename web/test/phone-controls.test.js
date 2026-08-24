@@ -165,6 +165,7 @@ test('phone mode DOM includes playing layout, touch visibility rules, and quit h
   assert.match(html, /data-phone-action="jump"[^>]*>Jump<\/button>/);
   assert.match(html, /data-phone-action="attack"[^>]*>Atk<\/button>/);
   assert.match(html, /data-phone-action="use"[^>]*>Use<\/button>/);
+  assert.match(html, /data-phone-action="prevWeapon"[^>]*>Previous<\/button>/);
   assert.match(html, /data-phone-action="nextWeapon"[^>]*>Next<\/button>/);
   assert.match(html, /data-phone-action="menu"[^>]*>Menu<\/button>/);
   assert.match(html, /data-phone-action="menuBack"[^>]*>Back<\/button>/);

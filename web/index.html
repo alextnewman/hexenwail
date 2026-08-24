@@ -316,18 +316,21 @@
       box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
     }
     .phone-button:active { background: rgba(204, 173, 99, 0.36); }
-    .phone-button.back {
+    .phone-button.back,
+    .phone-button.menu-resume {
       font-size: 0.7rem;
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
-    .phone-button.attack {
+    .phone-button.attack,
+    .phone-button.menu-back {
       right: max(1rem, var(--safe-right));
       bottom: max(5.6rem, calc(var(--safe-bottom) + 5rem));
       width: 5rem;
       height: 5rem;
     }
-    .phone-button.jump {
+    .phone-button.jump,
+    .phone-button.menu-select {
       right: max(5.8rem, calc(var(--safe-right) + 4.8rem));
       bottom: max(2.4rem, calc(var(--safe-bottom) + 1.9rem));
     }
@@ -335,7 +338,8 @@
       right: max(1rem, var(--safe-right));
       bottom: max(1rem, calc(var(--safe-bottom) + 0.5rem));
     }
-    .phone-button.back {
+    .phone-button.back,
+    .phone-button.menu-resume {
       right: max(5.8rem, calc(var(--safe-right) + 4.8rem));
       bottom: max(6.2rem, calc(var(--safe-bottom) + 5.6rem));
       min-width: 3.2rem;
@@ -366,15 +370,18 @@
       right: 42%;
     }
     body[data-handedness="left"] .phone-button.attack,
+    body[data-handedness="left"] .phone-button.menu-back,
     body[data-handedness="left"] .phone-button.use {
       right: auto;
       left: max(1rem, var(--safe-left));
     }
-    body[data-handedness="left"] .phone-button.jump {
+    body[data-handedness="left"] .phone-button.jump,
+    body[data-handedness="left"] .phone-button.menu-select {
       right: auto;
       left: max(5.8rem, calc(var(--safe-left) + 4.8rem));
     }
-    body[data-handedness="left"] .phone-button.back {
+    body[data-handedness="left"] .phone-button.back,
+    body[data-handedness="left"] .phone-button.menu-resume {
       right: auto;
       left: max(9.6rem, calc(var(--safe-left) + 8.6rem));
     }
@@ -605,11 +612,11 @@
         <button class="phone-button jump phone-game-control" type="button" data-phone-action="jump" aria-label="Jump">Jump</button>
         <button class="phone-button back phone-game-control" type="button" data-phone-action="menu" aria-label="Open menu">Menu</button>
         <button class="phone-button use phone-game-control" type="button" data-phone-action="use" aria-label="Use or interact">Use</button>
-        <button class="phone-button prev phone-game-control" type="button" data-phone-action="prevWeapon" aria-label="Previous weapon">Prev</button>
+        <button class="phone-button prev phone-game-control" type="button" data-phone-action="prevWeapon" aria-label="Previous weapon">Previous</button>
         <button class="phone-button next phone-game-control" type="button" data-phone-action="nextWeapon" aria-label="Next weapon">Next</button>
-        <button class="phone-button attack phone-menu-control" type="button" data-phone-action="menuBack" aria-label="Go back one menu">Back</button>
-        <button class="phone-button jump phone-menu-control" type="button" data-phone-action="menuSelect" aria-label="Select menu item">Select</button>
-        <button class="phone-button back phone-menu-control" type="button" data-phone-action="menu" aria-label="Close menu and resume game">Resume</button>
+        <button class="phone-button menu-back phone-menu-control" type="button" data-phone-action="menuBack" aria-label="Go back one menu">Back</button>
+        <button class="phone-button menu-select phone-menu-control" type="button" data-phone-action="menuSelect" aria-label="Select menu item">Select</button>
+        <button class="phone-button menu-resume phone-menu-control" type="button" data-phone-action="menu" aria-label="Close menu and resume game">Resume</button>
       </div>
       <div id="phone-overlay" class="phone-overlay" role="dialog" aria-modal="true" aria-labelledby="phone-overlay-title" aria-hidden="true">
         <div class="phone-overlay-card">
