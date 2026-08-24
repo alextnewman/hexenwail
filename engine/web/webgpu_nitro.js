@@ -1953,12 +1953,12 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       state.device.queue.writeBuffer(state.uiUniform, 0,
         HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 4));
 
-      pass.setPipeline(state.uiPipeline);
-      pass.setBindGroup(0, state.uiBindGroup);
-      pass.setVertexBuffer(0, buffer);
-
       const runs = HEAP32.subarray(runPointer >> 2, (runPointer >> 2) + runCount * 4);
       drawUIRuns = (firstRun, lastRun) => {
+        if (firstRun >= lastRun) return;
+        pass.setPipeline(state.uiPipeline);
+        pass.setBindGroup(0, state.uiBindGroup);
+        pass.setVertexBuffer(0, buffer);
         let boundTexture = -1;
         for (let i = firstRun; i < lastRun; ++i) {
           const entry = state.textures[runs[i * 4]];
@@ -1984,8 +1984,6 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       pass.setBindGroup(0, state.scanoutBindGroup);
       pass.draw(3);
       pass.setViewport(0, 0, state.canvasWidth || width, state.canvasHeight || height, 0, 1);
-      pass.setPipeline(state.uiPipeline);
-      pass.setBindGroup(0, state.uiBindGroup);
     }
 
     drawUIRuns(sceneRunCount, runCount);
