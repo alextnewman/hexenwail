@@ -219,57 +219,6 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 		}
 	}
 
-	/*
-	================
-	WGPUWorld_UpdateLightstyles
-
-	Rebuild only surfaces whose authored light style changed, then upload each
-	touched atlas page once.  Dynamic lights will eventually share this dirty-page
-	path; keeping the first implementation page-granular makes the correctness
-	step small and leaves rectangle uploads to target-device measurement.
-	================
-	*/
-	void WGPUWorld_UpdateLightstyles (void)
-	{
-		qboolean	dirty[NITRO_MAX_LIGHTMAPS];
-		int		surfnum, maps, layer;
-
-		if (!nitro_world_ready || !cl.worldmodel)
-			return;
-
-		memset (dirty, 0, sizeof(dirty));
-		for (surfnum = 0; surfnum < nitro_numsurfaces; surfnum++)
-		{
-			msurface_t	*surf = &cl.worldmodel->surfaces[surfnum];
-			nitrosurf_t	*info = &nitro_surfaces[surfnum];
-			qboolean	changed = false;
-
-			if (info->lightmap < 0)
-				continue;
-			for (maps = 0; maps < MAXLIGHTMAPS && surf->styles[maps] != 255; maps++)
-			{
-				if (info->cached_style[maps] != d_lightstylevalue[surf->styles[maps]])
-				{
-					changed = true;
-					break;
-				}
-			}
-			if (!changed)
-				continue;
-
-			WGPUWorld_BuildLightmapBlock (surf, info);
-			dirty[info->lightmap] = true;
-		}
-
-		for (layer = 0; layer < nitro_numlightmaps; layer++)
-		{
-			if (!dirty[layer])
-				continue;
-			Nitro_UploadLightmap (layer, nitro_lightmap_data[layer]);
-			WebPerf_CountUpload (NITRO_LIGHTMAP_SIZE * NITRO_LIGHTMAP_SIZE);
-		}
-	}
-
 	dest = nitro_lightmap_data[info->lightmap] +
 		(size_t)info->light_t * NITRO_LIGHTMAP_SIZE + info->light_s;
 
@@ -287,6 +236,57 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 				value = 255;
 			row[s] = (byte)value;
 		}
+	}
+}
+
+/*
+================
+WGPUWorld_UpdateLightstyles
+
+Rebuild only surfaces whose authored light style changed, then upload each
+touched atlas page once.  Dynamic lights will eventually share this dirty-page
+path; keeping the first implementation page-granular makes the correctness
+step small and leaves rectangle uploads to target-device measurement.
+================
+*/
+void WGPUWorld_UpdateLightstyles (void)
+{
+	qboolean	dirty[NITRO_MAX_LIGHTMAPS];
+	int		surfnum, maps, layer;
+
+	if (!nitro_world_ready || !cl.worldmodel)
+		return;
+
+	memset (dirty, 0, sizeof(dirty));
+	for (surfnum = 0; surfnum < nitro_numsurfaces; surfnum++)
+	{
+		msurface_t	*surf = &cl.worldmodel->surfaces[surfnum];
+		nitrosurf_t	*info = &nitro_surfaces[surfnum];
+		qboolean	changed = false;
+
+		if (info->lightmap < 0)
+			continue;
+		for (maps = 0; maps < MAXLIGHTMAPS && surf->styles[maps] != 255; maps++)
+		{
+			if (info->cached_style[maps] != d_lightstylevalue[surf->styles[maps]])
+			{
+				changed = true;
+				break;
+			}
+		}
+		if (!changed)
+			continue;
+
+		WGPUWorld_BuildLightmapBlock (surf, info);
+		dirty[info->lightmap] = true;
+	}
+
+	for (layer = 0; layer < nitro_numlightmaps; layer++)
+	{
+		if (!dirty[layer])
+			continue;
+		Nitro_UploadLightmap (layer, nitro_lightmap_data[layer]);
+		WebPerf_CountUpload (NITRO_LIGHTMAP_SIZE * NITRO_LIGHTMAP_SIZE);
 	}
 }
 

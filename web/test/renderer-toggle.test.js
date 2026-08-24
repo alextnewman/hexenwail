@@ -276,7 +276,10 @@ test('WebGlideNitro draws entities, sprites and the view weapon its own way', ()
   assert.ok(gaps, 'WGPUWorld_ReportGaps is defined');
   assert.match(gaps, /world, entities and particles/);
   assert.doesNotMatch(gaps, /not drawn: brush entities/);
-  assert.match(gaps, /not applied: animated light styles/);
+  assert.doesNotMatch(gaps, /animated light styles/);
+  assert.match(nitroFront, /WGPU_AnimateLight \(\)/);
+  assert.match(nitroWorld, /void WGPUWorld_UpdateLightstyles \(void\)/);
+  assert.match(nitroWorld, /cached_style/);
 });
 
 test('the nitro build is reachable from the scripts, CI and the offline shell', () => {
