@@ -201,7 +201,7 @@ fn vertexMain(@location(0) position : vec3f) -> VertexOutput {
 }
 
 fn skyIndex(texture : texture_2d<u32>, coordinate : vec2f) -> u32 {
-  let size = textureDimensions(texture);
+  let size = vec2i(textureDimensions(texture));
   let texel = vec2i(floor(coordinate));
   let wrapped = ((texel % size) + size) % size;
   return textureLoad(texture, wrapped, 0).r;
