@@ -441,6 +441,7 @@ static int WGPUEntity_AliasSkin (entity_t *entity, const aliashdr_t *paliashdr,
 
 static float	nitro_ambientlight;
 static float	nitro_shadelight;
+static vec3_t	nitro_lightdir;
 
 /*
 ================
@@ -455,9 +456,12 @@ selects is what the software renderer would have selected.
 static void WGPUEntity_SetupLighting (entity_t *entity)
 {
 	vec3_t	adjust, dist;
+	wgpulightsample_t sample;
 	int	lnum, mls;
 	float	add;
 
+	nitro_lightdir[0] = -1.0f;
+	nitro_lightdir[1] = nitro_lightdir[2] = 0.0f;
 	mls = entity->drawflags & MLS_MASKIN;
 
 	if (entity->model && (entity->model->flags & EF_ROTATE))
@@ -483,30 +487,39 @@ static void WGPUEntity_SetupLighting (entity_t *entity)
 	if (entity != &cl.viewent && entity->model)
 		adjust[2] += (entity->model->mins[2] + entity->model->maxs[2]) * 0.5f;
 
-	nitro_ambientlight = nitro_shadelight =
-		(float) WGPUWorld_LightPoint (adjust, NULL);
-
-	if (entity == &cl.viewent && nitro_ambientlight < VIEWMODEL_LIGHT_MIN)
-		nitro_ambientlight = nitro_shadelight = VIEWMODEL_LIGHT_MIN;
-
-	if (r_dynamic.integer)
+	if (WGPULightVol_Sample (adjust, &sample))
 	{
-		for (lnum = 0; lnum < MAX_DLIGHTS; lnum++)
-		{
-			const dlight_t	*light = &cl_dlights[lnum];
+		nitro_ambientlight = sample.ambient;
+		nitro_shadelight = sample.shade;
+		VectorCopy (sample.direction, nitro_lightdir);
+	}
+	else
+	{
+		nitro_ambientlight = nitro_shadelight =
+			(float) WGPUWorld_LightPoint (adjust, NULL);
 
-			if (light->die < cl.time || !light->radius)
-				continue;
-			VectorSubtract (entity->origin, light->origin, dist);
-			add = light->radius - VectorLengthFast (dist);
-			if (add <= 0)
-				continue;
-			if (light->dark)
-				nitro_ambientlight -= add;
-			else
-				nitro_ambientlight += add;
+		if (r_dynamic.integer)
+		{
+			for (lnum = 0; lnum < MAX_DLIGHTS; lnum++)
+			{
+				const dlight_t	*light = &cl_dlights[lnum];
+
+				if (light->die < cl.time || !light->radius)
+					continue;
+				VectorSubtract (entity->origin, light->origin, dist);
+				add = light->radius - VectorLengthFast (dist);
+				if (add <= 0)
+					continue;
+				if (light->dark)
+					nitro_ambientlight -= add;
+				else
+					nitro_ambientlight += add;
+			}
 		}
 	}
+
+	if (entity == &cl.viewent && nitro_ambientlight < VIEWMODEL_LIGHT_MIN)
+		nitro_ambientlight = VIEWMODEL_LIGHT_MIN;
 
 	if (nitro_ambientlight < 0.0f)
 		nitro_ambientlight = 0.0f;
@@ -807,11 +820,11 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 	WGPUEntity_AliasAngles (entity, angles);
 	AngleVectors (angles, forward, right, up);
 	VectorInverse (right);	/* local +Y is left, as in R_AliasSetUpTransform */
-	/* R_AliasSetupLighting's fixed world light vector {-1,0,0}, transformed
+	/* The shared volume supplies light travel in world space. Transform it
 	 * into model space; right is already inverted above. */
-	plightvec[0] = -forward[0];
-	plightvec[1] = -right[0];
-	plightvec[2] = -up[0];
+	plightvec[0] = DotProduct (nitro_lightdir, forward);
+	plightvec[1] = DotProduct (nitro_lightdir, right);
+	plightvec[2] = DotProduct (nitro_lightdir, up);
 	if ((model->flags & EF_ROTATE) ||
 	    ((entity->drawflags & MLS_MASKIN) == MLS_ABSLIGHT))
 		VectorClear (plightvec);
@@ -883,15 +896,28 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 		WGPUWorld_LightPoint (sample, lightspot);
 
 		shadowz = lightspot[2];
-		an = entity->angles[YAW] / 180.0f * M_PI;
-		shadevector[0] = cos (-an);
-		shadevector[1] = sin (-an);
-		shadevector[2] = 1.0f;
-		VectorNormalize (shadevector);
-		shadowvector[0] = shadevector[0] * forward[0] +
-			shadevector[1] * right[0] + shadevector[2] * up[0];
-		shadowvector[1] = shadevector[0] * forward[1] +
-			shadevector[1] * right[1] + shadevector[2] * up[1];
+		if (VectorLength (nitro_lightdir) > 0.001f)
+		{
+			float vertical = q_max(fabsf(nitro_lightdir[2]), 0.5f);
+
+			/* Projection subtracts this vector below, so negate the
+			 * light-travel direction to put the silhouette behind its
+			 * dominant source. */
+			shadowvector[0] = -nitro_lightdir[0] / vertical;
+			shadowvector[1] = -nitro_lightdir[1] / vertical;
+		}
+		else
+		{
+			an = entity->angles[YAW] / 180.0f * M_PI;
+			shadevector[0] = cos (-an);
+			shadevector[1] = sin (-an);
+			shadevector[2] = 1.0f;
+			VectorNormalize (shadevector);
+			shadowvector[0] = shadevector[0] * forward[0] +
+				shadevector[1] * right[0] + shadevector[2] * up[0];
+			shadowvector[1] = shadevector[0] * forward[1] +
+				shadevector[1] * right[1] + shadevector[2] * up[1];
+		}
 		shadowvector[2] = 0.0f;
 
 		ptri = (const mtriangle_t *)((const byte *)paliashdr + paliashdr->triangles);

@@ -42,23 +42,24 @@ model; hiding those behind GL-shaped calls would keep the costs and constraints
 we are trying to remove.
 
 It may share renderer-neutral scene preparation with WebGlide where that makes
-ownership clearer, but backend objects never cross that boundary. The software
-renderer remains the default and WebGlide remains buildable.
+ownership clearer, but backend objects never cross that boundary. Nitro is the
+primary renderer, the software renderer remains the correctness reference and
+WebGlide remains buildable.
 
 ### The visual north star
 
-Nitro is **the impossible 1998 console port**: what Raven's artists might have
-made if they retained complete control of Hexen II's indexed artwork but had a
-fixed machine with extravagant fill rate and memory bandwidth. It is not a
-modern remaster. Its vocabulary is palette ramps, colormap rows, lightmaps,
-ordered dither, stipple, sprites, retained frames and deliberately finite
-budgets.
+Nitro completes Raven's artistic vision without treating 1990s hardware limits
+as sacred. Its vocabulary remains palette ramps, colormap rows, lightmaps,
+ordered dither, stipple, sprites and deliberately finite budgets, but modern GPU
+techniques are welcome when they make that authored world more coherent.
 
-Modern APIs are used to make that vocabulary stable, rich and fast, not to
-replace it with PBR, bloom, SSAO, deferred shading or shadow maps. The software
-renderer remains the art-direction anchor. Enhancements should preserve its
-silhouette, contrast, palette membership and readability even when they add
-motion, atmosphere or density.
+This is not hardware retro-ism and not a conventional modern remaster. Compute,
+light fields and temporal accumulation may be used where they preserve the
+assets' chunky lighting language and remain efficient on Apple and
+Snapdragon X-era GPUs. PBR is not the destination. The software renderer remains
+the art-direction anchor: enhancements preserve its silhouette, contrast,
+palette membership and readability while extending its world-level vision to
+actors, weapons and effects.
 
 The intended signature is:
 
@@ -236,14 +237,39 @@ than interpolate, matching the software renderer. Player skins are translated
 through the entity's colormap and cached by `(skin, top, bottom)`, so a colour
 change re-specifies one texture instead of leaking a new one per frame.
 
-**Entity lighting stays indexed.** `d_polyse.c`'s shading is reproduced
-exactly: `darkness = (255 - ambient) * 64`, plus `shade * 64 * lightcos` when
+**Entity lighting stays indexed.** `d_polyse.c`'s shading is reproduced:
+`darkness = (255 - ambient) * 64`, plus `shade * 64 * lightcos` when
 the normal faces the light, clamped to `[0, 255 * 64]`, divided by 256 to give
 the colormap row. Hexen II's `colorshade` stays an index remap too — the
 256x256 `gfx/tinttab.lmp` is a `r8uint` texture applied *after* the colormap,
 which is what `R_AliasDrawModel` does when it rebuilds `globalcolormap`. A
 data set with no tint table gets an identity table, so a missing file is a
 visual no-op rather than a black item.
+
+**One authored atmosphere feeds every solid actor.** Nitro builds a bounded,
+lazy light volume over the BSP. A cell resolves six axis traces through the
+same authored samples and animated style values used by world lightmaps,
+producing an ambient value and a dominant incoming direction. Alias models and
+the view weapon trilinearly sample that field; active dynamic lights are folded
+into the same sample, so a torch changes both brightness and direction rather
+than merely raising a model's flat ambient term. Planar shadows use that
+dominant direction too.
+
+World lightmaps remain the detailed surface authority: replacing 16-unit
+authored luxels with a coarse volume would erase composition and leak across
+walls. The volume instead carries that composition into objects that never had
+surface lightmaps. It is limited to 2 MiB, defaults to 64-unit cells, resolves
+at most 32 cells per frame and falls back to the previous point sample whenever
+its budget is exhausted. This deliberately spends CPU cache instead of adding a
+GPU pass or a per-fragment 3D fetch on Apple and Adreno. A GPU mirror, compute
+injection and temporal propagation remain valid later stages, but only after
+target-device captures show that they improve either expression or cost.
+
+| Cvar | Default | Meaning |
+| --- | --- | --- |
+| `r_nitro_lightvol` | `1` | Shared BSP-derived ambient and direction for solid actors; `0` restores the point-sample path for A/B captures. |
+| `r_nitro_lightvol_cell` | `64` | Requested map-space cell size, power-of-two snapped and automatically coarsened to the fixed memory budget. |
+| `r_nitro_lightvol_budget` | `32` | Maximum lazy cell resolves per frame. |
 
 Sprites are unlit, exactly as `d_sprite.c` leaves them, and carry all five
 Hexen II orientations. The view weapon is drawn last, into the near 30% of the
@@ -382,8 +408,9 @@ judge it against *that*. WebGlide's frame cost is not an input to any of them.
 
 ## What Nitro is not
 
-* Not a modern renderer. No PBR, no deferred shading, no shadow maps. Those
-  belong to the desktop tree that this port does not build.
+* Not a conventional modern remaster. Modern GPU techniques serve the authored
+  lighting language; PBR and generic feature-checklist rendering do not define
+  the destination.
 * Not a replacement for the software renderer, and not a reason to weaken it.
 * Not a WebGlide successor, competitor or benchmark target. WebGlide is an
   abortive experiment that stays buildable; Nitro neither waits for it nor is
