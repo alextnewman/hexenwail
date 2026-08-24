@@ -81,6 +81,7 @@ test('GPU renderers publish player light levels before view-model draw guards', 
     const lightLevel = viewModel.indexOf('cl.light_level =');
     const drawGuard = viewModel.indexOf('cl.v.health <= 0');
     assert.ok(lightLevel >= 0, 'player light level is published');
+    assert.ok(drawGuard >= 0, 'optional view-model draw guard is present');
     assert.ok(lightLevel < drawGuard, 'light level is published before optional drawing exits');
   }
 });
