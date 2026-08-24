@@ -520,6 +520,8 @@ static void WGPU_SetupScene (wgpuscene_t *scene)
 
 	VectorScale (vright, 1.5f, scene->particle_right);
 	VectorScale (vup, 1.5f, scene->particle_up);
+	VectorCopy (r_origin, scene->sky_eye);
+	scene->sky_time = (float)fmod (cl.time, 32768.0);
 }
 
 /*

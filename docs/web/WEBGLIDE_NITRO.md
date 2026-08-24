@@ -174,6 +174,9 @@ second adapter for a canvas that already has one.
 * lightmaps live in one 128-layer `r8unorm` texture array, bound once per
   frame rather than per batch;
 * every texture's bind group is built once at load;
+* sky keeps the authored indexed solid and punched-out cloud layers in one
+  cached binding, projects them from the eye direction, and scrolls them at
+  independent speeds in one draw;
 * the 2D layer coalesces consecutive same-texture quads into runs and flushes
   the whole HUD, console and menu from a single vertex buffer;
 * the whole frame is one command encoder, two passes (scene, then scan-out
@@ -228,8 +231,9 @@ it) so a running build never quietly implies more than it does.
 
 Not drawn: model shadows, model glows and fullbright skin pixels. Not applied:
 animated light styles, world dynamic lights (model lighting *does* take
-dlights), fog. Approximated: sky is its solid layer drawn unscrolled, liquids
-are opaque and unwarped, and model frames step rather than interpolate.
+dlights), fog. Approximated: liquids are opaque and unwarped, and model frames
+step rather than interpolate. Sky uses both authored palette-indexed layers,
+projected from the eye direction and scrolled independently.
 Texture *animation*, entity animation, player skin translation and particles
 are implemented, so they are deliberately absent from those lists.
 
@@ -268,10 +272,10 @@ describes — device acquisition and resize via the launcher handoff, offscreen
 scene scan-out with explicit failure reporting, a fully batched 2D layer, the
 static world drawn from immutable geometry with one lightmap texture array
 behind CPU BSP/PVS traversal, and then brush entities, alias models, sprites,
-particles and the view weapon. What is left of step 5 is fog, animated light
-styles, world dynamic lights, and the sky and liquid approximations, all
-listed in "Where it stops". Steps 6–7 remain gated on measured evidence from
-Nitro captures on the iPad.
+particles, the view weapon and the moving two-layer sky. What is left of step
+5 is fog, animated light styles, world dynamic lights and the liquid
+approximation, all listed in "Where it stops". Steps 6–7 remain gated on
+measured evidence from Nitro captures on the iPad.
 
 ## Candidate tricks
 

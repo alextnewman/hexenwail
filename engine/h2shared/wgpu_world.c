@@ -254,8 +254,9 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, const nitrosur
 WGPUWorld_LoadSkyTexture
 
 A sky texture is 256x128: the left half is the cloud overlay with palette
-index 0 punched out, the right half the solid background (r_sky.c).  The
-slice draws the solid half only, unscrolled -- see WGPUWorld_ReportGaps.
+index 0 punched out, the right half the solid background (r_sky.c).  Keep
+the authored indices in separate textures: the sky shader projects both
+onto the view direction and scrolls them independently.
 ================
 */
 static int WGPUWorld_LoadSkyTexture (const texture_t *texture)
@@ -264,20 +265,29 @@ static int WGPUWorld_LoadSkyTexture (const texture_t *texture)
 	int		width = (int)texture->width;
 	int		height = (int)texture->height;
 	int		half = width / 2;
-	byte		*solid;
+	byte		*solid, *clouds;
 	int		id, y;
 
-	if (half < 1 || height < 1)
+	if (width < 2 || (width & 1) || height < 1)
 		return 0;
 
 	solid = (byte *) malloc ((size_t)half * height);
-	if (!solid)
+	clouds = (byte *) malloc ((size_t)half * height);
+	if (!solid || !clouds)
+	{
+		free (solid);
+		free (clouds);
 		return 0;
+	}
 	for (y = 0; y < height; y++)
+	{
 		memcpy (solid + (size_t)y * half, src + (size_t)y * width + half, half);
+		memcpy (clouds + (size_t)y * half, src + (size_t)y * width, half);
+	}
 
-	id = Nitro_CreateTexture (texture->name, half, height, solid, NITROTEX_WRAP);
+	id = Nitro_CreateSky (texture->name, half, height, solid, clouds);
 	free (solid);
+	free (clouds);
 	return id;
 }
 
@@ -554,12 +564,7 @@ static void WGPUWorld_ResetChains (void)
 		nitro_texchain[i] = -1;
 }
 
-/*
- * Everything chains by texture, including sky and liquids.  Those two are
- * approximations in this slice rather than separate passes (see
- * WGPUWorld_ReportGaps), and chaining them with everything else is what
- * keeps the frame at one draw call per visible texture.
- */
+/* Sky uses its own pipeline but remains one texture chain and one draw. */
 static void WGPUWorld_ChainSurface (int surfnum)
 {
 	nitrosurf_t	*info = &nitro_surfaces[surfnum];
@@ -878,9 +883,8 @@ void WGPUWorld_DrawWorld (void)
 	WGPUWorld_ResetChains ();
 	WGPUWorld_RecursiveWorldNode (cl.worldmodel->nodes);
 
-	/* Sky and liquids ride the same chains and the same pipeline: the sky
-	 * is its solid layer, unscrolled, and liquids are opaque and unwarped.
-	 * Both are reported as approximations. */
+	/* Sky and liquids ride the normal chains.  The backend selects the sky
+	 * pipeline from the texture entry; liquids remain opaque and unwarped. */
 	WGPUWorld_DrawChains (0, 0);
 }
 
@@ -1254,5 +1258,5 @@ void WGPUWorld_ReportGaps (void)
 	Con_Printf ("  not drawn: shadows, model glows and fullbright skin pixels\n");
 	Con_Printf ("  not applied: animated light styles, world dynamic lights, fog\n");
 	Con_Printf ("  approximated: model frames step rather than interpolate\n");
-	Con_Printf ("  approximated: sky is its solid layer unscrolled; liquids are opaque and unwarped\n");
+	Con_Printf ("  approximated: liquids are opaque and unwarped\n");
 }

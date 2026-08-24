@@ -156,6 +156,70 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
 }`,
 
     /*
+     * Hexen II's authored sky is two 128x128 indexed layers.  Projecting
+     * from the eye direction prevents the texture from looking pasted onto
+     * the BSP polygons; independent scroll rates make the punched-out cloud
+     * layer move over the solid storm layer.  Index zero is the cloud mask,
+     * so the final colour remains an exact palette lookup.
+     */
+    skyShader: `
+struct Frame {
+  mvp : mat4x4f,
+  fullbright : f32,
+  pad0 : f32,
+  pad1 : f32,
+  pad2 : f32,
+  eye : vec3f,
+  time : f32,
+}
+
+struct Entity {
+  mvp : mat4x4f,
+  alpha : f32,
+  light : f32,
+  pad0 : f32,
+  pad1 : f32,
+}
+
+@group(0) @binding(1) var paletteTexture : texture_2d<f32>;
+@group(0) @binding(0) var<uniform> frame : Frame;
+@group(1) @binding(0) var solidTexture : texture_2d<u32>;
+@group(1) @binding(1) var cloudTexture : texture_2d<u32>;
+@group(2) @binding(0) var<uniform> entity : Entity;
+
+struct VertexOutput {
+  @builtin(position) position : vec4f,
+  @location(0) worldPosition : vec3f,
+}
+
+@vertex
+fn vertexMain(@location(0) position : vec3f) -> VertexOutput {
+  var output : VertexOutput;
+  output.position = entity.mvp * vec4f(position, 1.0);
+  output.worldPosition = position;
+  return output;
+}
+
+fn skyIndex(texture : texture_2d<u32>, coordinate : vec2f) -> u32 {
+  let size = textureDimensions(texture);
+  let texel = vec2i(floor(coordinate));
+  let wrapped = ((texel % size) + size) % size;
+  return textureLoad(texture, wrapped, 0).r;
+}
+
+@fragment
+fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
+  var direction = input.worldPosition - frame.eye;
+  direction.z *= 3.0;
+  let projection = direction.xy * (6.0 * 63.0 /
+      max(length(direction), 0.001));
+  let solid = skyIndex(solidTexture, projection + frame.time * 8.0);
+  let cloud = skyIndex(cloudTexture, projection + frame.time * 16.0);
+  let index = select(solid, cloud, cloud != 0u);
+  return vec4f(textureLoad(paletteTexture, vec2i(i32(index), 0), 0).rgb, 1.0);
+}`,
+
+    /*
      * Models and sprites.  The CPU has already posed, transformed and lit
      * the vertices, so the vertex stage is a single matrix multiply; what
      * matters is that the fragment stage is still indexed.  light is the
@@ -538,6 +602,15 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
             buffer: { type: 'uniform' } },
         ],
       });
+      const skyGroupLayout = device.createBindGroupLayout({
+        label: 'WebGlideNitro sky',
+        entries: [
+          { binding: 0, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: 'uint' } },
+          { binding: 1, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: 'uint' } },
+        ],
+      });
       /* Dynamic offset, not a storage buffer: Safari's compatibility
        * limits allow zero storage buffers in the vertex stage, and the
        * target device is an iPad. */
@@ -578,6 +651,9 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
 
       const worldModule = device.createShaderModule({
         label: 'WebGlideNitro world', code: Nitro.worldShader,
+      });
+      const skyModule = device.createShaderModule({
+        label: 'WebGlideNitro sky', code: Nitro.skyShader,
       });
       const scanoutModule = device.createShaderModule({
         label: 'WebGlideNitro scan-out', code: Nitro.scanoutShader,
@@ -627,6 +703,29 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         vertex: worldVertex,
         fragment: {
           module: worldModule,
+          entryPoint: 'fragmentMain',
+          targets: [{ format: 'rgba8unorm' }],
+        },
+        primitive: worldPrimitive,
+        depthStencil: {
+          format: 'depth24plus',
+          depthWriteEnabled: true,
+          depthCompare: 'less-equal',
+        },
+      });
+
+      const skyPipeline = device.createRenderPipeline({
+        label: 'WebGlideNitro sky',
+        layout: device.createPipelineLayout({
+          bindGroupLayouts: [frameGroupLayout, skyGroupLayout, entityGroupLayout],
+        }),
+        vertex: {
+          module: skyModule,
+          entryPoint: 'vertexMain',
+          buffers: worldVertex.buffers,
+        },
+        fragment: {
+          module: skyModule,
           entryPoint: 'fragmentMain',
           targets: [{ format: 'rgba8unorm' }],
         },
@@ -785,7 +884,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
 
       const frameUniform = device.createBuffer({
         label: 'WebGlideNitro frame uniform',
-        size: 80,
+        size: 96,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
       const scanoutUniform = device.createBuffer({
@@ -852,9 +951,11 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
 
       Nitro.state = {
         device, context, format,
-        frameGroupLayout, textureGroupLayout, scanoutGroupLayout, uiGroupLayout,
+        frameGroupLayout, textureGroupLayout, skyGroupLayout,
+        scanoutGroupLayout, uiGroupLayout,
         particleGroupLayout, entityGroupLayout,
-        worldPipeline, worldBlendPipeline, particlePipeline, scanoutPipeline,
+        worldPipeline, worldBlendPipeline, skyPipeline,
+        particlePipeline, scanoutPipeline,
         uiPipeline,
         modelOpaquePipeline, modelAlphaPipeline, modelAddPipeline,
         frameUniform, scanoutUniform, uiUniform, particleUniform,
@@ -913,6 +1014,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     for (const entry of state.textures) {
       entry?.texture?.destroy();
       entry?.params?.destroy();
+      entry?.solid?.destroy();
+      entry?.clouds?.destroy();
     }
     state.world?.vertexBuffer?.destroy();
     state.worldIndexBuffer?.destroy();
@@ -1049,6 +1152,52 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     }
   },
 
+  Nitro_CreateSky__deps: ['$Nitro'],
+  Nitro_CreateSky: function (namePointer, width, height, solidPointer, cloudPointer) {
+    const state = Nitro.state;
+    if (!state || width <= 0 || height <= 0) return 0;
+    const name = namePointer ? UTF8ToString(namePointer) : 'sky';
+    let solid;
+    let clouds;
+    try {
+      state.device.pushErrorScope('validation');
+      const createLayer = (label, pointer) => {
+        const texture = state.device.createTexture({
+          label: `WebGlideNitro ${name} ${label}`,
+          size: { width, height },
+          format: 'r8uint',
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+        });
+        state.device.queue.writeTexture(
+          { texture },
+          HEAPU8.subarray(pointer, pointer + width * height),
+          { bytesPerRow: width, rowsPerImage: height },
+          { width, height });
+        return texture;
+      };
+      solid = createLayer('solid', solidPointer);
+      clouds = createLayer('clouds', cloudPointer);
+      const bindGroup = state.device.createBindGroup({
+        label: `WebGlideNitro ${name} sky`,
+        layout: state.skyGroupLayout,
+        entries: [
+          { binding: 0, resource: solid.createView() },
+          { binding: 1, resource: clouds.createView() },
+        ],
+      });
+      Nitro.watchErrors(state.device, `sky ${name}`);
+      const slot = state.freeTextures.length ? state.freeTextures.pop()
+                                             : state.textures.length;
+      state.textures[slot] = { sky: true, solid, clouds, bindGroup, width, height };
+      return slot;
+    } catch (error) {
+      Nitro.fail(`sky ${name} failed: ${error.message}`);
+      solid?.destroy();
+      clouds?.destroy();
+      return 0;
+    }
+  },
+
   /*
    * Re-specify an existing texture's texels.  Player skins are the only
    * thing that needs this: their pixels are a translation of the base skin
@@ -1059,7 +1208,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   Nitro_UpdateTexture: function (id, pixelPointer) {
     const state = Nitro.state;
     const entry = state?.textures[id];
-    if (!entry) return;
+    if (!entry?.texture) return;
     const { width, height } = entry;
     state.device.queue.writeTexture(
       { texture: entry.texture },
@@ -1073,8 +1222,10 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     const state = Nitro.state;
     const entry = (id > 0) ? state?.textures[id] : null;
     if (!entry) return;
-    entry.texture.destroy();
-    entry.params.destroy();
+    entry.texture?.destroy();
+    entry.params?.destroy();
+    entry.solid?.destroy();
+    entry.clouds?.destroy();
     state.textures[id] = null;
     state.freeTextures.push(id);
   },
@@ -1187,6 +1338,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
    *   [28]     flags: 1 = fullbright
    *   [29..32] particle right basis vector
    *   [33..36] particle up basis vector
+   *   [37..39] sky eye position    [40] sky time
    *
    * data (see wgpuscenedata_t in wgpu_nitro.h) is fourteen ints:
    *   [0]  world index arena     [1]  index count
@@ -1208,7 +1360,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     const state = Nitro.checkDevice();
     if (!state?.encoder) return;
 
-    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 37);
+    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 41);
     const integers = HEAP32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 29);
     const data = HEAP32.subarray(dataPointer >> 2, (dataPointer >> 2) + 14);
     const indexPointer = data[0], indexCount = data[1];
@@ -1229,9 +1381,10 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       width: Math.max(integers[26], 1), height: Math.max(integers[27], 1),
     };
 
-    const frame = new Float32Array(20);
+    const frame = new Float32Array(24);
     frame.set(floats.subarray(0, 16));
     frame[16] = (integers[28] & 1) ? 1.0 : 0.0;
+    frame.set(floats.subarray(37, 41), 20);
     state.device.queue.writeBuffer(state.frameUniform, 0, frame);
 
     const scan = new Float32Array(8);
@@ -1302,14 +1455,6 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       if (!worldReady || from >= to) return;
       const batches = HEAP32.subarray(batchPointer >> 2,
         (batchPointer >> 2) + batchCount * 4);
-      const pipeline = blended ? state.worldBlendPipeline : state.worldPipeline;
-      if (boundPipeline !== pipeline) {
-        pass.setPipeline(pipeline);
-        pass.setBindGroup(0, state.frameBindGroup);
-        boundPipeline = pipeline;
-        boundTexture = -1;
-        boundEntity = -1;
-      }
       if (boundVertices !== state.world.vertexBuffer) {
         pass.setVertexBuffer(0, state.world.vertexBuffer);
         pass.setIndexBuffer(indexBuffer, 'uint32');
@@ -1322,6 +1467,15 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         const count = batches[i * 4 + 2];
         const entity = batches[i * 4 + 3];
         if (!entry || count <= 0 || entity < 0 || entity >= entityCount) continue;
+        const pipeline = entry.sky ? state.skyPipeline
+          : blended ? state.worldBlendPipeline : state.worldPipeline;
+        if (boundPipeline !== pipeline) {
+          pass.setPipeline(pipeline);
+          pass.setBindGroup(0, state.frameBindGroup);
+          boundPipeline = pipeline;
+          boundTexture = -1;
+          boundEntity = -1;
+        }
         if (textureId !== boundTexture) {
           pass.setBindGroup(1, entry.bindGroup);
           boundTexture = textureId;
