@@ -213,8 +213,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   direction.z *= 3.0;
   let projection = direction.xy * (6.0 * 63.0 /
       max(length(direction), 0.001));
-  let solid = skyIndex(solidTexture, projection + frame.time * 8.0);
-  let cloud = skyIndex(cloudTexture, projection + frame.time * 16.0);
+  let solid = skyIndex(solidTexture, projection + vec2f(frame.time * 8.0));
+  let cloud = skyIndex(cloudTexture, projection + vec2f(frame.time * 16.0));
   let index = select(solid, cloud, cloud != 0u);
   return vec4f(textureLoad(paletteTexture, vec2i(i32(index), 0), 0).rgb, 1.0);
 }`,
@@ -1159,8 +1159,10 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     const name = namePointer ? UTF8ToString(namePointer) : 'sky';
     let solid;
     let clouds;
+    let errorScope = false;
     try {
       state.device.pushErrorScope('validation');
+      errorScope = true;
       const createLayer = (label, pointer) => {
         const texture = state.device.createTexture({
           label: `WebGlideNitro ${name} ${label}`,
@@ -1186,11 +1188,13 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         ],
       });
       Nitro.watchErrors(state.device, `sky ${name}`);
+      errorScope = false;
       const slot = state.freeTextures.length ? state.freeTextures.pop()
                                              : state.textures.length;
       state.textures[slot] = { sky: true, solid, clouds, bindGroup, width, height };
       return slot;
     } catch (error) {
+      if (errorScope) state.device.popErrorScope().catch(() => {});
       Nitro.fail(`sky ${name} failed: ${error.message}`);
       solid?.destroy();
       clouds?.destroy();
