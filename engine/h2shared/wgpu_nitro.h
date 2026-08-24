@@ -200,7 +200,7 @@ typedef struct
 
 typedef struct
 {
-	int	texture;
+	int		texture;
 	int		first;		/* first vertex, not index */
 	int		count;
 	unsigned int	flags;
