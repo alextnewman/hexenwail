@@ -723,17 +723,32 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 	wgpumodel_vertex_t	*out;
 	vec3_t			mins, maxs, scale, offset, angles;
 	vec3_t			forward, right, up, plightvec;
-	float			alpha = 1.0f;
+	float			alpha = 1.0f, radius;
 	float			iw, ih;
 	unsigned int		flags = extraflags;
 	unsigned int		shade;
-	int			i, pose, numtris, skin, alphabyte;
+	int			i, pose, numtris, skin, alphabyte, pimp_flags;
 
 	if (!model)
 		return;
 
-	VectorAdd (entity->origin, model->mins, mins);
-	VectorAdd (entity->origin, model->maxs, maxs);
+	radius = 0.0f;
+	for (i = 0; i < 3; i++)
+	{
+		float	extent = q_max(fabsf(model->mins[i]), fabsf(model->maxs[i]));
+
+		radius += extent * extent;
+	}
+	radius = sqrtf(radius);
+	if (entity->scale && entity->scale > 100)
+		radius *= (float)entity->scale / 100.0f;
+	if (model->flags & EF_ROTATE)
+		radius += 5.5f;
+	for (i = 0; i < 3; i++)
+	{
+		mins[i] = entity->origin[i] - radius;
+		maxs[i] = entity->origin[i] + radius;
+	}
 	if (entity != &cl.viewent && WGPU_CullBox (mins, maxs))
 		return;
 
@@ -770,6 +785,7 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 
 	WGPUEntity_SetupLighting (entity);
 	WGPUEntity_ApplyLightFloor ();
+	pimp_flags = R_GetPimpFlags (entity, NULL);
 
 	/* colorshade is a row of gfx/tinttab.lmp.  R_AliasDrawModel remaps the
 	 * whole colormap through it; here the row travels with the vertex and
@@ -777,6 +793,8 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 	 * instead of becoming an RGB multiply. */
 	shade = ((unsigned int)(alphabyte & 255)) |
 		(((unsigned int)entity->colorshade & 255u) << 8);
+	if (pimp_flags & (XF_TORCH_GLOW | XF_GLOW | XF_MISSILE_GLOW | EF_GLOW))
+		shade |= 1u << 16;
 
 	pose = WGPUEntity_AliasPose (paliashdr, pmdl, entity);
 	poseverts = (const trivertx_t *)((const byte *)paliashdr + pose);
@@ -851,6 +869,7 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 	wgpu_frame_polys += numtris;
 
 	if (r_shadows.integer && entity != &cl.viewent &&
+	    !(pimp_flags & (XF_TORCH_GLOW | XF_GLOW | XF_MISSILE_GLOW | EF_GLOW)) &&
 	    !(flags & (NITROMODEL_BLEND_ALPHA | NITROMODEL_BLEND_ADD)))
 	{
 		vec3_t	lightspot, sample, shadevector, shadowvector;
@@ -863,7 +882,7 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 		lightspot[2] += model->mins[2];
 		WGPUWorld_LightPoint (sample, lightspot);
 
-		shadowz = lightspot[2] + 1.0f;
+		shadowz = lightspot[2];
 		an = entity->angles[YAW] / 180.0f * M_PI;
 		shadevector[0] = cos (-an);
 		shadevector[1] = sin (-an);

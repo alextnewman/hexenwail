@@ -268,8 +268,14 @@ The renderer prints its own gaps once per map (`r_nitro_report 0` silences
 it) so a running build never quietly implies more than it does.
 
 Model frames still step rather than interpolate. Projected shadows use the
-sampled world floor and a stencil-bounded planar silhouette; they remain
-deliberately cheap rather than conforming to sloped world geometry.
+sampled world floor and a two-sided depth/stencil receiver mask that clips the
+silhouette both where no receiver exists and where nearer geometry occludes it,
+so raised platforms do not leave a shadow floating beyond their edge; luminous
+glow models do not cast one. The result remains a deliberately cheap planar
+silhouette rather than a shadow map. Model fullbright pixels remain available
+through `gl_fullbrights`, but only models marked as luminous may bypass the
+colormap: incidental high palette indices in ordinary dim skins no longer
+become bright speckles.
 Sky uses both authored palette-indexed layers, projected from the eye direction
 and scrolled independently. Authored light styles animate world lightmaps and
 model-light-style entities; touched atlas pages are rebuilt and uploaded only
