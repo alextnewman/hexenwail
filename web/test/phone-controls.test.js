@@ -74,6 +74,22 @@ test('multi-touch buttons and look region keep independent pointer ownership', (
   assert.deepEqual(looks, [[20, -20]], 'look deltas are clamped before sensitivity scaling');
 });
 
+test('phone back button presses the virtual controller back key', () => {
+  const root = makeElement(null);
+  const back = makeElement('backButton');
+  const events = [];
+  const controls = new PhoneControls(root, { key: (key, down) => events.push([key, down]), look() {} });
+  controls.attach();
+
+  root.dispatch('pointerdown', pointer(back, 11, 10, 10));
+  root.dispatch('pointerup', pointer(back, 11, 10, 10));
+
+  assert.deepEqual(events, [
+    [PHONE_CONTROL_KEYCODES.backButton, true],
+    [PHONE_CONTROL_KEYCODES.backButton, false],
+  ]);
+});
+
 test('each touch action rejects a second pointer', () => {
   const root = makeElement(null);
   const attack = makeElement('attack');
