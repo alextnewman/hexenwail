@@ -161,11 +161,13 @@ translucent work, and 2D quads. The backend owns:
 * static world geometry and a lightmap texture array;
 * transient models and GPU-pulled particles;
 * scene/history targets and scan-out;
-* a batched, full-resolution UI pass.
+* a batched, full-resolution UI pass, with legacy pre-view clears kept before
+  scan-out and overlays kept after it.
 
 The pass order is lightmap updates, opaque world/entities, ordered translucent
-work, optional history accumulation, scan-out, then full-resolution UI. Frame
-and pass constants are packed blocks; pipeline variants are immutable.
+work, optional history accumulation, pre-view 2D clears, scan-out, then
+full-resolution UI overlays. Frame and pass constants are packed blocks;
+pipeline variants are immutable.
 
 Keep the implementation behind a positive `WEBGPUQUAKE` build macro. Do not
 make `WEBQUAKE` mean GPU and do not spread WebGPU conditionals through the
@@ -368,6 +370,18 @@ produces; within the translucent half, brush entities are drawn before alias
 models and sprites rather than interleaved in visedict order. That is a
 deliberate batching choice, not an oversight: it keeps a translucent door to
 one `drawIndexed` and it is invisible unless two translucent things overlap.
+`DRF_TRANSLUCENT` is an authored half blend for brush, alias and sprite
+entities; it does not inherit `r_wateralpha`, which controls liquid materials.
+
+Core authored transparency is already active: `DRF_TRANSLUCENT`, entity alpha,
+transparent/special-trans alias models and sprites, teleporter surfaces and
+non-default liquid alpha values select blend pipelines with depth writes off.
+Ordinary water remains opaque at the compatibility default
+`r_wateralpha 1`; changing that cvar exercises the existing path. The later
+“supernatural liquids” horizon adds distinctive dithered translucency and
+retained-frame refraction—it does not introduce basic alpha blending. If an
+authored transparent entity remains opaque with an alpha value below one, that
+is a regression rather than deferred work.
 
 Core authored transparency is already active: `DRF_TRANSLUCENT`, entity alpha,
 transparent/special-trans alias models and sprites, teleporter surfaces and

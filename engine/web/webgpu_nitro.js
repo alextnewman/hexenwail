@@ -1990,10 +1990,11 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   /*
    * params: [0] screen width, [1] screen height, [2] gamma, [3] contrast.
    * runs are int quads of { textureId, firstVertex, vertexCount, unused }.
+   * sceneRunCount separates legacy pre-view clears from overlay draws.
    */
   Nitro_EndFrame__deps: ['$Nitro'],
   Nitro_EndFrame: function (paramsPointer, vertexPointer, vertexCount,
-    runPointer, runCount) {
+    runPointer, runCount, sceneRunCount) {
     const state = Nitro.checkDevice();
     if (!state?.encoder) return;
 
@@ -2016,6 +2017,39 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       }],
     });
 
+    let drawUIRuns = () => {};
+    if (vertexCount > 0 && runCount > 0) {
+      const bytes = vertexCount * Nitro.UI_STRIDE;
+      const buffer = Nitro.ensureUploadBuffer('uiVertexBuffer', bytes,
+        GPUBufferUsage.VERTEX);
+      state.device.queue.writeBuffer(buffer, 0, HEAPU8, vertexPointer, bytes);
+      state.device.queue.writeBuffer(state.uiUniform, 0,
+        HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 4));
+
+      const runs = HEAP32.subarray(runPointer >> 2, (runPointer >> 2) + runCount * 4);
+      drawUIRuns = (firstRun, lastRun) => {
+        if (firstRun >= lastRun) return;
+        pass.setPipeline(state.uiPipeline);
+        pass.setBindGroup(0, state.uiBindGroup);
+        pass.setVertexBuffer(0, buffer);
+        let boundTexture = -1;
+        for (let i = firstRun; i < lastRun; ++i) {
+          const entry = state.textures[runs[i * 4]];
+          const first = runs[i * 4 + 1];
+          const count = runs[i * 4 + 2];
+          if (!entry || count <= 0) continue;
+          if (runs[i * 4] !== boundTexture) {
+            pass.setBindGroup(1, entry.bindGroup);
+            boundTexture = runs[i * 4];
+          }
+          pass.draw(count, 1, first, 0);
+        }
+      };
+    }
+
+    sceneRunCount = Math.max(0, Math.min(sceneRunCount, runCount));
+    drawUIRuns(0, sceneRunCount);
+
     if (state.sceneReady && state.scanout) {
       const { x, y, width, height } = state.scanout;
       pass.setViewport(x, y, width, height, 0, 1);
@@ -2025,32 +2059,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       pass.setViewport(0, 0, state.canvasWidth || width, state.canvasHeight || height, 0, 1);
     }
 
-    if (vertexCount > 0 && runCount > 0) {
-      const bytes = vertexCount * Nitro.UI_STRIDE;
-      const buffer = Nitro.ensureUploadBuffer('uiVertexBuffer', bytes,
-        GPUBufferUsage.VERTEX);
-      state.device.queue.writeBuffer(buffer, 0, HEAPU8, vertexPointer, bytes);
-      state.device.queue.writeBuffer(state.uiUniform, 0,
-        HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 4));
-
-      pass.setPipeline(state.uiPipeline);
-      pass.setBindGroup(0, state.uiBindGroup);
-      pass.setVertexBuffer(0, buffer);
-
-      const runs = HEAP32.subarray(runPointer >> 2, (runPointer >> 2) + runCount * 4);
-      let boundTexture = -1;
-      for (let i = 0; i < runCount; ++i) {
-        const entry = state.textures[runs[i * 4]];
-        const first = runs[i * 4 + 1];
-        const count = runs[i * 4 + 2];
-        if (!entry || count <= 0) continue;
-        if (runs[i * 4] !== boundTexture) {
-          pass.setBindGroup(1, entry.bindGroup);
-          boundTexture = runs[i * 4];
-        }
-        pass.draw(count, 1, first, 0);
-      }
-    }
+    drawUIRuns(sceneRunCount, runCount);
 
     pass.end();
     if (state.sceneReady && state.sceneColor && state.historyColor) {

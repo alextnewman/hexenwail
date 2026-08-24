@@ -1372,7 +1372,7 @@ void WGPUWorld_DrawBrushEntity (entity_t *entity)
 	}
 
 	if (entity->drawflags & DRF_TRANSLUCENT)
-		alpha = r_wateralpha.value;
+		alpha = NITRO_DRF_ALPHA;
 	else if (entity->alpha != ENTALPHA_DEFAULT && !ENTALPHA_OPAQUE(entity->alpha))
 		alpha = ENTALPHA_DECODE(entity->alpha);
 	alpha = CLAMP(0.0f, alpha, 1.0f);
