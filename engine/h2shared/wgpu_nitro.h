@@ -340,13 +340,13 @@ typedef struct
 	float	ambient;
 	float	shade;
 	vec3_t	direction;
-	qboolean resolved;
 } wgpulightsample_t;
 
 void WGPULightVol_NewMap (void);
 void WGPULightVol_Shutdown (void);
 void WGPULightVol_BeginFrame (void);
 qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample);
+qboolean WGPULightVol_Active (void);
 void WGPULightVol_Stats (int *cells, int *resolved, int *cellsize);
 
 /*

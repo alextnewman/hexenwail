@@ -13,16 +13,21 @@
 #define NITRO_LIGHTVOL_MAX_BYTES	(2 * 1024 * 1024)
 #define NITRO_LIGHTVOL_MIN_CELL		32
 #define NITRO_LIGHTVOL_MAX_CELL		512
+#define NITRO_LIGHTVOL_USED_MAX		4096
 
 static wgpulightcell_t	*lightvol_cells;
 static byte		*lightvol_valid;
+static byte		*lightvol_used;
+static byte		lightvol_styles[MAX_LIGHTSTYLES];
+static int		lightvol_used_indices[NITRO_LIGHTVOL_USED_MAX];
+static int		lightvol_used_count;
 static vec3_t		lightvol_mins;
 static int		lightvol_dims[3];
 static int		lightvol_total;
 static int		lightvol_cellsize;
 static int		lightvol_budget;
-static int		lightvol_refresh_cursor;
-static float		lightvol_trace_distance;
+static int		lightvol_refresh_budget;
+static unsigned int	lightvol_style_hash;
 
 static int WGPULightVol_Index (int x, int y, int z)
 {
@@ -59,7 +64,7 @@ static qboolean WGPULightVol_Layout (qmodel_t *world, int cellsize)
 	total = (double)lightvol_dims[0] * lightvol_dims[1] * lightvol_dims[2];
 	if (total <= 0 || total > INT_MAX)
 		return false;
-	if (total * (sizeof(wgpulightcell_t) + sizeof(byte)) >
+	if (total * (sizeof(wgpulightcell_t) + sizeof(byte) * 2) >
 	    NITRO_LIGHTVOL_MAX_BYTES)
 		return false;
 
@@ -71,21 +76,25 @@ void WGPULightVol_Shutdown (void)
 {
 	free (lightvol_cells);
 	free (lightvol_valid);
+	free (lightvol_used);
 	lightvol_cells = NULL;
 	lightvol_valid = NULL;
+	lightvol_used = NULL;
 	memset (lightvol_dims, 0, sizeof(lightvol_dims));
 	VectorClear (lightvol_mins);
 	lightvol_total = 0;
 	lightvol_cellsize = 0;
 	lightvol_budget = 0;
-	lightvol_refresh_cursor = 0;
-	lightvol_trace_distance = 0;
+	lightvol_refresh_budget = 0;
+	memset (lightvol_styles, 0, sizeof(lightvol_styles));
+	lightvol_used_count = 0;
+	lightvol_style_hash = 0;
 }
 
 void WGPULightVol_NewMap (void)
 {
 	qmodel_t	*world = cl.worldmodel;
-	int		cellsize, i;
+	int		cellsize, surfnum, map;
 
 	WGPULightVol_Shutdown ();
 	if (!world || !world->nodes || !world->lightdata)
@@ -104,7 +113,8 @@ void WGPULightVol_NewMap (void)
 	lightvol_cells = (wgpulightcell_t *) calloc ((size_t)lightvol_total,
 						    sizeof(*lightvol_cells));
 	lightvol_valid = (byte *) calloc ((size_t)lightvol_total, sizeof(*lightvol_valid));
-	if (!lightvol_cells || !lightvol_valid)
+	lightvol_used = (byte *) calloc ((size_t)lightvol_total, sizeof(*lightvol_used));
+	if (!lightvol_cells || !lightvol_valid || !lightvol_used)
 	{
 		Con_DPrintf ("WebGlideNitro: could not allocate light volume\n");
 		WGPULightVol_Shutdown ();
@@ -112,34 +122,37 @@ void WGPULightVol_NewMap (void)
 	}
 
 	lightvol_cellsize = cellsize;
-	for (i = 0; i < 3; i++)
-	{
-		float extent = world->maxs[i] - world->mins[i] + cellsize * 2.0f;
-
-		if (extent > lightvol_trace_distance)
-			lightvol_trace_distance = extent;
-	}
+	for (surfnum = 0; surfnum < world->numsurfaces; surfnum++)
+		for (map = 0; map < MAXLIGHTMAPS &&
+		     world->surfaces[surfnum].styles[map] != 255; map++)
+			lightvol_styles[world->surfaces[surfnum].styles[map]] = 1;
 }
 
 void WGPULightVol_BeginFrame (void)
 {
-	int	invalidate, i;
+	unsigned int	hash = 2166136261u;
+	int		i;
 
 	lightvol_budget = CLAMP(1, r_nitro_lightvol_budget.integer, 4096);
-	if (!lightvol_valid || !lightvol_total)
+	lightvol_refresh_budget = lightvol_budget / 2;
+	if (!lightvol_valid || !lightvol_used || !lightvol_total)
 		return;
 
-	/* Light styles are part of a resolved probe.  Invalidating a small
-	 * round-robin slice lets visible cells pick up animation lazily without
-	 * rebuilding the map-sized field on the WASM thread. */
-	invalidate = q_max(lightvol_budget / 4, 1);
-	for (i = 0; i < invalidate; i++)
+	for (i = 0; i < MAX_LIGHTSTYLES; i++)
 	{
-		lightvol_valid[lightvol_refresh_cursor] = 0;
-		lightvol_refresh_cursor++;
-		if (lightvol_refresh_cursor == lightvol_total)
-			lightvol_refresh_cursor = 0;
+		if (!lightvol_styles[i])
+			continue;
+		hash ^= (unsigned int)d_lightstylevalue[i];
+		hash *= 16777619u;
 	}
+	if (lightvol_style_hash && hash != lightvol_style_hash)
+		for (i = 0; i < lightvol_used_count; i++)
+			if (lightvol_valid[lightvol_used_indices[i]] == 1)
+				lightvol_valid[lightvol_used_indices[i]] = 3;
+	lightvol_style_hash = hash;
+	for (i = 0; i < lightvol_used_count; i++)
+		lightvol_used[lightvol_used_indices[i]] = 0;
+	lightvol_used_count = 0;
 }
 
 static qboolean WGPULightVol_Resolve (int x, int y, int z)
@@ -155,20 +168,29 @@ static qboolean WGPULightVol_Resolve (int x, int y, int z)
 	int		index, axis, i;
 
 	index = WGPULightVol_Index (x, y, z);
-	if (lightvol_valid[index])
+	if (lightvol_valid[index] == 1 || lightvol_valid[index] == 2)
+		return true;
+	if (lightvol_valid[index] == 3 && lightvol_refresh_budget <= 0)
 		return true;
 	if (lightvol_budget <= 0)
-		return false;
+		return lightvol_valid[index] == 3;
 	lightvol_budget--;
+	if (lightvol_valid[index] == 3)
+		lightvol_refresh_budget--;
 
 	for (i = 0; i < 3; i++)
 		point[i] = lightvol_mins[i] +
 			((i == 0 ? x : (i == 1 ? y : z)) + 0.5f) * lightvol_cellsize;
+	if (Mod_PointInLeaf (point, cl.worldmodel)->contents == CONTENTS_SOLID)
+	{
+		lightvol_valid[index] = 2;
+		return true;
+	}
 
 	sum = 0;
 	for (axis = 0; axis < 6; axis++)
 	{
-		VectorMA (point, lightvol_trace_distance, axes[axis], end);
+		VectorMA (point, 2048.0f, axes[axis], end);
 		samples[axis] = (float)WGPUWorld_TraceLight (point, end, NULL);
 		if (samples[axis] < 0)
 			samples[axis] = 0;
@@ -196,7 +218,7 @@ static qboolean WGPULightVol_Resolve (int x, int y, int z)
 	for (i = 0; i < 3; i++)
 		cell->direction[i] = (byte)CLAMP(0,
 			(int)((direction[i] * 0.5f + 0.5f) * 255.0f + 0.5f), 255);
-	cell->ambient = (byte)CLAMP(0, (int)(sum / 6.0f + 0.5f), 255);
+	cell->ambient = (byte)CLAMP(0, WGPUWorld_LightPoint (point, NULL), 255);
 	lightvol_valid[index] = 1;
 	return true;
 }
@@ -204,8 +226,10 @@ static qboolean WGPULightVol_Resolve (int x, int y, int z)
 static void WGPULightVol_Dynamic (const vec3_t point, wgpulightsample_t *sample)
 {
 	vec3_t	weighted, delta;
+	float	static_shade;
 	int	i;
 
+	static_shade = sample->shade;
 	VectorScale (sample->direction, sample->shade, weighted);
 	if (r_dynamic.integer)
 	{
@@ -228,7 +252,7 @@ static void WGPULightVol_Dynamic (const vec3_t point, wgpulightsample_t *sample)
 			}
 			sample->ambient += add;
 			if (distance > 0.001f)
-				VectorMA (weighted, add / distance, delta, weighted);
+				VectorMA (weighted, add * 0.35f / distance, delta, weighted);
 		}
 	}
 
@@ -237,6 +261,8 @@ static void WGPULightVol_Dynamic (const vec3_t point, wgpulightsample_t *sample)
 		VectorScale (weighted, 1.0f / sample->shade, sample->direction);
 	else
 		VectorClear (sample->direction);
+	if (sample->shade < static_shade)
+		sample->shade = static_shade;
 	if (sample->ambient < 0)
 		sample->ambient = 0;
 }
@@ -244,11 +270,12 @@ static void WGPULightVol_Dynamic (const vec3_t point, wgpulightsample_t *sample)
 qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample)
 {
 	vec3_t	grid, direction;
-	float	ambient, weight;
+	float	ambient, weight, weight_sum;
 	int	base[3], x, y, z, i;
 
 	memset (sample, 0, sizeof(*sample));
-	if (!r_nitro_lightvol.integer || !lightvol_cells || !lightvol_valid)
+	if (!r_nitro_lightvol.integer || !lightvol_cells || !lightvol_valid ||
+	    !lightvol_used)
 		return false;
 
 	for (i = 0; i < 3; i++)
@@ -261,6 +288,7 @@ qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample)
 	}
 
 	ambient = 0;
+	weight_sum = 0;
 	VectorClear (direction);
 	for (z = 0; z < 2; z++)
 	for (y = 0; y < 2; y++)
@@ -271,25 +299,41 @@ qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample)
 		int			index;
 
 		if (!WGPULightVol_Resolve (base[0] + x, base[1] + y, base[2] + z))
-			return false;
+			continue;
 		index = WGPULightVol_Index (base[0] + x, base[1] + y, base[2] + z);
+		if (lightvol_valid[index] == 2)
+			continue;
 		cell = &lightvol_cells[index];
 		weight = (x ? grid[0] : 1.0f - grid[0]) *
 			 (y ? grid[1] : 1.0f - grid[1]) *
 			 (z ? grid[2] : 1.0f - grid[2]);
+		weight_sum += weight;
 		ambient += cell->ambient * weight;
 		for (i = 0; i < 3; i++)
 			cell_direction[i] = cell->direction[i] * (2.0f / 255.0f) - 1.0f;
 		VectorMA (direction, weight * cell->ambient, cell_direction, direction);
+		if (!lightvol_used[index] &&
+		    lightvol_used_count < NITRO_LIGHTVOL_USED_MAX)
+		{
+			lightvol_used[index] = 1;
+			lightvol_used_indices[lightvol_used_count++] = index;
+		}
 	}
 
-	sample->ambient = ambient;
+	if (weight_sum <= 0.001f)
+		return false;
+	sample->ambient = ambient / weight_sum;
+	VectorScale (direction, 1.0f / weight_sum, direction);
 	sample->shade = VectorLength (direction);
 	if (sample->shade > 0.001f)
 		VectorScale (direction, 1.0f / sample->shade, sample->direction);
 	WGPULightVol_Dynamic (point, sample);
-	sample->resolved = true;
 	return true;
+}
+
+qboolean WGPULightVol_Active (void)
+{
+	return r_nitro_lightvol.integer && lightvol_cells && lightvol_valid;
 }
 
 void WGPULightVol_Stats (int *cells, int *resolved, int *cellsize)
@@ -297,7 +341,7 @@ void WGPULightVol_Stats (int *cells, int *resolved, int *cellsize)
 	int	count = 0, i;
 
 	for (i = 0; lightvol_valid && i < lightvol_total; i++)
-		count += lightvol_valid[i] != 0;
+		count += lightvol_valid[i] == 1 || lightvol_valid[i] == 3;
 	if (cells)
 		*cells = lightvol_total;
 	if (resolved)

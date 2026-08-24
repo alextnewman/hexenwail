@@ -1466,7 +1466,10 @@ void WGPUWorld_ReportGaps (void)
 			nitro_numsurfaces, nitro_numlightmaps);
 	WGPULightVol_Stats (&cells, &resolved, &cellsize);
 	if (cells)
+	{
 		Con_Printf ("  light volume: %d cells at %d units (%d resolved lazily)\n",
 				cells, cellsize, resolved);
+		Con_Printf ("  legacy projected shadows disabled while the light volume is active\n");
+	}
 	Con_Printf ("  approximated: model frames step rather than interpolate\n");
 }

@@ -252,8 +252,14 @@ same authored samples and animated style values used by world lightmaps,
 producing an ambient value and a dominant incoming direction. Alias models and
 the view weapon trilinearly sample that field; active dynamic lights are folded
 into the same sample, so a torch changes both brightness and direction rather
-than merely raising a model's flat ambient term. Planar shadows use that
-dominant direction too.
+than merely raising a model's flat ambient term.
+
+The old projected depth/stencil silhouette is deliberately suppressed whenever
+the shared volume is enabled. It describes neither the authored ambient field
+nor a real emitter and would place a second, contradictory lighting composition
+over the new one. `r_dynamic 1` and `r_nitro_lightvol 1` are the shipped
+defaults. Setting `r_nitro_lightvol 0` restores the legacy point-lighting path
+and permits `r_shadows` again for controlled A/B diagnosis.
 
 World lightmaps remain the detailed surface authority: replacing 16-unit
 authored luxels with a coarse volume would erase composition and leak across
@@ -264,6 +270,9 @@ its budget is exhausted. This deliberately spends CPU cache instead of adding a
 GPU pass or a per-fragment 3D fetch on Apple and Adreno. A GPU mirror, compute
 injection and temporal propagation remain valid later stages, but only after
 target-device captures show that they improve either expression or cost.
+Resolved corners are retained across budget pressure; a partially warm sample
+renormalizes its available corners, and only an entirely cold sample falls back
+to the previous point-light path.
 
 | Cvar | Default | Meaning |
 | --- | --- | --- |
@@ -293,8 +302,9 @@ specification here.
 The renderer prints its own gaps once per map (`r_nitro_report 0` silences
 it) so a running build never quietly implies more than it does.
 
-Model frames still step rather than interpolate. Projected shadows use the
-sampled world floor and a two-sided depth/stencil receiver mask that clips the
+Model frames still step rather than interpolate. In the legacy light-volume-off
+fallback, projected shadows use the sampled world floor and a two-sided
+depth/stencil receiver mask that clips the
 silhouette both where no receiver exists and where nearer geometry occludes it,
 so raised platforms do not leave a shadow floating beyond their edge; luminous
 glow models do not cast one. The result remains a deliberately cheap planar

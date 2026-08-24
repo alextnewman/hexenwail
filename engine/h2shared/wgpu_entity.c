@@ -881,7 +881,7 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 	c_alias_polys += numtris;
 	wgpu_frame_polys += numtris;
 
-	if (r_shadows.integer && entity != &cl.viewent &&
+	if (r_shadows.integer && !WGPULightVol_Active () && entity != &cl.viewent &&
 	    !(pimp_flags & (XF_TORCH_GLOW | XF_GLOW | XF_MISSILE_GLOW | EF_GLOW)) &&
 	    !(flags & (NITROMODEL_BLEND_ALPHA | NITROMODEL_BLEND_ADD)))
 	{
@@ -896,28 +896,15 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 		WGPUWorld_LightPoint (sample, lightspot);
 
 		shadowz = lightspot[2];
-		if (VectorLength (nitro_lightdir) > 0.001f)
-		{
-			float vertical = q_max(fabsf(nitro_lightdir[2]), 0.5f);
-
-			/* Projection subtracts this vector below, so negate the
-			 * light-travel direction to put the silhouette behind its
-			 * dominant source. */
-			shadowvector[0] = -nitro_lightdir[0] / vertical;
-			shadowvector[1] = -nitro_lightdir[1] / vertical;
-		}
-		else
-		{
-			an = entity->angles[YAW] / 180.0f * M_PI;
-			shadevector[0] = cos (-an);
-			shadevector[1] = sin (-an);
-			shadevector[2] = 1.0f;
-			VectorNormalize (shadevector);
-			shadowvector[0] = shadevector[0] * forward[0] +
-				shadevector[1] * right[0] + shadevector[2] * up[0];
-			shadowvector[1] = shadevector[0] * forward[1] +
-				shadevector[1] * right[1] + shadevector[2] * up[1];
-		}
+		an = entity->angles[YAW] / 180.0f * M_PI;
+		shadevector[0] = cos (-an);
+		shadevector[1] = sin (-an);
+		shadevector[2] = 1.0f;
+		VectorNormalize (shadevector);
+		shadowvector[0] = shadevector[0] * forward[0] +
+			shadevector[1] * right[0] + shadevector[2] * up[0];
+		shadowvector[1] = shadevector[0] * forward[1] +
+			shadevector[1] * right[1] + shadevector[2] * up[1];
 		shadowvector[2] = 0.0f;
 
 		ptri = (const mtriangle_t *)((const byte *)paliashdr + paliashdr->triangles);

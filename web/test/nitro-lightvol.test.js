@@ -24,10 +24,11 @@ test('light cells retain signed direction and authored intensity', () => {
   assert.match(volume, /WGPUWorld_TraceLight \(point, end, NULL\)/);
 });
 
-test('aliases and projected shadows consume the same light sample', () => {
+test('aliases consume the shared sample and legacy stencil shadows stay out', () => {
   assert.match(entities, /WGPULightVol_Sample \(adjust, &sample\)/);
   assert.match(entities, /DotProduct \(nitro_lightdir, forward\)/);
-  assert.match(entities, /shadowvector\[0\] = -nitro_lightdir\[0\] \/ vertical/);
+  assert.match(entities,
+    /r_shadows\.integer && !WGPULightVol_Active \(\) && entity != &cl\.viewent/);
   assert.match(entities, /nitro_ambientlight > 128\.0f/);
   assert.match(entities, /nitro_ambientlight \+ nitro_shadelight > 192\.0f/);
 });
@@ -42,6 +43,8 @@ test('light-volume controls are archived and frame-budgeted', () => {
     assert.match(renderer, new RegExp(`Cvar_RegisterVariable\\(&${name}\\)`));
   }
   assert.match(renderer, /WGPU_AnimateLight \(\);\s+WGPULightVol_BeginFrame \(\);/);
+  assert.match(renderer, /r_dynamic = \{"r_dynamic", "1"/);
+  assert.match(renderer, /r_nitro_lightvol = \{"r_nitro_lightvol", "1"/);
 });
 
 test('indexed alias darkness remains in the authored colormap domain', () => {
