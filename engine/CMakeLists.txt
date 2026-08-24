@@ -21,31 +21,26 @@ option(USE_SOUND "Enable the browser audio backend" ON)
 option(USE_CODEC_VORBIS "Decode Ogg Vorbis music via the Emscripten vorbis port" ON)
 set(GAME_DATA_DIR "" CACHE PATH "Optional game data directory to preload")
 
-# Renderer selection. "webgpu" is the primary shipping configuration:
-# WebGlideNitro, the native WebGPU renderer. "software" keeps the parked
-# classic 8bpp rasterizer buildable and "webgl2" keeps the abortive WebGlide
-# experiment buildable.
-# See docs/web/SOFTWARE_RENDERER.md, docs/web/WEBGLIDE.md,
-# docs/web/WEBGLIDE_NITRO.md and docs/web/ARCHITECTURE.md.
-set(WEB_RENDERER "webgpu" CACHE STRING "Web renderer: software, webgl2 or webgpu")
-set_property(CACHE WEB_RENDERER PROPERTY STRINGS software webgl2 webgpu)
-if(NOT WEB_RENDERER STREQUAL "software" AND NOT WEB_RENDERER STREQUAL "webgl2"
-        AND NOT WEB_RENDERER STREQUAL "webgpu")
-    message(FATAL_ERROR "WEB_RENDERER must be 'software', 'webgl2' or 'webgpu' (got '${WEB_RENDERER}')")
+# Renderer selection. WebGlideNitro is the primary shipping configuration.
+# The classic 8bpp software rasterizer remains available as the parked
+# correctness reference; WebGL2/WebGlide has been removed from the supported set.
+# See docs/web/SOFTWARE_RENDERER.md, docs/web/WEBGLIDE_NITRO.md and
+# docs/web/ARCHITECTURE.md.
+set(WEB_RENDERER "webgpu" CACHE STRING "Web renderer: software or webgpu")
+set_property(CACHE WEB_RENDERER PROPERTY STRINGS software webgpu)
+if(NOT WEB_RENDERER STREQUAL "software" AND NOT WEB_RENDERER STREQUAL "webgpu")
+    message(FATAL_ERROR "WEB_RENDERER must be 'software' or 'webgpu' (got '${WEB_RENDERER}')")
 endif()
 message(STATUS "Web renderer: ${WEB_RENDERER}")
 
 # The software rasterizer and its accelerated presenter are separate layers.
 # The presenter only exists to get the 8bpp framebuffer onto the canvas, so it
-# is meaningless for the two GPU renderers: WebGlide owns its WebGL2 context
-# directly and WebGlideNitro owns its WebGPU device directly.
-set(WEB_PRESENTER "webgl2" CACHE STRING "Software renderer presenter: webgl2 or webgpu")
-set_property(CACHE WEB_PRESENTER PROPERTY STRINGS webgl2 webgpu)
-if(NOT WEB_PRESENTER STREQUAL "webgl2" AND NOT WEB_PRESENTER STREQUAL "webgpu")
-    message(FATAL_ERROR "WEB_PRESENTER must be 'webgl2' or 'webgpu' (got '${WEB_PRESENTER}')")
-endif()
-if(NOT WEB_RENDERER STREQUAL "software" AND NOT WEB_PRESENTER STREQUAL "webgl2")
-    message(FATAL_ERROR "WEB_PRESENTER only applies to WEB_RENDERER=software")
+# is meaningless for the native WebGPU renderer. WebGL2/WebGlide has been
+# dropped; WebGPU is the only supported presenter path.
+set(WEB_PRESENTER "webgpu" CACHE STRING "Software renderer presenter: webgpu")
+set_property(CACHE WEB_PRESENTER PROPERTY STRINGS webgpu)
+if(NOT WEB_PRESENTER STREQUAL "webgpu")
+    message(FATAL_ERROR "WEB_PRESENTER must be 'webgpu' (got '${WEB_PRESENTER}')")
 endif()
 if(WEB_RENDERER STREQUAL "software")
     message(STATUS "Software presenter: ${WEB_PRESENTER}")

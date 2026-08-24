@@ -6,9 +6,9 @@
 # workflow, so the two never drift apart.
 #
 # Usage: wasm-build.sh [renderer] [build-dir]
-#   renderer   nitro (default) | software | webgl2 | webgpu
-#              webgpu is the software rasterizer with its WebGPU presenter;
-#              nitro is WebGlideNitro, the native WebGPU renderer.
+#   renderer   nitro (default) | software
+#              software uses the classic 8bpp rasterizer with the WebGPU
+#              presenter; nitro is WebGlideNitro, the native WebGPU renderer.
 #   build-dir  defaults to engine/build
 #
 # Requires: emcmake/emmake on PATH (i.e. `source "$EMSDK/emsdk_env.sh"` first).
@@ -25,17 +25,21 @@ elif [ "$renderer" = "nitro" ]; then
 else
 	build_dir="engine/build"
 fi
-presenter="webgl2"
+presenter="webgpu"
 
 case "$renderer" in
-webgpu)
-	# The software rasterizer scanned out through a WebGPU presenter.
-	renderer="software"
+software)
+	# The classic software rasterizer is still a valid reference path, but the
+	# PWA only ships it through the WebGPU canvas presenter.
 	presenter="webgpu"
 	;;
 nitro)
 	# WebGlideNitro: a native WebGPU renderer, no software framebuffer.
 	renderer="webgpu"
+	;;
+*)
+	echo "error: renderer must be 'software' or 'nitro'" >&2
+	exit 1
 	;;
 esac
 

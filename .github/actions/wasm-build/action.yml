@@ -1,14 +1,11 @@
 name: 'Build hexenwail WebAssembly + PWA artifact'
 description: >-
   Installs a pinned Emscripten SDK (with caching), prefetches the ogg/vorbis
-  ports, runs the lightweight Node PWA tests, builds the full WebAssembly
-  client with every renderer configuration (all shipped in the PWA artifact
-  — WebGlideNitro as the launch default, plus the parked software reference,
-  experimental WebGlide GPU bundle and WebGPU presenter preview), and
-  assembles the static Pages/PWA artifact.
-  Single source of truth shared by the PR "PWA / WebAssembly" check and the
-  GitHub Pages deployment workflow so the two build recipes cannot drift
-  apart.
+  ports, runs the lightweight Node PWA tests, builds the supported WebAssembly
+  client configurations (software and WebGlideNitro), and assembles the static
+  Pages/PWA artifact. Single source of truth shared by the PR "PWA /
+  WebAssembly" check and the GitHub Pages deployment workflow so the two build
+  recipes cannot drift apart.
 
 inputs:
   emsdk-version:
