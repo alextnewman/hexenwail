@@ -326,6 +326,21 @@ bounded, and every coloured result is still one of the game's 256 palette
 entries. `gl_coloredlight 0` restores neutral lighting without disabling the
 underlying scalar light or its authored flicker timing.
 
+Atmosphere follows the same rule. Authored exponential fog is rounded into a
+small number of depth bands before it is mixed, and the result is snapped back
+through the nearest-palette cube. Optional localized haze modulates that fog
+with slow world-space pockets rather than adding a volumetric pass. Contents
+shifts and full-screen flashes use the existing `cl.cshifts` timing and colour,
+then return the shifted scene to the palette in scan-out; this includes the
+game's white lightning flashes. The panel-resolution UI remains outside every
+one of these operations.
+
+| Cvar | Default | Meaning |
+| --- | --- | --- |
+| `r_nitro_fogbands` | `8` | Number of authored-fog depth steps; values below 2 restore smooth fog. |
+| `r_nitro_haze` | `0` | Strength of localized palette haze; disabled pending target-device aesthetic validation. |
+| `r_nitro_paletteshifts` | `1` | Palette-snap contents, damage, powerup and lightning/white-flash shifts; `0` restores continuous RGB scan-out tinting. |
+
 ### Where it stops
 
 The renderer prints its own gaps once per map (`r_nitro_report 0` silences
@@ -405,10 +420,13 @@ content rather than disguising omissions:
    history retains fading saturated light rather than uniformly blurring motion.
    Target-iPad Nitro-before/Nitro-after capture and aesthetic review remain the
    acceptance gate.
-3. **Deepen palette lighting and atmosphere (in progress):** quantized coloured
-   `.lit` and dynamic light is delivered across world surfaces, actors and the
-   view weapon. Fog bands, underwater shifts, localized haze and lightning
-   remain, expressed through palette/colormap operations.
+3. **Deepen palette lighting and atmosphere (implemented, target validation
+   pending):** quantized coloured `.lit` and dynamic light reaches world
+   surfaces, actors and the view weapon. Authored fog is depth-banded,
+   underwater and full-screen lightning shifts return through the palette, and
+   optional world-space haze provides localized pockets. Each invented
+   operation has an independent off switch; target-iPad Nitro-before/Nitro-after
+   capture and aesthetic review remain the acceptance gate.
 4. **Give liquids supernatural material identity:** distinct water, slime, lava
    and portal movement, translucency and retained-frame refraction without
    physically based material simulation.

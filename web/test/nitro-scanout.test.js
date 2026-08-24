@@ -37,7 +37,7 @@ test('history retains coloured light only and resets with scene identity', () =>
   assert.match(backend, /scan\.persistence \* lightTrail/);
   assert.match(backend, /state\.historyValid = false;\s+Nitro\.rebuildFrameBindGroup/);
   assert.match(backend, /copyTextureToTexture\(/);
-  assert.match(backend, /state\.historyValid \? floats\[47\] : 0\.0/);
+  assert.match(backend, /state\.historyValid \? floats\[49\] : 0\.0/);
 });
 
 test('scan-out uniform remains a 48-byte WGSL and JavaScript contract', () => {
