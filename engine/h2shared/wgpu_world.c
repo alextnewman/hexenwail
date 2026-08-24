@@ -201,7 +201,7 @@ static int WGPUWorld_AllocLightmapBlock (int w, int h, short *x, short *y)
 		if (!nitro_lightmap_data[layer])
 		{
 			nitro_lightmap_data[layer] = (byte *)
-				calloc (NITRO_LIGHTMAP_SIZE * NITRO_LIGHTMAP_SIZE, 1);
+				calloc (NITRO_LIGHTMAP_SIZE * NITRO_LIGHTMAP_SIZE, 4);
 			if (!nitro_lightmap_data[layer])
 				return -1;
 		}
@@ -257,7 +257,7 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 	int		i, s, maps;
 	const byte	*samples = surf->samples;
 	byte		*dest;
-	static int	blocklights[NITRO_LIGHTMAP_SIZE * NITRO_LIGHTMAP_SIZE];
+	static int	blocklights[NITRO_LIGHTMAP_SIZE * NITRO_LIGHTMAP_SIZE * 4];
 
 	if (info->lightmap < 0 || !nitro_lightmap_data[info->lightmap])
 		return;
@@ -268,7 +268,12 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 	if (r_fullbright.integer || !cl.worldmodel->lightdata)
 	{
 		for (i = 0; i < size; i++)
-			blocklights[i] = 255 * 256;
+		{
+			blocklights[i * 4 + 0] = 255 * 256;
+			blocklights[i * 4 + 1] = 255 * 256;
+			blocklights[i * 4 + 2] = 255 * 256;
+			blocklights[i * 4 + 3] = 255 * 256;
+		}
 	}
 	else
 	{
@@ -279,7 +284,12 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 		if (ambient < 0)
 			ambient = 0;
 		for (i = 0; i < size; i++)
-			blocklights[i] = ambient;
+		{
+			blocklights[i * 4 + 0] = ambient;
+			blocklights[i * 4 + 1] = ambient;
+			blocklights[i * 4 + 2] = ambient;
+			blocklights[i * 4 + 3] = ambient;
+		}
 
 		for (maps = 0; samples && maps < MAXLIGHTMAPS &&
 		     surf->styles[maps] != 255; maps++)
@@ -288,7 +298,14 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 
 			info->cached_style[maps] = scale;
 			for (i = 0; i < size; i++)
-				blocklights[i] += samples[i] * scale;
+			{
+				int	add = samples[i] * scale;
+
+				blocklights[i * 4 + 0] += add;
+				blocklights[i * 4 + 1] += add;
+				blocklights[i * 4 + 2] += add;
+				blocklights[i * 4 + 3] += add;
+			}
 			samples += size;
 		}
 
@@ -302,6 +319,7 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 				const mtexinfo_t *tex = surf->texinfo;
 				vec3_t		impact, local, receiver;
 				float		dist, facing, rad, minlight, sign;
+				float		color[3], luminance;
 				int		s, t, sd, td, j;
 
 				if (!(surf->dlightbits & (1u << lnum)))
@@ -336,6 +354,15 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 				if (!WGPUWorld_LineVisible (light->origin, receiver))
 					continue;
 				sign = light->dark ? -1.0f : 1.0f;
+				color[0] = light->color[0];
+				color[1] = light->color[1];
+				color[2] = light->color[2];
+				luminance = color[0] * 0.2126f + color[1] * 0.7152f +
+					color[2] * 0.0722f;
+				if (light->dark || luminance <= 0.001f)
+					color[0] = color[1] = color[2] = 1.0f;
+				else
+					VectorScale (color, 1.0f / luminance, color);
 
 				for (t = 0; t < info->tmax; t++)
 				{
@@ -350,7 +377,11 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 						if (lightdist >= minlight)
 							continue;
 						add = (minlight - lightdist) * 256.0f * sign;
-						blocklights[t * info->smax + s] += (int)add;
+						j = (t * info->smax + s) * 4;
+						blocklights[j + 0] += (int)(add * color[0]);
+						blocklights[j + 1] += (int)(add * color[1]);
+						blocklights[j + 2] += (int)(add * color[2]);
+						blocklights[j + 3] += (int)add;
 					}
 				}
 			}
@@ -359,21 +390,26 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 	}
 
 	dest = nitro_lightmap_data[info->lightmap] +
-		(size_t)info->light_t * NITRO_LIGHTMAP_SIZE + info->light_s;
+		((size_t)info->light_t * NITRO_LIGHTMAP_SIZE + info->light_s) * 4;
 
 	for (i = 0; i < tmax; i++)
 	{
-		byte	*row = dest + (size_t)i * NITRO_LIGHTMAP_SIZE;
+		byte	*row = dest + (size_t)i * NITRO_LIGHTMAP_SIZE * 4;
 
 		for (s = 0; s < smax; s++)
 		{
-			int	value = blocklights[i * smax + s] >> 8;
+			int	channel;
 
-			if (value < 0)
-				value = 0;
-			else if (value > 255)
-				value = 255;
-			row[s] = (byte)value;
+			for (channel = 0; channel < 4; channel++)
+			{
+				int	value = blocklights[(i * smax + s) * 4 + channel] >> 8;
+
+				if (value < 0)
+					value = 0;
+				else if (value > 255)
+					value = 255;
+				row[s * 4 + channel] = (byte)value;
+			}
 		}
 	}
 }
@@ -426,7 +462,7 @@ void WGPUWorld_UpdateLightstyles (void)
 		if (!dirty[layer])
 			continue;
 		Nitro_UploadLightmap (layer, nitro_lightmap_data[layer]);
-		WebPerf_CountUpload (NITRO_LIGHTMAP_SIZE * NITRO_LIGHTMAP_SIZE);
+		WebPerf_CountUpload (NITRO_LIGHTMAP_SIZE * NITRO_LIGHTMAP_SIZE * 4);
 	}
 }
 
@@ -686,7 +722,7 @@ static void WGPUWorld_BuildBuffers (qmodel_t *world)
 		if (!nitro_lightmap_data[surfnum])
 			continue;
 		Nitro_UploadLightmap (surfnum, nitro_lightmap_data[surfnum]);
-		WebPerf_CountUpload (NITRO_LIGHTMAP_SIZE * NITRO_LIGHTMAP_SIZE);
+		WebPerf_CountUpload (NITRO_LIGHTMAP_SIZE * NITRO_LIGHTMAP_SIZE * 4);
 	}
 
 	free (vertices);

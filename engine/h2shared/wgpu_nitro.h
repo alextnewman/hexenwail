@@ -169,7 +169,10 @@ typedef struct
 	float		texcoord[2];	/* normalised skin coordinates */
 	float		light;		/* colormap row 0..63.75; <0 is unlit */
 	unsigned int	shade;		/* byte 0 alpha, byte 1 tint-table row */
+	unsigned int	lightcolor;	/* RGB light multiplier, packed as bytes */
 } wgpumodel_vertex_t;
+_Static_assert (sizeof(wgpumodel_vertex_t) == 32,
+		"wgpumodel_vertex_t must match the WebGPU vertex stride");
 
 /* One drawIndexed (world, brush entities) or one draw (2D, models). */
 typedef struct
@@ -347,6 +350,7 @@ typedef struct
 	float	ambient;
 	float	shade;
 	vec3_t	direction;
+	vec3_t	color;		/* luminance-normalised dynamic-light colour */
 } wgpulightsample_t;
 
 void WGPULightVol_NewMap (void);

@@ -250,9 +250,25 @@ void WGPULightVol_ApplyDynamic (const vec3_t point, wgpulightsample_t *sample)
 			if (light->dark)
 			{
 				sample->ambient -= add;
+				sample->color[0] -= add;
+				sample->color[1] -= add;
+				sample->color[2] -= add;
 				continue;
 			}
 			sample->ambient += add;
+			{
+				vec3_t	color;
+				float	luminance;
+
+				VectorCopy (light->color, color);
+				luminance = color[0] * 0.2126f + color[1] * 0.7152f +
+					color[2] * 0.0722f;
+				if (luminance <= 0.001f)
+					color[0] = color[1] = color[2] = 1.0f;
+				else
+					VectorScale (color, 1.0f / luminance, color);
+				VectorMA (sample->color, add, color, sample->color);
+			}
 			if (distance > 0.001f)
 				VectorMA (weighted, add / distance, delta, weighted);
 		}
@@ -267,6 +283,9 @@ void WGPULightVol_ApplyDynamic (const vec3_t point, wgpulightsample_t *sample)
 		sample->shade = static_shade;
 	if (sample->ambient < 0)
 		sample->ambient = 0;
+	for (i = 0; i < 3; i++)
+		if (sample->color[i] < 0)
+			sample->color[i] = 0;
 }
 
 qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample)
@@ -336,6 +355,9 @@ qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample)
 	if (weight_sum <= 0.001f)
 		return false;
 	sample->ambient = ambient / weight_sum;
+	sample->color[0] = sample->ambient;
+	sample->color[1] = sample->ambient;
+	sample->color[2] = sample->ambient;
 	VectorScale (direction, 1.0f / weight_sum, direction);
 	sample->shade = VectorLength (direction);
 	if (sample->shade > 0.02f)
