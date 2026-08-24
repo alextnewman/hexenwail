@@ -789,7 +789,7 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 
 	if (entity->drawflags & DRF_TRANSLUCENT)
 	{
-		alpha = r_wateralpha.value;
+		alpha = NITRO_DRF_ALPHA;
 		flags |= NITROMODEL_BLEND_ALPHA;
 	}
 	else if (model->flags & (EF_TRANSPARENT | EF_SPECIAL_TRANS))
@@ -1195,7 +1195,7 @@ static void WGPUEntity_DrawSpriteModel (entity_t *entity, unsigned int extraflag
 	if (model->flags & EF_TRANSPARENT)
 		alpha = 0.5f;
 	if (entity->drawflags & DRF_TRANSLUCENT)
-		alpha = r_wateralpha.value;
+		alpha = NITRO_DRF_ALPHA;
 	if (entity->alpha != ENTALPHA_DEFAULT && !ENTALPHA_OPAQUE(entity->alpha))
 		alpha = ENTALPHA_DECODE(entity->alpha);
 	if (model->flags & EF_SPECIAL_TRANS)

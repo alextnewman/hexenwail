@@ -370,6 +370,8 @@ produces; within the translucent half, brush entities are drawn before alias
 models and sprites rather than interleaved in visedict order. That is a
 deliberate batching choice, not an oversight: it keeps a translucent door to
 one `drawIndexed` and it is invisible unless two translucent things overlap.
+`DRF_TRANSLUCENT` is an authored half blend for brush, alias and sprite
+entities; it does not inherit `r_wateralpha`, which controls liquid materials.
 
 Core authored transparency is already active: `DRF_TRANSLUCENT`, entity alpha,
 transparent/special-trans alias models and sprites, teleporter surfaces and
