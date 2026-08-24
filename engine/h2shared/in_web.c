@@ -165,9 +165,30 @@ static int Web_TouchKeyForMenu (int key)
 	}
 }
 
+/* A touch can outlive a menu transition. Remember the key emitted on press so
+ * its release cannot be translated for the new destination and leave the
+ * original gameplay or menu key stuck down. */
+static int	touch_key_down[MAX_KEYS];
+
 EMSCRIPTEN_KEEPALIVE int Web_TouchKey (int key, int down)
 {
-	Key_Event(Web_TouchKeyForMenu(key), down ? true : false);
+	int mapped;
+
+	if (key < 0 || key >= MAX_KEYS)
+		return 0;
+	if (down)
+	{
+		if (touch_key_down[key])
+			return 1;
+		mapped = Web_TouchKeyForMenu(key);
+		touch_key_down[key] = mapped;
+		Key_Event(mapped, true);
+	}
+	else if (touch_key_down[key])
+	{
+		Key_Event(touch_key_down[key], false);
+		touch_key_down[key] = 0;
+	}
 	return 1;
 }
 
@@ -672,6 +693,15 @@ void IN_GPRumble (float low_freq, float high_freq, unsigned int duration_ms)
 	}, gp_index, strong, weak, (double)duration_ms);
 }
 
+static void Web_SetTouchMenuMode (int menu)
+{
+	EM_ASM({
+		const menu = Boolean($0);
+		queueMicrotask(() => dispatchEvent(new CustomEvent('hexenwailtouchmode',
+			{ detail: { menu } })));
+	}, menu);
+}
+
 void IN_Init (void)
 {
 	Cvar_RegisterVariable(&in_gamepad);
@@ -710,14 +740,27 @@ void IN_Shutdown (void) { mouse_active = false; Web_GPForget(); Web_SetCursorHid
  * API is poll-only -- to sample the controller. */
 void IN_Commands (void)
 {
+	static int	touch_menu = -1;
+	int		menu = (Key_GetDest() & key_menu) ? 1 : 0;
+
 	Web_SetCursorHidden(Key_GetDest() == key_game ? 1 : 0);
+	if (menu != touch_menu)
+	{
+		touch_menu = menu;
+		Web_SetTouchMenuMode(menu);
+	}
 	Web_PollGamepad();
 }
 void IN_SendKeyEvents (void) {}
 /* Releases whatever the pad was holding rather than forgetting it: the only
  * in-tree caller (ClearAllStates) drops the engine's keys first, but a silent
  * forget would leave a key stuck down for any caller that does not. */
-void IN_ClearStates (void) { look_x = look_y = 0; Web_GPReleaseAll(); }
+void IN_ClearStates (void)
+{
+	look_x = look_y = 0;
+	memset(touch_key_down, 0, sizeof(touch_key_down));
+	Web_GPReleaseAll();
+}
 void IN_ActivateMouse (void) { mouse_active = true; }
 void IN_DeactivateMouse (void) { mouse_active = false; }
 void IN_ShowMouse (void) { Web_SetCursorHidden(0); }

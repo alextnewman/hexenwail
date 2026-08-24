@@ -288,20 +288,32 @@ device.
 Preferences are stored in local browser storage, separate from imported game
 assets and saves.
 
-Default mappings reuse existing engine input bindings:
+The touch overlay uses action labels rather than controller-face letters, so
+every visible label describes what that control actually does:
 
 - left virtual stick: `W` / `S` forward and back, `A` / `D` strafe left and right; while a menu is open it becomes the menu D-pad so the touch stick can navigate lists and submenus
 - right look region: relative mouse-look deltas through a small JS-to-C bridge
-- **Atk**: primary attack (`MOUSE1`)
-- **Jump**: jump (`SPACE`)
+- **Atk**: primary attack (`K_GP_RTRIGGER`)
+- **Jump**: jump (`K_GP_A`)
 - **Use**: lift/use interaction (`K_GP_LTHUMB`, default `impulse 13`)
-- **◀ / ▶**: previous/next weapon (`K_GP_LSHOULDER` / `K_GP_RSHOULDER`)
+- **Previous / Next**: previous/next weapon (`K_GP_LSHOULDER` / `K_GP_RSHOULDER`)
+- **Menu**: open the engine menu (`K_GP_START`)
 - in-game overlay **Send Esc/Menu**: Escape
+
+When the engine menu opens, the gameplay controls are replaced with a smaller,
+explicitly labelled menu pad: the stick navigates, **Select** confirms,
+**Back** moves out one screen, and **Resume** closes the menu outright. The
+engine notifies the launcher when menu ownership changes; that transition also
+releases every held touch input so movement or attack cannot stick across it.
 
 The controls use Pointer Events and track each touch by pointer ID, so moving,
 looking, and firing can happen at the same time. Held keys/buttons are released
 on cancellation, backgrounding, orientation changes, overlay opening, and quit to
 avoid stuck movement or fire.
+
+The play surface disables browser touch gestures in CSS, carries a fixed-scale
+viewport declaration in both launcher HTML paths, and consumes `dblclick` while
+the engine is running so a double tap cannot zoom the game view.
 
 Hardware keyboard, mouse, and physical gamepad support are preserved. On iPad
 and desktop, touch controls stay hidden by default unless explicitly enabled.
