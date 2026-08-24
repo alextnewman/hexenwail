@@ -1436,9 +1436,8 @@ void WGPUWorld_NewMap (void)
 ================
 WGPUWorld_ReportGaps
 
-The renderer still has deliberate content gaps.  They are stated out loud
-once per map rather than left for the player to discover by walking into an
-invisible monster.  Silence it with r_nitro_report 0.
+The renderer reports its scene coverage and deliberate approximations once per
+map. Silence it with r_nitro_report 0.
 ================
 */
 void WGPUWorld_ReportGaps (void)
@@ -1449,6 +1448,5 @@ void WGPUWorld_ReportGaps (void)
 
 	Con_Printf ("WebGlideNitro: world, entities and particles (%d surfaces, %d lightmap pages)\n",
 			nitro_numsurfaces, nitro_numlightmaps);
-	Con_Printf ("  not drawn: shadows and model glows\n");
 	Con_Printf ("  approximated: model frames step rather than interpolate\n");
 }

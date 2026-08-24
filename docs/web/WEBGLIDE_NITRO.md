@@ -311,17 +311,16 @@ describes — device acquisition and resize via the launcher handoff, offscreen
 scene scan-out with explicit failure reporting, a fully batched 2D layer, the
 static world drawn from immutable geometry with one lightmap texture array
 behind CPU BSP/PVS traversal, and then brush entities, alias models, sprites,
-particles, the view weapon and the moving two-layer sky. What is left of step
-5 is fog, world dynamic lights and the liquid
-approximation, all listed in "Where it stops". Steps 6–7 remain gated on
-measured evidence from Nitro captures on the iPad.
+particles, the view weapon and the moving two-layer sky. The authored effects
+in step 5 are now complete. Steps 6–7 remain gated on measured evidence from
+Nitro captures on the iPad.
 
 ## Visual horizon order
 
 This is the locked direction, ordered so later expression rests on correct game
 content rather than disguising omissions:
 
-1. **Finish the authored world:** animated light styles, world dynamic lights,
+1. **Finish the authored world (delivered):** animated light styles, world dynamic lights,
    warped/translucent liquids, fullbright pixels, model glows, fog and cheap
    projected shadows.
 2. **Establish Nitro's scan-out:** optional ordered 16-bit dither, the restrained

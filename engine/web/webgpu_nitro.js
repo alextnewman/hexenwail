@@ -358,6 +358,7 @@ struct VertexOutput {
 @vertex
 fn vertexMain(@location(0) position : vec3f,
               @location(1) uv : vec2f,
+              /* Location 2 is model light; effects carry packed RGBA at 3. */
               @location(3) color : vec4f) -> VertexOutput {
   var output : VertexOutput;
   output.position = frame.mvp * vec4f(position, 1.0);
