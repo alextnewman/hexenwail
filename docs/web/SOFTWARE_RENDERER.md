@@ -31,7 +31,8 @@ experiment that is kept compiling rather than an actively pursued renderer, and
 its frame cost is not a baseline for anything. A third configuration,
 WebGlideNitro
 (`-DWEB_RENDERER=webgpu`, see [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md)), is a
-native WebGPU technology preview that currently draws only the static world.
+native WebGPU technology preview that draws the complete playable scene while
+its remaining visual effects are developed.
 Neither changes the default: `WEB_RENDERER` defaults to `software`, and the
 shipped `hexenwail.*` bundle is this renderer.
 

@@ -301,6 +301,7 @@ extern void Nitro_EndFrame (const wgpuui_params_t *params, const wgpuui_vertex_t
 
 void WGPUWorld_NewMap (void);
 void WGPUWorld_Shutdown (void);
+void WGPUWorld_UpdateLightstyles (void);
 void WGPUWorld_BeginScene (void);
 void WGPUWorld_DrawWorld (void);
 void WGPUWorld_DrawBrushEntity (entity_t *entity);

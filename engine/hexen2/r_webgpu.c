@@ -682,10 +682,6 @@ void R_NewMap (void)
 {
 	int i;
 
-	/* Lightmaps are baked once at load, so light styles are frozen at the
-	 * neutral value the software renderer starts from.  Hexen II's model
-	 * light styles read the same table, so they are static too; both are
-	 * in the per-map gap report. */
 	for (i = 0; i < 256; ++i)
 		d_lightstylevalue[i] = 264;
 
@@ -703,6 +699,39 @@ void R_NewMap (void)
 	WGPUWorld_ReportGaps();
 }
 
+static void WGPU_AnimateLight (void)
+{
+	int	i, c, v;
+	int	defaultLocus;
+	int	locusHz[3];
+
+	defaultLocus = locusHz[0] = (int)(cl.time * 10);
+	locusHz[1] = (int)(cl.time * 20);
+	locusHz[2] = (int)(cl.time * 30);
+	for (i = 0; i < MAX_LIGHTSTYLES; i++)
+	{
+		if (!cl_lightstyle[i].length)
+		{
+			d_lightstylevalue[i] = 256;
+			continue;
+		}
+		c = cl_lightstyle[i].map[0];
+		if (c == '1' || c == '2' || c == '3')
+		{
+			if (cl_lightstyle[i].length == 1)
+			{
+				d_lightstylevalue[i] = 256;
+				continue;
+			}
+			v = locusHz[c - '1'] % (cl_lightstyle[i].length - 1);
+			d_lightstylevalue[i] = (cl_lightstyle[i].map[v + 1] - 'a') * 22;
+			continue;
+		}
+		v = defaultLocus % cl_lightstyle[i].length;
+		d_lightstylevalue[i] = (cl_lightstyle[i].map[v] - 'a') * 22;
+	}
+}
+
 void R_RenderView (void)
 {
 	wgpuscene_t	scene;
@@ -715,6 +744,8 @@ void R_RenderView (void)
 	WebGPU_BeginFrame ();
 	WGPU_SetupFrame ();
 	WGPU_SetupScene (&scene);
+	WGPU_AnimateLight ();
+	WGPUWorld_UpdateLightstyles ();
 	wgpu_particle_count = 0;
 	R_DrawParticles ();
 

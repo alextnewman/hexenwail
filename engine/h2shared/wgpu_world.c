@@ -67,6 +67,7 @@ typedef struct
 	int	chain;		/* next surface in this frame's texture chain */
 	short	light_s, light_t;
 	short	smax, tmax;
+	int	cached_style[MAXLIGHTMAPS];
 } nitrosurf_t;
 
 static nitrosurf_t	*nitro_surfaces;
@@ -171,16 +172,12 @@ static int WGPUWorld_AllocLightmapBlock (int w, int h, short *x, short *y)
 ================
 WGPUWorld_BuildLightmapBlock
 
-r_surf.c's arithmetic, once, at load time.  Values accumulate in 8.8 fixed
+r_surf.c's arithmetic.  Values accumulate in 8.8 fixed
 point exactly as the software renderer's blocklights do, then collapse to
 the one byte the shader turns back into a colormap row.
-
-Light styles are frozen at the value R_NewMap seeds d_lightstylevalue with,
-and dynamic lights are not accumulated at all: the slice has no per-frame
-lightmap upload path.  Both gaps are reported at map load.
 ================
 */
-static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, const nitrosurf_t *info)
+static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *info)
 {
 	int		smax = info->smax;
 	int		tmax = info->tmax;
@@ -215,9 +212,61 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, const nitrosur
 		{
 			int	scale = d_lightstylevalue[surf->styles[maps]];
 
+			info->cached_style[maps] = scale;
 			for (i = 0; i < size; i++)
 				blocklights[i] += samples[i] * scale;
 			samples += size;
+		}
+	}
+
+	/*
+	================
+	WGPUWorld_UpdateLightstyles
+
+	Rebuild only surfaces whose authored light style changed, then upload each
+	touched atlas page once.  Dynamic lights will eventually share this dirty-page
+	path; keeping the first implementation page-granular makes the correctness
+	step small and leaves rectangle uploads to target-device measurement.
+	================
+	*/
+	void WGPUWorld_UpdateLightstyles (void)
+	{
+		qboolean	dirty[NITRO_MAX_LIGHTMAPS];
+		int		surfnum, maps, layer;
+
+		if (!nitro_world_ready || !cl.worldmodel)
+			return;
+
+		memset (dirty, 0, sizeof(dirty));
+		for (surfnum = 0; surfnum < nitro_numsurfaces; surfnum++)
+		{
+			msurface_t	*surf = &cl.worldmodel->surfaces[surfnum];
+			nitrosurf_t	*info = &nitro_surfaces[surfnum];
+			qboolean	changed = false;
+
+			if (info->lightmap < 0)
+				continue;
+			for (maps = 0; maps < MAXLIGHTMAPS && surf->styles[maps] != 255; maps++)
+			{
+				if (info->cached_style[maps] != d_lightstylevalue[surf->styles[maps]])
+				{
+					changed = true;
+					break;
+				}
+			}
+			if (!changed)
+				continue;
+
+			WGPUWorld_BuildLightmapBlock (surf, info);
+			dirty[info->lightmap] = true;
+		}
+
+		for (layer = 0; layer < nitro_numlightmaps; layer++)
+		{
+			if (!dirty[layer])
+				continue;
+			Nitro_UploadLightmap (layer, nitro_lightmap_data[layer]);
+			WebPerf_CountUpload (NITRO_LIGHTMAP_SIZE * NITRO_LIGHTMAP_SIZE);
 		}
 	}
 
@@ -1055,10 +1104,6 @@ r_light.c's RecursiveLightPoint, kept here because the software renderer's
 copy is not compiled into this build.  It returns the same scalar intensity
 the software renderer feeds into a colormap row, so a model standing in a
 dark corner is exactly as dark as it is under the rasteriser.
-
-Light styles are frozen at the value R_NewMap seeds d_lightstylevalue with,
-so the sum below is static for a given map -- which is also why a flickering
-torch does not make the monster beside it flicker.  That gap is reported.
 ================
 */
 static int WGPUWorld_RecursiveLightPoint (mnode_t *node, const vec3_t start, const vec3_t end)
@@ -1256,7 +1301,7 @@ void WGPUWorld_ReportGaps (void)
 	Con_Printf ("WebGlideNitro: world, entities and particles (%d surfaces, %d lightmap pages)\n",
 			nitro_numsurfaces, nitro_numlightmaps);
 	Con_Printf ("  not drawn: shadows, model glows and fullbright skin pixels\n");
-	Con_Printf ("  not applied: animated light styles, world dynamic lights, fog\n");
+	Con_Printf ("  not applied: world dynamic lights, fog\n");
 	Con_Printf ("  approximated: model frames step rather than interpolate\n");
 	Con_Printf ("  approximated: liquids are opaque and unwarped\n");
 }
