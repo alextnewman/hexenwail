@@ -10,6 +10,21 @@ const nitroEntityRenderer = readFileSync(join(repoRoot, 'engine/h2shared/wgpu_en
 const worldRenderer = readFileSync(join(repoRoot, 'engine/h2shared/gl2_world.c'), 'utf8');
 const audioBackend = readFileSync(join(repoRoot, 'engine/h2shared/snd_web.c'), 'utf8');
 
+function functionBody(source, signature) {
+  const start = source.indexOf(signature);
+  assert.ok(start >= 0, `${signature} is present`);
+  const open = source.indexOf('{', start + signature.length);
+  assert.ok(open >= 0, `${signature} has a body`);
+
+  let depth = 1;
+  for (let i = open + 1; i < source.length; i += 1) {
+    if (source[i] === '{') depth += 1;
+    if (source[i] === '}') depth -= 1;
+    if (depth === 0) return source.slice(open + 1, i);
+  }
+  assert.fail(`${signature} has a complete body`);
+}
+
 test('WebGlide converts alias 16.16 skin coordinates to normalized UVs', () => {
   const sScale = aliasRenderer.match(
     /out->s\s*=\s*st->s\s*\*\s*\(1\.0f\s*\/\s*([0-9.]+)f\)\s*\*\s*iw\s*;/,
@@ -59,13 +74,8 @@ test('WebGlide streams dynamic geometry through non-overlapping buffer ranges', 
 });
 
 test('GPU renderers publish player light levels before view-model draw guards', () => {
-  const webglViewModel = webglRenderer.match(
-    /static void GL2_DrawViewModel \(void\)([\s\S]*?)\n\}/,
-  )?.[1];
-  const nitroViewModel = nitroEntityRenderer.match(
-    /void WGPUEntity_DrawViewModel \(void\)([\s\S]*?)\n\}/,
-  )?.[1];
-  assert.ok(webglViewModel && nitroViewModel, 'both view-model functions are present');
+  const webglViewModel = functionBody(webglRenderer, 'static void GL2_DrawViewModel (void)');
+  const nitroViewModel = functionBody(nitroEntityRenderer, 'void WGPUEntity_DrawViewModel (void)');
 
   for (const viewModel of [webglViewModel, nitroViewModel]) {
     const lightLevel = viewModel.indexOf('cl.light_level =');
