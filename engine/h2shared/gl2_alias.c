@@ -589,6 +589,16 @@ static void GL2_SetupEntityLighting (entity_t *entity)
 	}
 }
 
+int GL2_ViewModelLightLevel (entity_t *entity)
+{
+	GL2_SetupEntityLighting (entity);
+	if (gl2_ambientlight < 0.0f)
+		return 0;
+	if (gl2_ambientlight > 255.0f)
+		return 255;
+	return (int)gl2_ambientlight;
+}
+
 /*
 ================
 GL2_ApplyAliasLightFloor

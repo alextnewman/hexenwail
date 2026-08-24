@@ -5,6 +5,8 @@ import { join } from 'node:path';
 
 const repoRoot = process.cwd();
 const aliasRenderer = readFileSync(join(repoRoot, 'engine/h2shared/gl2_alias.c'), 'utf8');
+const webglRenderer = readFileSync(join(repoRoot, 'engine/hexen2/r_webgl2.c'), 'utf8');
+const nitroEntityRenderer = readFileSync(join(repoRoot, 'engine/h2shared/wgpu_entity.c'), 'utf8');
 const worldRenderer = readFileSync(join(repoRoot, 'engine/h2shared/gl2_world.c'), 'utf8');
 const audioBackend = readFileSync(join(repoRoot, 'engine/h2shared/snd_web.c'), 'utf8');
 
@@ -54,4 +56,21 @@ test('WebGlide streams dynamic geometry through non-overlapping buffer ranges', 
     /glBufferSubData \(GL_ARRAY_BUFFER,\s*\n\s*\(GLintptr\)gl2_model_vbo_offset/);
   assert.match(aliasRenderer,
     /glDrawArrays \(GL_TRIANGLES, gl2_model_vbo_offset, gl2_batch_count\)/);
+});
+
+test('GPU renderers publish player light levels before view-model draw guards', () => {
+  const webglViewModel = webglRenderer.match(
+    /static void GL2_DrawViewModel \(void\)([\s\S]*?)\n\}/,
+  )?.[1];
+  const nitroViewModel = nitroEntityRenderer.match(
+    /void WGPUEntity_DrawViewModel \(void\)([\s\S]*?)\n\}/,
+  )?.[1];
+  assert.ok(webglViewModel && nitroViewModel, 'both view-model functions are present');
+
+  for (const viewModel of [webglViewModel, nitroViewModel]) {
+    const lightLevel = viewModel.indexOf('cl.light_level =');
+    const drawGuard = viewModel.indexOf('cl.v.health <= 0');
+    assert.ok(lightLevel >= 0, 'player light level is published');
+    assert.ok(lightLevel < drawGuard, 'light level is published before optional drawing exits');
+  }
 });

@@ -524,6 +524,16 @@ static void WGPUEntity_ApplyLightFloor (void)
 		nitro_shadelight = LIGHT_MIN;
 }
 
+static int WGPUEntity_ViewModelLightLevel (entity_t *entity)
+{
+	WGPUEntity_SetupLighting (entity);
+	if (nitro_ambientlight < 0.0f)
+		return 0;
+	if (nitro_ambientlight > 255.0f)
+		return 255;
+	return (int)nitro_ambientlight;
+}
+
 /*
 =============================================================================
 
@@ -1129,6 +1139,7 @@ void WGPUEntity_DrawViewModel (void)
 
 	if (!entity->model)
 		return;
+	cl.light_level = WGPUEntity_ViewModelLightLevel (entity);
 	if (cl.v.health <= 0 || chase_active.integer || !r_drawviewmodel.integer ||
 	    !r_drawentities.integer || scr_viewsize.integer >= 140)
 		return;

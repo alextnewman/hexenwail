@@ -523,6 +523,7 @@ static void GL2_DrawViewModel (void)
 
 	if (!entity->model)
 		return;
+	cl.light_level = GL2_ViewModelLightLevel (entity);
 	if (cl.v.health <= 0 || chase_active.integer || !r_drawviewmodel.integer ||
 	    !r_drawentities.integer || scr_viewsize.integer >= 140)
 		return;
