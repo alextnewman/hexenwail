@@ -254,6 +254,20 @@ the view weapon trilinearly sample that field; active dynamic lights are folded
 into the same sample, so a torch changes both brightness and direction rather
 than merely raising a model's flat ambient term.
 
+Interpolation is BSP-aware: a probe contributes only when it shares the
+receiver's convex leaf or the segment between them remains outside solid map
+contents. Dynamic lights use that same visibility test for world lightmaps,
+actors and the view weapon, and back-facing surfaces terminate authored-light
+traces instead of allowing a sample from the far side of a wall. This keeps a
+closed wall authoritative across every kind of receiver rather than correcting
+leaks separately in each draw path.
+
+The volume's direction chooses the lit side of an alias model while the sampled
+ambient supplies the authored software-style shade range. This preserves
+pronounced silhouettes instead of weakening them in proportion to the coarse
+probe gradient. The view weapon receives the same directional range, including
+its existing minimum readability floor.
+
 The old projected depth/stencil silhouette is deliberately suppressed whenever
 the shared volume is enabled. It describes neither the authored ambient field
 nor a real emitter and would place a second, contradictory lighting composition
