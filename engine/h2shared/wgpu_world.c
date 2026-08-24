@@ -100,10 +100,67 @@ static int		nitro_entity_count;
 static byte	*nitro_lightmap_data[NITRO_MAX_LIGHTMAPS];
 static short	nitro_lightmap_allocated[NITRO_MAX_LIGHTMAPS][NITRO_LIGHTMAP_SIZE];
 static int	nitro_numlightmaps;
+static byte	*nitro_litdata;
+static qboolean	nitro_lit_loaded;
+static int	nitro_cached_coloredlight;
 
 static qboolean	nitro_world_ready;
 static qboolean	nitro_reported;
 static int	nitro_dlightframecount;
+
+static void WGPUWorld_LoadLitFile (qmodel_t *world)
+{
+	char		litname[MAX_QPATH];
+	unsigned int	path_id = 0;
+	byte		*data;
+	int		version;
+
+	nitro_litdata = NULL;
+	nitro_lit_loaded = false;
+	if (!world->lightdata)
+		return;
+
+	COM_StripExtension (world->name, litname, sizeof(litname));
+	q_strlcat (litname, ".lit", sizeof(litname));
+	data = (byte *) FS_LoadHunkFile (litname, &path_id);
+	if (!data)
+		return;
+	if (path_id < world->path_id)
+	{
+		Con_DPrintf ("WebGlideNitro: ignoring %s from a lower priority gamedir\n",
+				litname);
+		return;
+	}
+	if (data[0] != 'Q' || data[1] != 'L' || data[2] != 'I' || data[3] != 'T')
+	{
+		Con_Printf ("WebGlideNitro: %s is not a .lit file\n", litname);
+		return;
+	}
+	version = LittleLong (((int *)data)[1]);
+	if (version != 1)
+	{
+		Con_Printf ("WebGlideNitro: %s is .lit version %d, expected 1\n",
+				litname, version);
+		return;
+	}
+
+	nitro_litdata = data + 8;
+	nitro_lit_loaded = true;
+	Con_Printf ("WebGlideNitro: coloured lighting from %s\n", litname);
+}
+
+static const byte *WGPUWorld_SurfaceSamples (const msurface_t *surf)
+{
+	ptrdiff_t	offset;
+
+	if (!gl_coloredlight.integer || !nitro_lit_loaded || !surf->samples ||
+	    !cl.worldmodel->lightdata)
+		return NULL;
+	offset = surf->samples - cl.worldmodel->lightdata;
+	if (offset < 0)
+		return NULL;
+	return nitro_litdata + offset * 3;
+}
 
 static qboolean WGPUWorld_RecursiveLineVisible (mnode_t *node,
 						const vec3_t start,
@@ -244,9 +301,9 @@ static qboolean WGPUWorld_SurfacePoint (const msurface_t *surf, float s, float t
 ================
 WGPUWorld_BuildLightmapBlock
 
-r_surf.c's arithmetic.  Values accumulate in 8.8 fixed
-point exactly as the software renderer's blocklights do, then collapse to
-the one byte the shader turns back into a colormap row.
+r_surf.c's arithmetic. Values accumulate in 8.8 fixed point exactly as the
+software renderer's blocklights do. Alpha retains that scalar intensity while
+RGB carries luminance-normalised chroma for the shader's final palette lookup.
 ================
 */
 static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *info)
@@ -256,6 +313,7 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 	int		size = smax * tmax;
 	int		i, s, maps;
 	const byte	*samples = surf->samples;
+	const byte	*colored = WGPUWorld_SurfaceSamples (surf);
 	byte		*dest;
 	static int	blocklights[NITRO_LIGHTMAP_SIZE * NITRO_LIGHTMAP_SIZE * 4];
 
@@ -301,12 +359,23 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 			{
 				int	add = samples[i] * scale;
 
-				blocklights[i * 4 + 0] += add;
-				blocklights[i * 4 + 1] += add;
-				blocklights[i * 4 + 2] += add;
+				if (colored)
+				{
+					blocklights[i * 4 + 0] += colored[i * 3 + 0] * scale;
+					blocklights[i * 4 + 1] += colored[i * 3 + 1] * scale;
+					blocklights[i * 4 + 2] += colored[i * 3 + 2] * scale;
+				}
+				else
+				{
+					blocklights[i * 4 + 0] += add;
+					blocklights[i * 4 + 1] += add;
+					blocklights[i * 4 + 2] += add;
+				}
 				blocklights[i * 4 + 3] += add;
 			}
 			samples += size;
+			if (colored)
+				colored += (size_t)size * 3;
 		}
 
 		if (surf->dlightframe == nitro_dlightframecount && r_dynamic.integer)
@@ -359,7 +428,8 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 				color[2] = light->color[2];
 				luminance = color[0] * 0.2126f + color[1] * 0.7152f +
 					color[2] * 0.0722f;
-				if (light->dark || luminance <= 0.001f)
+				if (!gl_coloredlight.integer || light->dark ||
+				    luminance <= 0.001f)
 					color[0] = color[1] = color[2] = 1.0f;
 				else
 					VectorScale (color, 1.0f / luminance, color);
@@ -426,18 +496,21 @@ page-granular leaves rectangle uploads to target-device measurement.
 void WGPUWorld_UpdateLightstyles (void)
 {
 	qboolean	dirty[NITRO_MAX_LIGHTMAPS];
+	qboolean	colored_changed;
 	int		surfnum, numsurfaces, maps, layer;
 
 	if (!nitro_world_ready || !cl.worldmodel)
 		return;
 
 	numsurfaces = q_min(nitro_numsurfaces, cl.worldmodel->numsurfaces);
+	colored_changed = nitro_cached_coloredlight != gl_coloredlight.integer;
+	nitro_cached_coloredlight = gl_coloredlight.integer;
 	memset (dirty, 0, sizeof(dirty));
 	for (surfnum = 0; surfnum < numsurfaces; surfnum++)
 	{
 		msurface_t	*surf = &cl.worldmodel->surfaces[surfnum];
 		nitrosurf_t	*info = &nitro_surfaces[surfnum];
-		qboolean	changed = false;
+		qboolean	changed = colored_changed;
 
 		if (info->lightmap < 0)
 			continue;
@@ -1377,7 +1450,7 @@ dark corner is exactly as dark as it is under the rasteriser.
 ================
 */
 static int WGPUWorld_RecursiveLightPoint (mnode_t *node, const vec3_t start,
-					const vec3_t end, vec3_t lightspot)
+					const vec3_t end, vec3_t lightspot, vec3_t color)
 {
 	float		front, back, frac;
 	int		side, i, r, maps;
@@ -1413,7 +1486,8 @@ loc0:
 	mid[1] = start[1] + (end[1] - start[1]) * frac;
 	mid[2] = start[2] + (end[2] - start[2]) * frac;
 
-	r = WGPUWorld_RecursiveLightPoint (node->children[side], start, mid, lightspot);
+	r = WGPUWorld_RecursiveLightPoint (node->children[side], start, mid,
+					 lightspot, color);
 	if (r >= 0)
 		return r;
 
@@ -1422,6 +1496,7 @@ loc0:
 	{
 		const mtexinfo_t	*tex;
 		const byte		*lightmap;
+		const byte		*colored;
 		int			s, t, ds, dt;
 
 		if (surf->flags & SURF_DRAWTILED)
@@ -1441,7 +1516,11 @@ loc0:
 		if (lightspot)
 			VectorCopy (mid, lightspot);
 		if (!surf->samples)
+		{
+			if (color)
+				VectorClear (color);
 			return 0;
+		}
 		{
 			vec3_t	ray;
 			float	facing;
@@ -1451,33 +1530,71 @@ loc0:
 			if (surf->flags & SURF_PLANEBACK)
 				facing = -facing;
 			if (facing >= 0.0f)
+			{
+				if (color)
+					VectorClear (color);
 				return 0;
+			}
 		}
 
 		ds >>= 4;
 		dt >>= 4;
 		lightmap = surf->samples + dt * ((surf->extents[0] >> 4) + 1) + ds;
+		colored = WGPUWorld_SurfaceSamples (surf);
+		if (colored)
+			colored += (dt * ((surf->extents[0] >> 4) + 1) + ds) * 3;
 		r = 0;
+		if (color)
+			VectorClear (color);
 		for (maps = 0; maps < MAXLIGHTMAPS && surf->styles[maps] != 255; maps++)
 		{
-			r += *lightmap * d_lightstylevalue[surf->styles[maps]];
+			int	scale = d_lightstylevalue[surf->styles[maps]];
+
+			r += *lightmap * scale;
+			if (color)
+			{
+				if (colored)
+				VectorMA (color, (float)scale, colored, color);
+				else
+				{
+				color[0] += *lightmap * scale;
+				color[1] += *lightmap * scale;
+				color[2] += *lightmap * scale;
+				}
+			}
 			lightmap += ((surf->extents[0] >> 4) + 1) *
 					((surf->extents[1] >> 4) + 1);
+			if (colored)
+				colored += ((surf->extents[0] >> 4) + 1) *
+					((surf->extents[1] >> 4) + 1) * 3;
 		}
+		if (color)
+			VectorScale (color, 1.0f / 256.0f, color);
 		return r >> 8;
 	}
 
-	return WGPUWorld_RecursiveLightPoint (node->children[!side], mid, end, lightspot);
+	return WGPUWorld_RecursiveLightPoint (node->children[!side], mid, end,
+					     lightspot, color);
 }
 
 int WGPUWorld_TraceLight (const vec3_t start, const vec3_t end, vec3_t lightspot)
 {
 	if (!cl.worldmodel || !cl.worldmodel->nodes)
 		return -1;
-	return WGPUWorld_RecursiveLightPoint (cl.worldmodel->nodes, start, end, lightspot);
+	return WGPUWorld_RecursiveLightPoint (cl.worldmodel->nodes, start, end,
+					     lightspot, NULL);
 }
 
-int WGPUWorld_LightPoint (const vec3_t point, vec3_t lightspot)
+int WGPUWorld_TraceLightColor (const vec3_t start, const vec3_t end,
+				vec3_t lightspot, vec3_t color)
+{
+	if (!cl.worldmodel || !cl.worldmodel->nodes)
+		return -1;
+	return WGPUWorld_RecursiveLightPoint (cl.worldmodel->nodes, start, end,
+					     lightspot, color);
+}
+
+int WGPUWorld_LightPointColor (const vec3_t point, vec3_t lightspot, vec3_t color)
 {
 	vec3_t	start, end;
 	int	r;
@@ -1490,14 +1607,31 @@ int WGPUWorld_LightPoint (const vec3_t point, vec3_t lightspot)
 	end[1] = point[1];
 	end[2] = point[2] - 2048;
 
-	r = WGPUWorld_TraceLight (start, end, lightspot);
+	r = WGPUWorld_TraceLightColor (start, end, lightspot, color);
 	if (!cl.worldmodel->lightdata)
+	{
+		if (color)
+			color[0] = color[1] = color[2] = 255.0f;
 		return 255;
+	}
 	if (r < 0)
+	{
 		r = 0;
+		if (color)
+			VectorClear (color);
+	}
 	if (r < (int)r_ambient.value)
+	{
 		r = (int)r_ambient.value;
+		if (color)
+			color[0] = color[1] = color[2] = (float)r;
+	}
 	return r;
+}
+
+int WGPUWorld_LightPoint (const vec3_t point, vec3_t lightspot)
+{
+	return WGPUWorld_LightPointColor (point, lightspot, NULL);
 }
 
 qboolean WGPUWorld_Ready (void)
@@ -1557,6 +1691,9 @@ void WGPUWorld_Shutdown (void)
 	nitro_entity_count = 0;
 	nitro_world_ready = false;
 	nitro_dlightframecount = 0;
+	nitro_litdata = NULL;
+	nitro_lit_loaded = false;
+	nitro_cached_coloredlight = 0;
 }
 
 void WGPUWorld_NewMap (void)
@@ -1574,6 +1711,8 @@ void WGPUWorld_NewMap (void)
 	if (!nitro_surfaces)
 		Sys_Error ("WebGlideNitro: out of memory for %d surfaces", nitro_numsurfaces);
 
+	WGPUWorld_LoadLitFile (world);
+	nitro_cached_coloredlight = gl_coloredlight.integer;
 	WGPUWorld_LoadTextures (world);
 	WGPUWorld_BuildBuffers (world);
 	WGPULightVol_NewMap ();

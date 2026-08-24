@@ -460,8 +460,9 @@ WGPUEntity_SetupLighting
 
 The Hexen II model light styles come first -- they override the world
 outright -- then the sampled world light, then every dynamic light in range.
-The result is a scalar intensity, not a colour, because the colormap row it
-selects is what the software renderer would have selected.
+The scalar intensity still selects exactly the colormap row the software
+renderer would have selected; a separate luminance-normalised colour carries
+authored chroma to the final palette quantizer.
 ================
 */
 static void WGPUEntity_SetupLighting (entity_t *entity)

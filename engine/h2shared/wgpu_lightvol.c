@@ -163,7 +163,7 @@ static qboolean WGPULightVol_Resolve (int x, int y, int z)
 		{ 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 }
 	};
 	wgpulightcell_t	*cell;
-	vec3_t		point, end, direction;
+	vec3_t		point, end, direction, color;
 	float		samples[6], sum, length;
 	int		index, axis, i;
 
@@ -218,7 +218,15 @@ static qboolean WGPULightVol_Resolve (int x, int y, int z)
 	for (i = 0; i < 3; i++)
 		cell->direction[i] = (byte)CLAMP(0,
 			(int)((direction[i] * 0.5f + 0.5f) * 255.0f + 0.5f), 255);
-	cell->ambient = (byte)CLAMP(0, WGPUWorld_LightPoint (point, NULL), 255);
+	cell->ambient = (byte)CLAMP(0,
+		WGPUWorld_LightPointColor (point, NULL, color), 255);
+	if (cell->ambient > 0)
+		VectorScale (color, 1.0f / cell->ambient, color);
+	else
+		color[0] = color[1] = color[2] = 1.0f;
+	for (i = 0; i < 3; i++)
+		cell->color[i] = (byte)CLAMP(0, (int)(color[i] * 64.0f + 0.5f), 255);
+	cell->pad = 0;
 	lightvol_valid[index] = 1;
 	return true;
 }
@@ -263,7 +271,7 @@ void WGPULightVol_ApplyDynamic (const vec3_t point, wgpulightsample_t *sample)
 				VectorCopy (light->color, color);
 				luminance = color[0] * 0.2126f + color[1] * 0.7152f +
 					color[2] * 0.0722f;
-				if (luminance <= 0.001f)
+				if (!gl_coloredlight.integer || luminance <= 0.001f)
 					color[0] = color[1] = color[2] = 1.0f;
 				else
 					VectorScale (color, 1.0f / luminance, color);
@@ -290,7 +298,7 @@ void WGPULightVol_ApplyDynamic (const vec3_t point, wgpulightsample_t *sample)
 
 qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample)
 {
-	vec3_t	grid, direction, sample_point;
+	vec3_t	grid, direction, sample_point, color;
 	mleaf_t	*point_leaf;
 	float	ambient, weight, weight_sum;
 	int	base[3], x, y, z, i;
@@ -312,6 +320,7 @@ qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample)
 	ambient = 0;
 	weight_sum = 0;
 	VectorClear (direction);
+	VectorClear (color);
 	VectorCopy (point, sample_point);
 	point_leaf = Mod_PointInLeaf (sample_point, cl.worldmodel);
 	for (z = 0; z < 2; z++)
@@ -342,7 +351,12 @@ qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample)
 		weight_sum += weight;
 		ambient += cell->ambient * weight;
 		for (i = 0; i < 3; i++)
+		{
 			cell_direction[i] = cell->direction[i] * (2.0f / 255.0f) - 1.0f;
+			color[i] += weight * cell->ambient *
+				(gl_coloredlight.integer ? cell->color[i] * (1.0f / 64.0f) :
+				 1.0f);
+		}
 		VectorMA (direction, weight * cell->ambient, cell_direction, direction);
 		if (!lightvol_used[index] &&
 		    lightvol_used_count < NITRO_LIGHTVOL_USED_MAX)
@@ -355,9 +369,7 @@ qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample)
 	if (weight_sum <= 0.001f)
 		return false;
 	sample->ambient = ambient / weight_sum;
-	sample->color[0] = sample->ambient;
-	sample->color[1] = sample->ambient;
-	sample->color[2] = sample->ambient;
+	VectorScale (color, 1.0f / weight_sum, sample->color);
 	VectorScale (direction, 1.0f / weight_sum, direction);
 	sample->shade = VectorLength (direction);
 	if (sample->shade > 0.02f)

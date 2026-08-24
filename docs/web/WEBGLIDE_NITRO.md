@@ -6,7 +6,8 @@ explicitly *not* its performance baseline (see "How Nitro is measured").
 The renderer now exists as a real build configuration
 (`-DWEB_RENDERER=webgpu`, macro `WEBGPUQUAKE`, bundle `hexenwail-nitro`) that
 draws the world, its brush entities, alias models, sprites, particles and the
-view weapon as batched engine polygons through native WebGPU. World dynamic lights,
+view weapon as batched engine polygons through native WebGPU. Palette-quantized
+`.lit` files and coloured world/actor dynamic lights, authored light styles,
 fog, liquid warp and alpha, fullbright skin pixels, authored glows and projected
 model shadows are implemented. See "Where it stops" below.
 
@@ -249,10 +250,13 @@ visual no-op rather than a black item.
 **One authored atmosphere feeds every solid actor.** Nitro builds a bounded,
 lazy light volume over the BSP. A cell resolves six axis traces through the
 same authored samples and animated style values used by world lightmaps,
-producing an ambient value and a dominant incoming direction. Alias models and
+producing an ambient value, a palette-light colour and a dominant incoming
+direction. Alias models and
 the view weapon trilinearly sample that field; active dynamic lights are folded
 into the same sample, so a torch changes both brightness and direction rather
-than merely raising a model's flat ambient term.
+than merely raising a model's flat ambient term. Their engine-authored RGB
+colour is luminance-normalised into that sample as well, so the wall, actor and
+view weapon receive the same flickering hue.
 
 Interpolation is BSP-aware: a probe contributes only when it shares the
 receiver's convex leaf or the segment between them remains outside solid map
@@ -307,9 +311,20 @@ palette indices. The world shader reconstructs the software rasteriser's
 lighting exactly: an 8-bit lightmap sample `L` selects colormap row
 `clamp((255 - L) >> 2, 0, 63)`, that row is indexed by the texel to get a
 shaded palette index, and only then does the palette produce RGB. Nothing is
-filtered in RGB space, so the result stays inside the authored palette by
-construction — the same contract as the software renderer, which is the
-specification here.
+filtered in RGB space before that lookup, so the neutral result stays inside
+the authored palette by construction — the same contract as the software
+renderer, which is the specification here.
+
+Coloured lighting does not weaken that contract. World lightmaps are
+`rgba8unorm`: alpha retains the software renderer's scalar intensity while RGB
+contains only luminance-normalised chroma from standard `.lit` samples and
+`cl_dlights[].color`. Aliases carry the same chroma from the shared light
+volume. After the ordinary colormap lookup, Nitro applies that chroma and
+snaps the result through a precomputed 32x32x32 nearest-palette cube. White
+lights therefore take the exact old colormap path, mixed coloured lights remain
+bounded, and every coloured result is still one of the game's 256 palette
+entries. `gl_coloredlight 0` restores neutral lighting without disabling the
+underlying scalar light or its authored flicker timing.
 
 ### Where it stops
 
@@ -390,9 +405,10 @@ content rather than disguising omissions:
    history retains fading saturated light rather than uniformly blurring motion.
    Target-iPad Nitro-before/Nitro-after capture and aesthetic review remain the
    acceptance gate.
-3. **Deepen palette lighting and atmosphere:** quantized coloured light,
-   fog bands, underwater shifts, localized haze and lightning expressed through
-   palette/colormap operations.
+3. **Deepen palette lighting and atmosphere (in progress):** quantized coloured
+   `.lit` and dynamic light is delivered across world surfaces, actors and the
+   view weapon. Fog bands, underwater shifts, localized haze and lightning
+   remain, expressed through palette/colormap operations.
 4. **Give liquids supernatural material identity:** distinct water, slime, lava
    and portal movement, translucency and retained-frame refraction without
    physically based material simulation.

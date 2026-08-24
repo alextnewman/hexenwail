@@ -46,7 +46,7 @@ const HexenwailNitroLibrary = {
     WORLD_STRIDE: 32,
     UI_STRIDE: 20,
     PARTICLE_STRIDE: 20,
-    MODEL_STRIDE: 28,
+    MODEL_STRIDE: 32,
 
     /* Per-entity uniform block, padded to WebGPU's minimum dynamic uniform
      * buffer offset alignment so the whole arena uploads in one write. */
@@ -105,6 +105,7 @@ struct Entity {
 @group(0) @binding(2) var colormapTexture : texture_2d<u32>;
 @group(0) @binding(3) var lightmapTexture : texture_2d_array<f32>;
 @group(0) @binding(4) var lightmapSampler : sampler;
+@group(0) @binding(6) var paletteLutTexture : texture_2d<u32>;
 
 @group(1) @binding(0) var diffuseTexture : texture_2d<u32>;
 @group(1) @binding(1) var<uniform> texParams : TexParams;
@@ -116,6 +117,13 @@ struct VertexOutput {
   @location(0) uv : vec2f,
   @location(1) lightmap : vec3f,
   @location(2) fogDistance : f32,
+}
+
+fn paletteQuantize(rgb : vec3f) -> vec3f {
+  let quantized = vec3i(clamp(round(rgb * 31.0), vec3f(0.0), vec3f(31.0)));
+  let index = textureLoad(paletteLutTexture,
+      vec2i(quantized.x + quantized.z * 32, quantized.y), 0).r;
+  return textureLoad(paletteTexture, vec2i(i32(index), 0), 0).rgb;
 }
 
 @vertex
@@ -155,19 +163,26 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
    * (255 * 256 - blocklight) >> 2, so the row an 8-bit lightmap sample
    * selects is (255 - sample) >> 2, i.e. (1 - intensity) * 63.75. */
   var row = 0;
+  var lightColor = vec3f(1.0);
   if (frame.fullbright == 0.0) {
     if (entity.light >= 0.0) {
       /* A Hexen II model light style: one flat row for the whole
        * submodel, which is what makes an MLS_ABSLIGHT lift uniform. */
       row = clamp(i32(floor((1.0 - entity.light) * 63.75)), 0, 63);
     } else if (input.lightmap.z >= 0.0) {
-      let light = textureSampleLevel(lightmapTexture, lightmapSampler,
-          input.lightmap.xy, i32(input.lightmap.z), 0.0).r;
-      row = clamp(i32(floor((1.0 - light) * 63.75)), 0, 63);
+      let lightmap = textureSampleLevel(lightmapTexture, lightmapSampler,
+          input.lightmap.xy, i32(input.lightmap.z), 0.0);
+      row = clamp(i32(floor((1.0 - lightmap.a) * 63.75)), 0, 63);
+      if (lightmap.a > 0.001) {
+        lightColor = lightmap.rgb / lightmap.a;
+      }
     }
   }
   let shaded = textureLoad(colormapTexture, vec2i(i32(index), row), 0).r;
-  let rgb = textureLoad(paletteTexture, vec2i(i32(shaded), 0), 0).rgb;
+  var rgb = textureLoad(paletteTexture, vec2i(i32(shaded), 0), 0).rgb;
+  if (length(lightColor - vec3f(1.0)) > 0.01) {
+    rgb = paletteQuantize(rgb * lightColor);
+  }
   let fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
       input.fogDistance * input.fogDistance), 0.0, 1.0);
   return vec4f(mix(rgb, frame.fogColor, fog), entity.alpha);
@@ -274,6 +289,7 @@ struct TexParams {
 @group(0) @binding(1) var paletteTexture : texture_2d<f32>;
 @group(0) @binding(2) var colormapTexture : texture_2d<u32>;
 @group(0) @binding(5) var tintTexture : texture_2d<u32>;
+@group(0) @binding(6) var paletteLutTexture : texture_2d<u32>;
 
 @group(1) @binding(0) var diffuseTexture : texture_2d<u32>;
 @group(1) @binding(1) var<uniform> texParams : TexParams;
@@ -286,13 +302,22 @@ struct VertexOutput {
   @location(3) @interpolate(flat) tint : u32,
   @location(4) fogDistance : f32,
   @location(5) @interpolate(flat) fullbright : u32,
+  @location(6) @interpolate(flat) lightColor : vec3f,
+}
+
+fn paletteQuantize(rgb : vec3f) -> vec3f {
+  let quantized = vec3i(clamp(round(rgb * 31.0), vec3f(0.0), vec3f(31.0)));
+  let index = textureLoad(paletteLutTexture,
+      vec2i(quantized.x + quantized.z * 32, quantized.y), 0).r;
+  return textureLoad(paletteTexture, vec2i(i32(index), 0), 0).rgb;
 }
 
 @vertex
 fn vertexMain(@location(0) position : vec3f,
               @location(1) uv : vec2f,
               @location(2) light : f32,
-              @location(3) shade : vec4u) -> VertexOutput {
+              @location(3) shade : vec4u,
+              @location(4) lightColor : vec4u) -> VertexOutput {
   var output : VertexOutput;
   output.position = frame.mvp * vec4f(position, 1.0);
   output.uv = uv;
@@ -301,6 +326,7 @@ fn vertexMain(@location(0) position : vec3f,
   output.tint = shade.y;
   output.fogDistance = abs(output.position.w);
   output.fullbright = shade.z;
+  output.lightColor = vec3f(lightColor.xyz) * (1.0 / 64.0);
   return output;
 }
 
@@ -319,6 +345,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   }
 
   var shaded = index;
+  var receivesLight = false;
   /* A negative row is the unlit sentinel sprites use: d_sprite.c never
    * touches the colormap, so neither does this. */
   if (input.light >= 0.0 && frame.fullbright == 0.0 &&
@@ -326,12 +353,16 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         index >= 224u)) {
     let row = clamp(i32(input.light), 0, 63);
     shaded = textureLoad(colormapTexture, vec2i(i32(index), row), 0).r;
+    receivesLight = true;
   }
   if (input.tint != 0u) {
     shaded = textureLoad(tintTexture,
         vec2i(i32(shaded), i32(input.tint)), 0).r;
   }
-  let rgb = textureLoad(paletteTexture, vec2i(i32(shaded), 0), 0).rgb;
+  var rgb = textureLoad(paletteTexture, vec2i(i32(shaded), 0), 0).rgb;
+  if (receivesLight && length(input.lightColor - vec3f(1.0)) > 0.01) {
+    rgb = paletteQuantize(rgb * input.lightColor);
+  }
   let fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
       input.fogDistance * input.fogDistance), 0.0, 1.0);
   return vec4f(mix(rgb, frame.fogColor, fog), input.alpha);
@@ -655,6 +686,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           { binding: 3, resource: state.lightmapView },
           { binding: 4, resource: state.lightmapSampler },
           { binding: 5, resource: state.tintTexture.createView() },
+          { binding: 6, resource: state.paletteLutTexture.createView() },
         ],
       });
     },
@@ -769,6 +801,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           /* gfx/tinttab.lmp: 256 rows of index-to-index remap, one per
            * Hexen II colorshade.  Only the model pipelines read it. */
           { binding: 5, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: 'uint' } },
+          { binding: 6, visibility: GPUShaderStage.FRAGMENT,
             texture: { sampleType: 'uint' } },
         ],
       });
@@ -956,6 +990,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
             { shaderLocation: 1, offset: 12, format: 'float32x2' },
             { shaderLocation: 2, offset: 20, format: 'float32' },
             { shaderLocation: 3, offset: 24, format: 'uint8x4' },
+            { shaderLocation: 4, offset: 28, format: 'uint8x4' },
           ],
         }],
       };
@@ -1150,6 +1185,12 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         format: 'rgba8unorm',
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
       });
+      const paletteLutTexture = device.createTexture({
+        label: 'WebGlideNitro palette colour cube',
+        size: { width: 32 * 32, height: 32 },
+        format: 'r8uint',
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
       const colormapTexture = device.createTexture({
         label: 'WebGlideNitro colormap',
         size: { width: 256, height: 64 },
@@ -1177,7 +1218,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       const placeholderLightmap = device.createTexture({
         label: 'WebGlideNitro lightmap placeholder',
         size: { width: 1, height: 1, depthOrArrayLayers: 1 },
-        format: 'r8unorm',
+        format: 'rgba8unorm',
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
       });
       const lightmapSampler = device.createSampler({
@@ -1202,7 +1243,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         modelOpaquePipeline, modelAlphaPipeline, modelAddPipeline,
         modelGlowPipeline, modelShadowMaskPipeline, modelShadowPipeline,
         frameUniform, scanoutUniform, uiUniform, particleUniform,
-        paletteTexture, colormapTexture, tintTexture, lightmapSampler, sceneSampler,
+        paletteTexture, paletteLutTexture, colormapTexture, tintTexture,
+        lightmapSampler, sceneSampler,
         placeholderLightmap,
         lightmapTexture: null, lightmapView: placeholderLightmap.createView({
           dimension: '2d-array',
@@ -1277,6 +1319,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     state.uiUniform.destroy();
     state.particleUniform.destroy();
     state.paletteTexture.destroy();
+    state.paletteLutTexture.destroy();
     state.colormapTexture.destroy();
     state.tintTexture.destroy();
     Nitro.state = null;
@@ -1309,6 +1352,33 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     state.device.queue.writeTexture(
       { texture: state.paletteTexture }, rgba,
       { bytesPerRow: 256 * 4, rowsPerImage: 1 }, { width: 256, height: 1 });
+
+    const cube = new Uint8Array(32 * 32 * 32);
+    for (let blue = 0; blue < 32; ++blue) {
+      for (let green = 0; green < 32; ++green) {
+        for (let red = 0; red < 32; ++red) {
+          const targetRed = red * (255 / 31);
+          const targetGreen = green * (255 / 31);
+          const targetBlue = blue * (255 / 31);
+          let best = 0;
+          let bestDistance = Number.POSITIVE_INFINITY;
+          for (let i = 0; i < 256; ++i) {
+            const dr = palette[i * 3] - targetRed;
+            const dg = palette[i * 3 + 1] - targetGreen;
+            const db = palette[i * 3 + 2] - targetBlue;
+            const distance = dr * dr + dg * dg + db * db;
+            if (distance < bestDistance) {
+              best = i;
+              bestDistance = distance;
+            }
+          }
+          cube[green * 1024 + blue * 32 + red] = best;
+        }
+      }
+    }
+    state.device.queue.writeTexture(
+      { texture: state.paletteLutTexture }, cube,
+      { bytesPerRow: 1024, rowsPerImage: 32 }, { width: 1024, height: 32 });
   },
 
   Nitro_SetColormap__deps: ['$Nitro'],
@@ -1518,7 +1588,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           label: 'WebGlideNitro lightmap array',
           size: { width: lightmapSize, height: lightmapSize,
             depthOrArrayLayers: lightmapLayers },
-          format: 'r8unorm',
+          format: 'rgba8unorm',
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
         });
         state.lightmapView = state.lightmapTexture.createView({ dimension: '2d-array' });
@@ -1545,8 +1615,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     const size = state.world.lightmapSize;
     state.device.queue.writeTexture(
       { texture: state.lightmapTexture, origin: { x: 0, y: 0, z: layer } },
-      HEAPU8.subarray(texelPointer, texelPointer + size * size),
-      { bytesPerRow: size, rowsPerImage: size },
+      HEAPU8.subarray(texelPointer, texelPointer + size * size * 4),
+      { bytesPerRow: size * 4, rowsPerImage: size },
       { width: size, height: size, depthOrArrayLayers: 1 });
   },
 
