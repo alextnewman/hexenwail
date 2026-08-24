@@ -455,10 +455,9 @@ selects is what the software renderer would have selected.
 */
 static void WGPUEntity_SetupLighting (entity_t *entity)
 {
-	vec3_t	adjust, dist;
+	vec3_t	adjust;
 	wgpulightsample_t sample;
-	int	lnum, mls;
-	float	add;
+	int	mls;
 
 	nitro_lightdir[0] = -1.0f;
 	nitro_lightdir[1] = nitro_lightdir[2] = 0.0f;
@@ -495,31 +494,22 @@ static void WGPUEntity_SetupLighting (entity_t *entity)
 	}
 	else
 	{
-		nitro_ambientlight = nitro_shadelight =
-			(float) WGPUWorld_LightPoint (adjust, NULL);
-
-		if (r_dynamic.integer)
-		{
-			for (lnum = 0; lnum < MAX_DLIGHTS; lnum++)
-			{
-				const dlight_t	*light = &cl_dlights[lnum];
-
-				if (light->die < cl.time || !light->radius)
-					continue;
-				VectorSubtract (entity->origin, light->origin, dist);
-				add = light->radius - VectorLengthFast (dist);
-				if (add <= 0)
-					continue;
-				if (light->dark)
-					nitro_ambientlight -= add;
-				else
-					nitro_ambientlight += add;
-			}
-		}
+		sample.ambient = (float) WGPUWorld_LightPoint (adjust, NULL);
+		sample.shade = sample.ambient;
+		sample.direction[0] = -1.0f;
+		sample.direction[1] = sample.direction[2] = 0.0f;
+		WGPULightVol_ApplyDynamic (adjust, &sample);
+		nitro_ambientlight = sample.ambient;
+		nitro_shadelight = sample.shade;
+		VectorCopy (sample.direction, nitro_lightdir);
 	}
 
 	if (entity == &cl.viewent && nitro_ambientlight < VIEWMODEL_LIGHT_MIN)
+	{
 		nitro_ambientlight = VIEWMODEL_LIGHT_MIN;
+		if (nitro_shadelight < VIEWMODEL_LIGHT_MIN)
+			nitro_shadelight = VIEWMODEL_LIGHT_MIN;
+	}
 
 	if (nitro_ambientlight < 0.0f)
 		nitro_ambientlight = 0.0f;

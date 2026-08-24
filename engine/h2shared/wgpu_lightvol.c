@@ -223,7 +223,7 @@ static qboolean WGPULightVol_Resolve (int x, int y, int z)
 	return true;
 }
 
-static void WGPULightVol_Dynamic (const vec3_t point, wgpulightsample_t *sample)
+void WGPULightVol_ApplyDynamic (const vec3_t point, wgpulightsample_t *sample)
 {
 	vec3_t	weighted, delta;
 	float	static_shade;
@@ -245,6 +245,8 @@ static void WGPULightVol_Dynamic (const vec3_t point, wgpulightsample_t *sample)
 			add = light->radius - distance;
 			if (add <= 0)
 				continue;
+			if (!WGPUWorld_LineVisible (light->origin, point))
+				continue;
 			if (light->dark)
 			{
 				sample->ambient -= add;
@@ -252,7 +254,7 @@ static void WGPULightVol_Dynamic (const vec3_t point, wgpulightsample_t *sample)
 			}
 			sample->ambient += add;
 			if (distance > 0.001f)
-				VectorMA (weighted, add * 0.35f / distance, delta, weighted);
+				VectorMA (weighted, add / distance, delta, weighted);
 		}
 	}
 
@@ -269,7 +271,8 @@ static void WGPULightVol_Dynamic (const vec3_t point, wgpulightsample_t *sample)
 
 qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample)
 {
-	vec3_t	grid, direction;
+	vec3_t	grid, direction, sample_point;
+	mleaf_t	*point_leaf;
 	float	ambient, weight, weight_sum;
 	int	base[3], x, y, z, i;
 
@@ -290,18 +293,28 @@ qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample)
 	ambient = 0;
 	weight_sum = 0;
 	VectorClear (direction);
+	VectorCopy (point, sample_point);
+	point_leaf = Mod_PointInLeaf (sample_point, cl.worldmodel);
 	for (z = 0; z < 2; z++)
 	for (y = 0; y < 2; y++)
 	for (x = 0; x < 2; x++)
 	{
 		const wgpulightcell_t	*cell;
-		vec3_t			cell_direction;
+		vec3_t			cell_direction, cell_point;
 		int			index;
 
 		if (!WGPULightVol_Resolve (base[0] + x, base[1] + y, base[2] + z))
 			continue;
 		index = WGPULightVol_Index (base[0] + x, base[1] + y, base[2] + z);
 		if (lightvol_valid[index] == 2)
+			continue;
+		for (i = 0; i < 3; i++)
+			cell_point[i] = lightvol_mins[i] +
+				((i == 0 ? base[0] + x :
+				  (i == 1 ? base[1] + y : base[2] + z)) + 0.5f) *
+				lightvol_cellsize;
+		if (point_leaf != Mod_PointInLeaf (cell_point, cl.worldmodel) &&
+		    !WGPUWorld_LineVisible (point, cell_point))
 			continue;
 		cell = &lightvol_cells[index];
 		weight = (x ? grid[0] : 1.0f - grid[0]) *
@@ -325,9 +338,17 @@ qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample)
 	sample->ambient = ambient / weight_sum;
 	VectorScale (direction, 1.0f / weight_sum, direction);
 	sample->shade = VectorLength (direction);
-	if (sample->shade > 0.001f)
+	if (sample->shade > 0.02f)
+	{
 		VectorScale (direction, 1.0f / sample->shade, sample->direction);
-	WGPULightVol_Dynamic (point, sample);
+		sample->shade = sample->ambient;
+	}
+	else
+	{
+		sample->shade = 0.0f;
+		VectorClear (sample->direction);
+	}
+	WGPULightVol_ApplyDynamic (point, sample);
 	return true;
 }
 

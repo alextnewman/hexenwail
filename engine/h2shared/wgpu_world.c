@@ -105,6 +105,52 @@ static qboolean	nitro_world_ready;
 static qboolean	nitro_reported;
 static int	nitro_dlightframecount;
 
+static qboolean WGPUWorld_RecursiveLineVisible (mnode_t *node,
+						const vec3_t start,
+						const vec3_t end)
+{
+	float	front, back, frac;
+	int	side;
+	vec3_t	mid;
+
+	if (!node)
+		return false;
+	if (node->contents < 0)
+		return node->contents != CONTENTS_SOLID;
+
+	if (node->plane->type < 3)
+	{
+		front = start[node->plane->type] - node->plane->dist;
+		back = end[node->plane->type] - node->plane->dist;
+	}
+	else
+	{
+		front = DotProduct (start, node->plane->normal) - node->plane->dist;
+		back = DotProduct (end, node->plane->normal) - node->plane->dist;
+	}
+	if (front >= 0.0f && back >= 0.0f)
+		return WGPUWorld_RecursiveLineVisible (node->children[0], start, end);
+	if (front < 0.0f && back < 0.0f)
+		return WGPUWorld_RecursiveLineVisible (node->children[1], start, end);
+
+	side = front < 0.0f;
+	frac = front / (front - back);
+	frac = CLAMP(0.0f, frac, 1.0f);
+	mid[0] = start[0] + (end[0] - start[0]) * frac;
+	mid[1] = start[1] + (end[1] - start[1]) * frac;
+	mid[2] = start[2] + (end[2] - start[2]) * frac;
+	if (!WGPUWorld_RecursiveLineVisible (node->children[side], start, mid))
+		return false;
+	return WGPUWorld_RecursiveLineVisible (node->children[!side], mid, end);
+}
+
+qboolean WGPUWorld_LineVisible (const vec3_t start, const vec3_t end)
+{
+	if (!cl.worldmodel || !cl.worldmodel->nodes)
+		return true;
+	return WGPUWorld_RecursiveLineVisible (cl.worldmodel->nodes, start, end);
+}
+
 /*
 =============================================================================
 
@@ -170,6 +216,30 @@ static int WGPUWorld_AllocLightmapBlock (int w, int h, short *x, short *y)
 	return -1;
 }
 
+static qboolean WGPUWorld_SurfacePoint (const msurface_t *surf, float s, float t,
+					vec3_t point)
+{
+	const mtexinfo_t	*tex = surf->texinfo;
+	vec3_t		cross12, cross20, cross01;
+	float		rhs0, rhs1, rhs2, determinant;
+	int		i;
+
+	CrossProduct (tex->vecs[1], surf->plane->normal, cross12);
+	CrossProduct (surf->plane->normal, tex->vecs[0], cross20);
+	CrossProduct (tex->vecs[0], tex->vecs[1], cross01);
+	determinant = DotProduct (tex->vecs[0], cross12);
+	if (fabsf(determinant) < 0.000001f)
+		return false;
+
+	rhs0 = s - tex->vecs[0][3];
+	rhs1 = t - tex->vecs[1][3];
+	rhs2 = surf->plane->dist;
+	for (i = 0; i < 3; i++)
+		point[i] = (rhs0 * cross12[i] + rhs1 * cross20[i] +
+			    rhs2 * cross01[i]) / determinant;
+	return true;
+}
+
 /*
 ================
 WGPUWorld_BuildLightmapBlock
@@ -229,8 +299,8 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 			{
 				const dlight_t	*light = &cl_dlights[lnum];
 				const mtexinfo_t *tex = surf->texinfo;
-				vec3_t		impact, local;
-				float		dist, rad, minlight, sign;
+				vec3_t		impact, local, receiver;
+				float		dist, facing, rad, minlight, sign;
 				int		s, t, sd, td, j;
 
 				if (!(surf->dlightbits & (1u << lnum)))
@@ -238,6 +308,9 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 				rad = light->radius;
 				dist = DotProduct (light->origin, surf->plane->normal) -
 					surf->plane->dist;
+				facing = (surf->flags & SURF_PLANEBACK) ? -dist : dist;
+				if (facing <= 0.0f)
+					continue;
 				rad -= fabs (dist);
 				minlight = light->minlight;
 				if (rad < minlight)
@@ -249,6 +322,18 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 					surf->texturemins[0];
 				local[1] = DotProduct (impact, tex->vecs[1]) + tex->vecs[1][3] -
 					surf->texturemins[1];
+				if (!WGPUWorld_SurfacePoint (surf,
+					surf->texturemins[0] +
+						CLAMP(0.0f, local[0], (float)surf->extents[0]),
+					surf->texturemins[1] +
+						CLAMP(0.0f, local[1], (float)surf->extents[1]),
+					receiver))
+					VectorCopy (impact, receiver);
+				VectorMA (receiver,
+					  (surf->flags & SURF_PLANEBACK) ? -0.5f : 0.5f,
+					  surf->plane->normal, receiver);
+				if (!WGPUWorld_LineVisible (light->origin, receiver))
+					continue;
 				sign = light->dark ? -1.0f : 1.0f;
 
 				for (t = 0; t < info->tmax; t++)
@@ -1320,6 +1405,17 @@ loc0:
 			VectorCopy (mid, lightspot);
 		if (!surf->samples)
 			return 0;
+		{
+			vec3_t	ray;
+			float	facing;
+
+			VectorSubtract (end, start, ray);
+			facing = DotProduct (ray, surf->plane->normal);
+			if (surf->flags & SURF_PLANEBACK)
+				facing = -facing;
+			if (facing >= 0.0f)
+				return 0;
+		}
 
 		ds >>= 4;
 		dt >>= 4;

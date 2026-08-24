@@ -319,6 +319,7 @@ qboolean WGPUWorld_Ready (void);
 void WGPUWorld_ReportGaps (void);
 int  WGPUWorld_LightPoint (const vec3_t point, vec3_t lightspot);
 int  WGPUWorld_TraceLight (const vec3_t start, const vec3_t end, vec3_t lightspot);
+qboolean WGPUWorld_LineVisible (const vec3_t start, const vec3_t end);
 
 /*
 =============================================================================
@@ -346,6 +347,7 @@ void WGPULightVol_NewMap (void);
 void WGPULightVol_Shutdown (void);
 void WGPULightVol_BeginFrame (void);
 qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample);
+void WGPULightVol_ApplyDynamic (const vec3_t point, wgpulightsample_t *sample);
 qboolean WGPULightVol_Active (void);
 void WGPULightVol_Stats (int *cells, int *resolved, int *cellsize);
 
