@@ -718,6 +718,8 @@ static void WGPU_AnimateLight (void)
 		c = cl_lightstyle[i].map[0];
 		if (c == '1' || c == '2' || c == '3')
 		{
+			/* Hexen II uses the first character as an explicit 10/20/30 Hz
+			 * rate tag; only the remaining characters are light frames. */
 			if (cl_lightstyle[i].length == 1)
 			{
 				d_lightstylevalue[i] = 256;

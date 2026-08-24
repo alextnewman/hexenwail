@@ -252,13 +252,14 @@ step small and leaves rectangle uploads to target-device measurement.
 void WGPUWorld_UpdateLightstyles (void)
 {
 	qboolean	dirty[NITRO_MAX_LIGHTMAPS];
-	int		surfnum, maps, layer;
+	int		surfnum, numsurfaces, maps, layer;
 
 	if (!nitro_world_ready || !cl.worldmodel)
 		return;
 
+	numsurfaces = q_min(nitro_numsurfaces, cl.worldmodel->numsurfaces);
 	memset (dirty, 0, sizeof(dirty));
-	for (surfnum = 0; surfnum < nitro_numsurfaces; surfnum++)
+	for (surfnum = 0; surfnum < numsurfaces; surfnum++)
 	{
 		msurface_t	*surf = &cl.worldmodel->surfaces[surfnum];
 		nitrosurf_t	*info = &nitro_surfaces[surfnum];
