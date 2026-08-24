@@ -471,7 +471,9 @@ struct ScanParams {
   resolve : f32,
   tint : vec4f,
   persistence : f32,
-  pad : vec3f,
+  pad0 : f32,
+  pad1 : f32,
+  pad2 : f32,
 }
 
 @group(0) @binding(0) var sceneTexture : texture_2d<f32>;
