@@ -169,7 +169,10 @@ typedef struct
 	float		texcoord[2];	/* normalised skin coordinates */
 	float		light;		/* colormap row 0..63.75; <0 is unlit */
 	unsigned int	shade;		/* byte 0 alpha, byte 1 tint-table row */
+	unsigned int	lightcolor;	/* RGB light multiplier, packed as bytes */
 } wgpumodel_vertex_t;
+_Static_assert (sizeof(wgpumodel_vertex_t) == 32,
+		"wgpumodel_vertex_t must match the WebGPU vertex stride");
 
 /* One drawIndexed (world, brush entities) or one draw (2D, models). */
 typedef struct
@@ -324,7 +327,10 @@ void WGPUWorld_SubmitScene (wgpuscene_t *scene);
 qboolean WGPUWorld_Ready (void);
 void WGPUWorld_ReportGaps (void);
 int  WGPUWorld_LightPoint (const vec3_t point, vec3_t lightspot);
+int  WGPUWorld_LightPointColor (const vec3_t point, vec3_t lightspot, vec3_t color);
 int  WGPUWorld_TraceLight (const vec3_t start, const vec3_t end, vec3_t lightspot);
+int  WGPUWorld_TraceLightColor (const vec3_t start, const vec3_t end,
+			vec3_t lightspot, vec3_t color);
 qboolean WGPUWorld_LineVisible (const vec3_t start, const vec3_t end);
 
 /*
@@ -339,14 +345,17 @@ typedef struct
 {
 	byte	direction[3];	/* incoming light vector, encoded from [-1,1] */
 	byte	ambient;
+	byte	color[3];	/* RGB multiplier, encoded at 1.0 == 64 */
+	byte	pad;
 } wgpulightcell_t;
-_Static_assert (sizeof(wgpulightcell_t) == 4, "light cells must stay compact");
+_Static_assert (sizeof(wgpulightcell_t) == 8, "light cells must stay compact");
 
 typedef struct
 {
 	float	ambient;
 	float	shade;
 	vec3_t	direction;
+	vec3_t	color;		/* luminance-normalised dynamic-light colour */
 } wgpulightsample_t;
 
 void WGPULightVol_NewMap (void);

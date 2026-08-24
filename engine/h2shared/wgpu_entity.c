@@ -442,6 +442,17 @@ static int WGPUEntity_AliasSkin (entity_t *entity, const aliashdr_t *paliashdr,
 static float	nitro_ambientlight;
 static float	nitro_shadelight;
 static vec3_t	nitro_lightdir;
+static vec3_t	nitro_lightcolor;
+
+static unsigned int WGPUEntity_PackLightColor (void)
+{
+	unsigned int	r, g, b;
+
+	r = (unsigned int)CLAMP(0, (int)(nitro_lightcolor[0] * 64.0f + 0.5f), 255);
+	g = (unsigned int)CLAMP(0, (int)(nitro_lightcolor[1] * 64.0f + 0.5f), 255);
+	b = (unsigned int)CLAMP(0, (int)(nitro_lightcolor[2] * 64.0f + 0.5f), 255);
+	return r | (g << 8) | (b << 16) | (255u << 24);
+}
 
 /*
 ================
@@ -449,8 +460,9 @@ WGPUEntity_SetupLighting
 
 The Hexen II model light styles come first -- they override the world
 outright -- then the sampled world light, then every dynamic light in range.
-The result is a scalar intensity, not a colour, because the colormap row it
-selects is what the software renderer would have selected.
+The scalar intensity still selects exactly the colormap row the software
+renderer would have selected; a separate luminance-normalised colour carries
+authored chroma to the final palette quantizer.
 ================
 */
 static void WGPUEntity_SetupLighting (entity_t *entity)
@@ -461,6 +473,7 @@ static void WGPUEntity_SetupLighting (entity_t *entity)
 
 	nitro_lightdir[0] = -1.0f;
 	nitro_lightdir[1] = nitro_lightdir[2] = 0.0f;
+	nitro_lightcolor[0] = nitro_lightcolor[1] = nitro_lightcolor[2] = 1.0f;
 	mls = entity->drawflags & MLS_MASKIN;
 
 	if (entity->model && (entity->model->flags & EF_ROTATE))
@@ -491,17 +504,24 @@ static void WGPUEntity_SetupLighting (entity_t *entity)
 		nitro_ambientlight = sample.ambient;
 		nitro_shadelight = sample.shade;
 		VectorCopy (sample.direction, nitro_lightdir);
+		if (sample.ambient > 0.001f)
+			VectorScale (sample.color, 1.0f / sample.ambient, nitro_lightcolor);
 	}
 	else
 	{
 		sample.ambient = (float) WGPUWorld_LightPoint (adjust, NULL);
 		sample.shade = sample.ambient;
+		sample.color[0] = sample.ambient;
+		sample.color[1] = sample.ambient;
+		sample.color[2] = sample.ambient;
 		sample.direction[0] = -1.0f;
 		sample.direction[1] = sample.direction[2] = 0.0f;
 		WGPULightVol_ApplyDynamic (adjust, &sample);
 		nitro_ambientlight = sample.ambient;
 		nitro_shadelight = sample.shade;
 		VectorCopy (sample.direction, nitro_lightdir);
+		if (sample.ambient > 0.001f)
+			VectorScale (sample.color, 1.0f / sample.ambient, nitro_lightcolor);
 	}
 
 	if (entity == &cl.viewent && nitro_ambientlight < VIEWMODEL_LIGHT_MIN)
@@ -730,6 +750,7 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 	float			iw, ih;
 	unsigned int		flags = extraflags;
 	unsigned int		shade;
+	unsigned int		lightcolor;
 	int			i, pose, numtris, skin, alphabyte, pimp_flags;
 
 	if (!model)
@@ -788,6 +809,7 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 
 	WGPUEntity_SetupLighting (entity);
 	WGPUEntity_ApplyLightFloor ();
+	lightcolor = WGPUEntity_PackLightColor ();
 	pimp_flags = R_GetPimpFlags (entity, NULL);
 
 	/* colorshade is a row of gfx/tinttab.lmp.  R_AliasDrawModel remaps the
@@ -864,6 +886,7 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 			darkness = CLAMP(0.0f, darkness, 255.0f * VID_GRADES);
 			out->light = darkness * (1.0f / 256.0f);
 			out->shade = shade;
+			out->lightcolor = lightcolor;
 			out++;
 		}
 	}
@@ -926,6 +949,7 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 				out->texcoord[0] = out->texcoord[1] = 0.5f;
 				out->light = -1.0f;
 				out->shade = 96u << 24;
+				out->lightcolor = 0xff404040u;
 				out++;
 			}
 		}
@@ -1001,6 +1025,7 @@ static void WGPUEntity_DrawGlow (entity_t *entity)
 		out->texcoord[1] = corners[i][1] * 0.5f + 0.5f;
 		out->light = -1.0f;
 		out->shade = color;
+		out->lightcolor = 0xff404040u;
 		out++;
 	}
 	wgpu_frame_polys += 2;
@@ -1211,6 +1236,7 @@ static void WGPUEntity_DrawSpriteModel (entity_t *entity, unsigned int extraflag
 		out->texcoord[1] = t;
 		out->light = -1.0f;	/* unlit: no colormap, as d_sprite.c */
 		out->shade = shade;
+		out->lightcolor = 0xff404040u;
 		out++;
 	}
 
