@@ -61,6 +61,9 @@
 
 extern cvar_t	r_nitro_scenescale;	/* scene buffer scale, 0.25..2 */
 extern cvar_t	r_nitro_report;		/* print the slice's content gaps per map */
+extern cvar_t	r_nitro_dither;		/* mood-weighted ordered RGB565 dither */
+extern cvar_t	r_nitro_resolve;	/* restrained edge-aware 2x2 resolve */
+extern cvar_t	r_nitro_persistence;	/* coloured-light history, 0 disables */
 extern cvar_t	r_nitro_lightvol;	/* shared coarse world/entity irradiance */
 extern cvar_t	r_nitro_lightvol_cell;	/* map-space cell size */
 extern cvar_t	r_nitro_lightvol_budget; /* cells resolved per frame */
@@ -237,6 +240,9 @@ typedef struct
 	float	sky_time;
 	float	fog_color[3];
 	float	fog_density;
+	float	scan_dither;
+	float	scan_resolve;
+	float	scan_persistence;
 } wgpuscene_t;
 
 typedef struct

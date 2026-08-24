@@ -467,14 +467,17 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
 struct ScanParams {
   gamma : f32,
   contrast : f32,
-  pad0 : f32,
-  pad1 : f32,
+  dither : f32,
+  resolve : f32,
   tint : vec4f,
+  persistence : f32,
+  pad : vec3f,
 }
 
 @group(0) @binding(0) var sceneTexture : texture_2d<f32>;
 @group(0) @binding(1) var sceneSampler : sampler;
 @group(0) @binding(2) var<uniform> scan : ScanParams;
+@group(0) @binding(3) var historyTexture : texture_2d<f32>;
 
 struct VertexOutput {
   @builtin(position) position : vec4f,
@@ -493,10 +496,58 @@ fn vertexMain(@builtin(vertex_index) vertexIndex : u32) -> VertexOutput {
 
 @fragment
 fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
-  var rgb = textureSampleLevel(sceneTexture, sceneSampler, input.uv, 0.0).rgb;
+  let size = vec2i(textureDimensions(sceneTexture));
+  let texel = clamp(vec2i(input.uv * vec2f(size)), vec2i(0), size - vec2i(1));
+  let base = clamp(vec2i(floor(input.uv * vec2f(size) - vec2f(0.5))),
+                   vec2i(0), size - vec2i(1));
+  let p00 = textureLoad(sceneTexture, base, 0).rgb;
+  let p10 = textureLoad(sceneTexture,
+      min(base + vec2i(1, 0), size - vec2i(1)), 0).rgb;
+  let p01 = textureLoad(sceneTexture,
+      min(base + vec2i(0, 1), size - vec2i(1)), 0).rgb;
+  let p11 = textureLoad(sceneTexture,
+      min(base + vec2i(1, 1), size - vec2i(1)), 0).rgb;
+  let center = textureLoad(sceneTexture, texel, 0).rgb;
+  let average = (p00 + p10 + p01 + p11) * 0.25;
+  let low = min(min(p00, p10), min(p01, p11));
+  let high = max(max(p00, p10), max(p01, p11));
+  let localRange = max(max(high.r - low.r, high.g - low.g), high.b - low.b);
+  let luma = dot(center, vec3f(0.2126, 0.7152, 0.0722));
+  let edgeGuard = 1.0 - smoothstep(0.04, 0.16, localRange);
+  let darkness = 1.0 - smoothstep(0.25, 0.65, luma);
+  var rgb = mix(center, average,
+      scan.resolve * 0.22 * edgeGuard * (0.4 + darkness * 0.6));
+
+  let history = textureLoad(historyTexture, texel, 0).rgb;
+  let historyLuma = dot(history, vec3f(0.2126, 0.7152, 0.0722));
+  let historyChroma = max(max(history.r, history.g), history.b) -
+                      min(min(history.r, history.g), history.b);
+  let lightTrail = smoothstep(0.015, 0.20, historyLuma - luma) *
+                   smoothstep(0.08, 0.32, historyChroma) *
+                   (1.0 - smoothstep(0.65, 0.95, luma));
+  rgb = mix(rgb, max(rgb, history * 0.94), scan.persistence * lightTrail);
+
   rgb = mix(rgb, scan.tint.rgb, scan.tint.a);
   rgb = (rgb - vec3f(0.5)) * scan.contrast + vec3f(0.5);
   rgb = pow(max(rgb, vec3f(0.0)), vec3f(scan.gamma));
+
+  let bayer = array<f32, 16>(
+       0.0,  8.0,  2.0, 10.0,
+      12.0,  4.0, 14.0,  6.0,
+       3.0, 11.0,  1.0,  9.0,
+      15.0,  7.0, 13.0,  5.0);
+  let ditherIndex = (i32(input.position.y) & 3) * 4 +
+                    (i32(input.position.x) & 3);
+  let threshold = (bayer[ditherIndex] + 0.5) / 16.0;
+  let finalLuma = dot(rgb, vec3f(0.2126, 0.7152, 0.0722));
+  let nearBlack = 1.0 - smoothstep(0.08, 0.35, finalLuma);
+  let fogGradient = (1.0 - smoothstep(0.015, 0.10, localRange)) *
+                    smoothstep(0.08, 0.60, finalLuma) * 0.35;
+  let ditherWeight = scan.dither * max(nearBlack, fogGradient);
+  let levels = vec3f(31.0, 63.0, 31.0);
+  let rgb565 = floor(clamp(rgb, vec3f(0.0), vec3f(1.0)) * levels +
+                     vec3f(threshold)) / levels;
+  rgb = mix(rgb, rgb565, ditherWeight);
   return vec4f(clamp(rgb, vec3f(0.0), vec3f(1.0)), 1.0);
 }`,
 
@@ -634,11 +685,19 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       if (state.sceneWidth === width && state.sceneHeight === height) return;
       state.sceneColor?.destroy();
       state.sceneDepth?.destroy();
+      state.historyColor?.destroy();
       state.sceneColor = state.device.createTexture({
         label: 'WebGlideNitro scene colour',
         size: { width, height },
         format: 'rgba8unorm',
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING |
+               GPUTextureUsage.COPY_SRC,
+      });
+      state.historyColor = state.device.createTexture({
+        label: 'WebGlideNitro scene history',
+        size: { width, height },
+        format: 'rgba8unorm',
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
       });
       state.sceneDepth = state.device.createTexture({
         label: 'WebGlideNitro scene depth',
@@ -647,6 +706,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
       });
       state.sceneColorView = state.sceneColor.createView();
+      state.historyColorView = state.historyColor.createView();
       state.sceneDepthView = state.sceneDepth.createView();
       state.scanoutBindGroup = state.device.createBindGroup({
         label: 'WebGlideNitro scan-out',
@@ -655,10 +715,12 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           { binding: 0, resource: state.sceneColorView },
           { binding: 1, resource: state.sceneSampler },
           { binding: 2, resource: { buffer: state.scanoutUniform } },
+          { binding: 3, resource: state.historyColorView },
         ],
       });
       state.sceneWidth = width;
       state.sceneHeight = height;
+      state.historyValid = false;
     },
 
     ensureUploadBuffer(name, bytes, usage) {
@@ -748,6 +810,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
             sampler: { type: 'filtering' } },
           { binding: 2, visibility: GPUShaderStage.FRAGMENT,
             buffer: { type: 'uniform' } },
+          { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: {} },
         ],
       });
       const particleGroupLayout = device.createBindGroupLayout({
@@ -1066,7 +1129,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       });
       const scanoutUniform = device.createBuffer({
         label: 'WebGlideNitro scan-out uniform',
-        size: 32,
+        size: 48,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
       const uiUniform = device.createBuffer({
@@ -1147,9 +1210,10 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         textures: [null],
         freeTextures: [],
         world: null,
-        sceneColor: null, sceneDepth: null,
-        sceneColorView: null, sceneDepthView: null,
+        sceneColor: null, sceneDepth: null, historyColor: null,
+        sceneColorView: null, sceneDepthView: null, historyColorView: null,
         sceneWidth: 0, sceneHeight: 0,
+        historyValid: false,
         scanoutBindGroup: null,
         worldIndexBuffer: null, particleBuffer: null, uiVertexBuffer: null,
         modelVertexBuffer: null, entityBuffer: null, entityBindGroup: null,
@@ -1205,6 +1269,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     state.placeholderLightmap?.destroy();
     state.sceneColor?.destroy();
     state.sceneDepth?.destroy();
+    state.historyColor?.destroy();
     state.frameUniform.destroy();
     state.scanoutUniform.destroy();
     state.uiUniform.destroy();
@@ -1492,6 +1557,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     state.lightmapTexture?.destroy();
     state.lightmapTexture = null;
     state.lightmapView = state.placeholderLightmap.createView({ dimension: '2d-array' });
+    state.historyValid = false;
     Nitro.rebuildFrameBindGroup();
   },
 
@@ -1522,6 +1588,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
    *   [33..36] particle up basis vector
    *   [37..39] sky eye position    [40] sky time
    *   [41..43] fog colour          [44] fog density
+   *   [45] dither  [46] 2x2 resolve  [47] retained-frame persistence
    *
    * data (see wgpuscenedata_t in wgpu_nitro.h) is fourteen ints:
    *   [0]  world index arena     [1]  index count
@@ -1543,7 +1610,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     const state = Nitro.checkDevice();
     if (!state?.encoder) return;
 
-    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 45);
+    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 48);
     const integers = HEAP32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 29);
     const data = HEAP32.subarray(dataPointer >> 2, (dataPointer >> 2) + 14);
     const indexPointer = data[0], indexCount = data[1];
@@ -1572,10 +1639,13 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     frame.set(floats.subarray(41, 45), 24);
     state.device.queue.writeBuffer(state.frameUniform, 0, frame);
 
-    const scan = new Float32Array(8);
+    const scan = new Float32Array(12);
     scan[0] = floats[20];
     scan[1] = floats[21];
+    scan[2] = floats[45];
+    scan[3] = floats[46];
     scan.set(floats.subarray(16, 20), 4);
+    scan[8] = state.historyValid ? floats[47] : 0.0;
     state.device.queue.writeBuffer(state.scanoutUniform, 0, scan);
 
     /* Every entity's transform, alpha and flat light level in one upload;
@@ -1838,6 +1908,13 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     }
 
     pass.end();
+    if (state.sceneReady && state.sceneColor && state.historyColor) {
+      state.encoder.copyTextureToTexture(
+        { texture: state.sceneColor },
+        { texture: state.historyColor },
+        { width: state.sceneWidth, height: state.sceneHeight });
+      state.historyValid = true;
+    }
     state.device.queue.submit([state.encoder.finish()]);
     state.encoder = null;
   },

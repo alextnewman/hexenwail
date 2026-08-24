@@ -380,8 +380,16 @@ content rather than disguising omissions:
 1. **Finish the authored world (delivered):** animated light styles, world dynamic lights,
    warped/translucent liquids, fullbright pixels, model glows, fog and cheap
    projected shadows.
-2. **Establish Nitro's scan-out:** optional ordered 16-bit dither, the restrained
-   2x2 resolve and T-buffer persistence, always beneath panel-resolution UI.
+2. **Establish Nitro's scan-out (implemented, target validation pending):**
+   optional ordered 16-bit dither, the restrained 2x2 resolve and
+   colour-selective retained-frame persistence, always beneath panel-resolution
+   UI. `r_nitro_dither`, `r_nitro_resolve` and `r_nitro_persistence` independently
+   disable the invented effects; persistence defaults to a light 0.06 and is
+   clamped to 0.25. The resolve backs away at local contrast edges, the dither is
+   weighted toward fog-like low-contrast gradients and near-black colour, and
+   history retains fading saturated light rather than uniformly blurring motion.
+   Target-iPad Nitro-before/Nitro-after capture and aesthetic review remain the
+   acceptance gate.
 3. **Deepen palette lighting and atmosphere:** quantized coloured light,
    fog bands, underwater shifts, localized haze and lightning expressed through
    palette/colormap operations.
