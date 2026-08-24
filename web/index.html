@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#2b2242">
@@ -324,6 +324,12 @@
       right: max(1rem, var(--safe-right));
       bottom: max(1rem, calc(var(--safe-bottom) + 0.5rem));
     }
+    .phone-button.back {
+      right: max(5.8rem, calc(var(--safe-right) + 4.8rem));
+      bottom: max(6.2rem, calc(var(--safe-bottom) + 5.6rem));
+      min-width: 3.2rem;
+      min-height: 3.2rem;
+    }
     .phone-button.prev {
       right: max(10.5rem, calc(var(--safe-right) + 9.5rem));
       bottom: max(1rem, calc(var(--safe-bottom) + 0.5rem));
@@ -352,6 +358,10 @@
     body[data-handedness="left"] .phone-button.jump {
       right: auto;
       left: max(5.8rem, calc(var(--safe-left) + 4.8rem));
+    }
+    body[data-handedness="left"] .phone-button.back {
+      right: auto;
+      left: max(9.6rem, calc(var(--safe-left) + 8.6rem));
     }
     body[data-handedness="left"] .phone-button.prev,
     body[data-handedness="left"] .phone-button.next {
@@ -577,6 +587,7 @@
         <div class="phone-stick" data-phone-action="stick" aria-label="Move: forward, back, strafe left and right"></div>
         <button class="phone-button attack" type="button" data-phone-action="attack" aria-label="Attack">Atk</button>
         <button class="phone-button jump" type="button" data-phone-action="jump" aria-label="Jump">Jump</button>
+        <button class="phone-button back" type="button" data-phone-action="backButton" aria-label="Back">Back</button>
         <button class="phone-button use" type="button" data-phone-action="use" aria-label="Use or interact">Use</button>
         <button class="phone-button prev" type="button" data-phone-action="prevWeapon" aria-label="Previous weapon">◀</button>
         <button class="phone-button next" type="button" data-phone-action="nextWeapon" aria-label="Next weapon">▶</button>

@@ -26,6 +26,8 @@ test('starting the game is what enters fullscreen play', () => {
     'fullscreen must be requested from the launch gesture so it can never be entered without a game');
   assert.match(app, /function enterNativeFullscreen[\s\S]*?ui\.viewport \?\? ui\.canvas/,
     'the game surface, not the bare canvas, is the fullscreen element');
+  assert.match(html, /maximum-scale=1/,
+    'fullscreen play must disable browser zooming so double-taps cannot steal the view');
 });
 
 test('fullscreen transitions resize the canvas and restore the launcher', () => {

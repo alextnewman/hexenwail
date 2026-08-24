@@ -6,6 +6,7 @@ export const PHONE_CONTROL_KEYCODES = Object.freeze({
   attack: 200, // K_MOUSE1
   jump: 32, // K_SPACE
   use: 251, // K_GP_LTHUMB, default binding "impulse 13" lift/use
+  backButton: 253, // K_GP_BACK
   menu: 27, // K_ESCAPE
   nextWeapon: 248, // K_GP_RSHOULDER, default binding "impulse 10"
   prevWeapon: 247, // K_GP_LSHOULDER, default binding "impulse 12"
@@ -20,7 +21,7 @@ export const DEFAULT_PHONE_CONTROL_OPTIONS = Object.freeze({
   keys: PHONE_CONTROL_KEYCODES,
 });
 
-const BUTTON_ACTIONS = new Set(['attack', 'jump', 'use', 'menu', 'nextWeapon', 'prevWeapon', 'run']);
+const BUTTON_ACTIONS = new Set(['attack', 'jump', 'use', 'backButton', 'menu', 'nextWeapon', 'prevWeapon', 'run']);
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
