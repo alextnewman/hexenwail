@@ -306,10 +306,17 @@
       border: 2px solid rgba(255, 255, 255, 0.24);
       color: #fff;
       font-weight: 700;
+      font-size: clamp(1.25rem, 2vw, 1.8rem);
+      line-height: 1;
       text-shadow: 0 1px 2px black;
       box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
     }
     .phone-button:active { background: rgba(204, 173, 99, 0.36); }
+    .phone-button.back {
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
     .phone-button.attack {
       right: max(1rem, var(--safe-right));
       bottom: max(5.6rem, calc(var(--safe-bottom) + 5rem));
@@ -585,12 +592,12 @@
       <div id="phone-controls" class="phone-controls" aria-label="Touch game controls">
         <div class="phone-look" data-phone-action="look" aria-label="Drag to look"></div>
         <div class="phone-stick" data-phone-action="stick" aria-label="Move: forward, back, strafe left and right"></div>
-        <button class="phone-button attack" type="button" data-phone-action="attack" aria-label="Attack">Atk</button>
-        <button class="phone-button jump" type="button" data-phone-action="jump" aria-label="Jump">Jump</button>
-        <button class="phone-button back" type="button" data-phone-action="menu" aria-label="Menu">Menu</button>
-        <button class="phone-button use" type="button" data-phone-action="use" aria-label="Use or interact">Use</button>
+        <button class="phone-button attack" type="button" data-phone-action="attack" aria-label="Attack">B</button>
+        <button class="phone-button jump" type="button" data-phone-action="jump" aria-label="Jump">A</button>
+        <button class="phone-button back" type="button" data-phone-action="menu" aria-label="Menu">Start</button>
+        <button class="phone-button use" type="button" data-phone-action="use" aria-label="Use or interact">X</button>
         <button class="phone-button prev" type="button" data-phone-action="prevWeapon" aria-label="Previous weapon">◀</button>
-        <button class="phone-button next" type="button" data-phone-action="nextWeapon" aria-label="Next weapon">▶</button>
+        <button class="phone-button next" type="button" data-phone-action="nextWeapon" aria-label="Next weapon">Y</button>
       </div>
       <div id="phone-overlay" class="phone-overlay" role="dialog" aria-modal="true" aria-labelledby="phone-overlay-title" aria-hidden="true">
         <div class="phone-overlay-card">
