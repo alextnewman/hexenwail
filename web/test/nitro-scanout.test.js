@@ -7,6 +7,7 @@ const root = process.cwd();
 const read = (path) => readFileSync(join(root, path), 'utf8');
 const header = read('engine/h2shared/wgpu_nitro.h');
 const renderer = read('engine/hexen2/r_webgpu.c');
+const draw = read('engine/h2shared/draw_webgpu.c');
 const backend = read('engine/web/webgpu_nitro.js');
 
 test('Nitro scan-out effects are archived and independently optional', () => {
@@ -50,8 +51,13 @@ test('scan-out uniform remains a 48-byte WGSL and JavaScript contract', () => {
   assert.match(backend, /const scan = new Float32Array\(12\)/);
 });
 
-test('the processed scene is drawn before the crisp UI pass', () => {
+test('legacy clears precede scan-out and crisp overlays follow it', () => {
+  assert.match(renderer, /WGPUDraw_BeginScene \(\);\s+WebGPU_BeginFrame \(\);/);
+  assert.match(draw, /ui_scene_run_count = ui_run_count;/);
+  assert.match(draw, /ui_run_count > ui_scene_run_count/);
+
+  const clearDraw = backend.indexOf('drawUIRuns(0, sceneRunCount)');
   const sceneDraw = backend.indexOf('pass.setPipeline(state.scanoutPipeline)');
-  const uiDraw = backend.indexOf('pass.setPipeline(state.uiPipeline)');
-  assert.ok(sceneDraw >= 0 && uiDraw > sceneDraw);
+  const overlayDraw = backend.indexOf('drawUIRuns(sceneRunCount, runCount)');
+  assert.ok(clearDraw >= 0 && sceneDraw > clearDraw && overlayDraw > sceneDraw);
 });

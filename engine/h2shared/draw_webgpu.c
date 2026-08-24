@@ -91,6 +91,7 @@ static wgpuui_vertex_t	*ui_vertices;
 static int		ui_vertex_count, ui_vertex_max;
 static wgpubatch_t	*ui_runs;
 static int		ui_run_count, ui_run_max;
+static int		ui_scene_run_count;
 
 static qboolean WGPUDraw_ReserveVertices (int count)
 {
@@ -161,7 +162,8 @@ static void Draw_Quad (int texture, float x, float y, float width, float height,
 	out[0].color = out[1].color = out[2].color = color;
 	out[3].color = out[4].color = out[5].color = color;
 
-	if (ui_run_count > 0 && ui_runs[ui_run_count - 1].texture == texture)
+	if (ui_run_count > ui_scene_run_count &&
+	    ui_runs[ui_run_count - 1].texture == texture)
 	{
 		ui_runs[ui_run_count - 1].count += 6;
 	}
@@ -176,6 +178,19 @@ static void Draw_Quad (int texture, float x, float y, float width, float height,
 	}
 
 	ui_vertex_count += 6;
+}
+
+/*
+================
+WGPUDraw_BeginScene
+
+The shared screen code emits background clears before R_RenderView.  Preserve
+that ordering even though Nitro uploads all 2D vertices together at frame end.
+================
+*/
+void WGPUDraw_BeginScene (void)
+{
+	ui_scene_run_count = ui_run_count;
 }
 
 /*
@@ -196,7 +211,8 @@ void WGPUDraw_EndFrame (void)
 	params.screen_height = (float)q_max(vid.height, 1);
 	WGPU_GammaContrast (&params.gamma, &params.contrast);
 
-	Nitro_EndFrame (&params, ui_vertices, ui_vertex_count, ui_runs, ui_run_count);
+	Nitro_EndFrame (&params, ui_vertices, ui_vertex_count, ui_runs, ui_run_count,
+			ui_scene_run_count);
 
 	for (i = 0; i < ui_run_count; i++)
 		WebPerf_CountDraw (ui_runs[i].count / 3);
@@ -205,6 +221,7 @@ void WGPUDraw_EndFrame (void)
 
 	ui_vertex_count = 0;
 	ui_run_count = 0;
+	ui_scene_run_count = 0;
 }
 
 /*

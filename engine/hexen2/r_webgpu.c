@@ -772,6 +772,7 @@ void R_RenderView (void)
 	if (!cl.worldmodel)
 		return;
 
+	WGPUDraw_BeginScene ();
 	WebGPU_BeginFrame ();
 	WGPU_SetupFrame ();
 	WGPU_AnimateLight ();

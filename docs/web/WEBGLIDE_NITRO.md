@@ -161,11 +161,13 @@ translucent work, and 2D quads. The backend owns:
 * static world geometry and a lightmap texture array;
 * transient models and GPU-pulled particles;
 * scene/history targets and scan-out;
-* a batched, full-resolution UI pass.
+* a batched, full-resolution UI pass, with legacy pre-view clears kept before
+  scan-out and overlays kept after it.
 
 The pass order is lightmap updates, opaque world/entities, ordered translucent
-work, optional history accumulation, scan-out, then full-resolution UI. Frame
-and pass constants are packed blocks; pipeline variants are immutable.
+work, optional history accumulation, pre-view 2D clears, scan-out, then
+full-resolution UI overlays. Frame and pass constants are packed blocks;
+pipeline variants are immutable.
 
 Keep the implementation behind a positive `WEBGPUQUAKE` build macro. Do not
 make `WEBQUAKE` mean GPU and do not spread WebGPU conditionals through the

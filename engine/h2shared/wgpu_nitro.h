@@ -302,7 +302,8 @@ extern void Nitro_DestroyWorld (void);
 extern void Nitro_BeginFrame (void);
 extern void Nitro_DrawScene (const wgpuscene_t *params, const wgpuscenedata_t *data);
 extern void Nitro_EndFrame (const wgpuui_params_t *params, const wgpuui_vertex_t *vertices,
-			int vertexcount, const wgpubatch_t *runs, int runcount);
+			int vertexcount, const wgpubatch_t *runs, int runcount,
+			int sceneruncount);
 
 /*
 =============================================================================
@@ -390,6 +391,7 @@ void WGPUEntity_EndOpaque (void);
 =============================================================================
 */
 
+void WGPUDraw_BeginScene (void);
 void WGPUDraw_EndFrame (void);
 int WGPUDraw_LoadTexture (const char *name, const byte *pixels, int width,
 			int height, unsigned int flags);
