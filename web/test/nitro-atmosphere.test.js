@@ -8,6 +8,8 @@ const read = (path) => readFileSync(join(root, path), 'utf8');
 const header = read('engine/h2shared/wgpu_nitro.h');
 const renderer = read('engine/hexen2/r_webgpu.c');
 const backend = read('engine/web/webgpu_nitro.js');
+const world = read('engine/h2shared/wgpu_world.c');
+const entities = read('engine/h2shared/wgpu_entity.c');
 
 test('Nitro atmosphere controls are archived and independently optional', () => {
   for (const name of [
@@ -50,4 +52,13 @@ test('scene parameter offsets include atmosphere without changing scan uniform s
   assert.match(backend, /frame\[19\] = floats\[46\]/);
   assert.match(backend, /scan\[9\] = floats\[50\]/);
   assert.match(backend, /const scan = new Float32Array\(12\)/);
+});
+
+test('basic transparency is active before the later supernatural-liquid phase', () => {
+  assert.match(world, /WGPUWorld_LiquidAlpha/);
+  assert.match(world, /source->alpha \* alpha/);
+  assert.match(entities, /flags \|= NITROMODEL_BLEND_ALPHA/);
+  assert.match(backend, /worldBlendPipeline/);
+  assert.match(backend, /modelAlphaPipeline/);
+  assert.match(backend, /depthWriteEnabled: false/);
 });

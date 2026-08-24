@@ -369,6 +369,16 @@ models and sprites rather than interleaved in visedict order. That is a
 deliberate batching choice, not an oversight: it keeps a translucent door to
 one `drawIndexed` and it is invisible unless two translucent things overlap.
 
+Core authored transparency is already active: `DRF_TRANSLUCENT`, entity alpha,
+transparent/special-trans alias models and sprites, teleporter surfaces and
+non-default liquid alpha values select blend pipelines with depth writes off.
+Ordinary water remains opaque at the compatibility default
+`r_wateralpha 1`; changing that cvar exercises the existing path. The later
+“supernatural liquids” horizon adds distinctive dithered translucency and
+retained-frame refraction—it does not introduce basic alpha blending. If an
+authored transparent entity remains opaque with an alpha value below one, that
+is a regression rather than deferred work.
+
 The launcher labels Nitro as the default and the service worker precaches its
 core bundle.
 

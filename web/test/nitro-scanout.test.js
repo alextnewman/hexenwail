@@ -45,7 +45,8 @@ test('scan-out uniform remains a 48-byte WGSL and JavaScript contract', () => {
   assert.ok(params, 'ScanParams is defined');
   assert.doesNotMatch(params, /vec3f/,
     'a vec3 after persistence would align to byte 48 and grow the struct to 64 bytes');
-  assert.match(params, /persistence : f32,\s+pad0 : f32,\s+pad1 : f32,\s+pad2 : f32,/);
+  assert.match(params,
+    /persistence : f32,\s+paletteShifts : f32,\s+pad1 : f32,\s+pad2 : f32,/);
   assert.match(backend, /label: 'WebGlideNitro scan-out uniform',\s+size: 48,/);
   assert.match(backend, /const scan = new Float32Array\(12\)/);
 });
