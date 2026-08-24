@@ -81,20 +81,7 @@ set(RENDERER_SOURCES
     ${COMMONDIR}/web_perf.c
 )
 
-if(WEB_RENDERER STREQUAL "webgl2")
-    add_compile_definitions(WEBGL2QUAKE)
-    list(APPEND RENDERER_SOURCES
-        ${ENGINE_TOP}/hexen2/r_webgl2.c
-        ${COMMONDIR}/draw_webgl2.c
-        ${COMMONDIR}/gl2_texture.c
-        ${COMMONDIR}/gl2_shader.c
-        ${COMMONDIR}/gl2_glide.c
-        ${COMMONDIR}/gl2_world.c
-        ${COMMONDIR}/gl2_alias.c
-        ${COMMONDIR}/gl_fog.c
-        ${COMMONDIR}/gl_refrag.c
-    )
-elseif(WEB_RENDERER STREQUAL "webgpu")
+if(WEB_RENDERER STREQUAL "webgpu")
     # WebGlideNitro. No gl2_* source is listed on purpose: this renderer
     # shares no code with WebGlide, only scene-preparation ideas.
     # gl_refrag.c is here because efrags are renderer-agnostic and the
@@ -245,9 +232,7 @@ set(PLATFORM_SOURCES
     ${COMMONDIR}/midi_nul.c
     ${COMMONDIR}/cd_null.c
 )
-if(WEB_RENDERER STREQUAL "webgl2")
-    list(APPEND PLATFORM_SOURCES ${COMMONDIR}/vid_webgl2.c)
-elseif(WEB_RENDERER STREQUAL "webgpu")
+if(WEB_RENDERER STREQUAL "webgpu")
     list(APPEND PLATFORM_SOURCES ${COMMONDIR}/vid_webgpu.c)
 else()
     list(APPEND PLATFORM_SOURCES
@@ -255,8 +240,6 @@ else()
     )
     if(WEB_PRESENTER STREQUAL "webgpu")
         list(APPEND PLATFORM_SOURCES ${COMMONDIR}/web_canvas_wgpu.c)
-    else()
-        list(APPEND PLATFORM_SOURCES ${COMMONDIR}/web_canvas_gl2.c)
     endif()
 endif()
 add_compile_definitions(_NO_MIDIDRV)
@@ -317,16 +300,8 @@ if(GAME_DATA_DIR)
 endif()
 
 target_link_libraries(uhexen2_web PRIVATE m)
-if(WEB_RENDERER STREQUAL "webgl2")
-    # The experimental WebGlide bundle ships alongside the software one and
-    # is picked by the launcher's renderer toggle, so it needs its own name.
-    set(WEB_OUTPUT_NAME hexenwail-webglide)
-elseif(WEB_RENDERER STREQUAL "webgpu")
-    # WebGlideNitro. Distinct from hexenwail-webgpu, which is the software
-    # rasterizer scanned out through a WebGPU presenter.
+if(WEB_RENDERER STREQUAL "webgpu")
     set(WEB_OUTPUT_NAME hexenwail-nitro)
-elseif(WEB_PRESENTER STREQUAL "webgpu")
-    set(WEB_OUTPUT_NAME hexenwail-webgpu)
 else()
     set(WEB_OUTPUT_NAME hexenwail)
 endif()

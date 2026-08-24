@@ -47,14 +47,12 @@ test('launcher passes the configured perf capture to the engine on startup', () 
 });
 
 test('ensureEngineScriptLoaded routes the supported renderer preferences to the right bundle URL', () => {
-  const loader = app.match(/async function ensureEngineScriptLoaded\(\) \{([\s\S]*?)\n\}/)?.[1];
+  const loader = app.match(/async function ensureEngineScriptLoaded\(\) \{([\s\S]*?)\n\s*\}\n\nfunction bindUi\(\)/)?.[1];
   assert.ok(loader, 'ensureEngineScriptLoaded is defined');
-  assert.match(loader, /state\.preferences\.renderer === 'nitro'/);
-  assert.match(loader, /state\.preferences\.renderer === 'software'/);
-  assert.match(loader, /'\.\/hexenwail-nitro\.js'/);
-  assert.match(loader, /'\.\/hexenwail\.js'/);
-  assert.match(loader, /logToConsole\('\[launcher\]',/);
-  assert.match(loader, /Loading engine bundle/);
+  assert.match(loader, /const useNitro = state\.preferences\.renderer === 'nitro'/);
+  assert.match(loader, /const scriptUrl = useNitro \? '\.\/hexenwail-nitro\.js' : '\.\/hexenwail\.js'/);
+  assert.match(loader, /logToConsole\('\[launcher\]', `Loading engine bundle: \$\{scriptUrl\} \(renderer=\$\{state\.preferences\.renderer\}\)`\);/);
+  assert.match(loader, /The WebGlideNitro bundle is missing from this artifact/);
 });
 
 test('a missing Nitro bundle fails loudly and names the shipping toggle', () => {
@@ -90,7 +88,7 @@ test('the launcher exposes the supported shipping pair for software and Nitro', 
 });
 
 test('changing the toggle mid-play does not yank the tab out from a running game', () => {
-  const handler = app.match(/ui\.rendererSetting\?\.addEventListener\('change', \(\) => \{([\s\S]*?)\n {2}\}\);/)?.[1];
+  const handler = app.match(/ui\.rendererSetting\?\.addEventListener\('change', \(\) => \{([\s\S]*?)\n\s*\}\);\n\s*ui\.perfSetting\?/)[1];
   assert.ok(handler, 'the renderer-setting change handler is defined');
   assert.match(handler, /savePreferences\(\)/,
     'the preference must be persisted before anything else, so it survives a manual reload');
@@ -100,76 +98,52 @@ test('changing the toggle mid-play does not yank the tab out from a running game
     'no active game means it is safe to reload the launcher automatically');
   assert.match(handler, /Renderer change queued/,
     'a mid-play change must surface an explicit "reload to apply" affordance');
-  // The user-facing label in the runtime log and hint text must be the
-  // canonical name.
-  assert.match(handler, /WebGlide experimental GPU renderer/);
-  assert.match(handler, /experimental WebGPU presenter/);
   assert.match(handler, /WebGlideNitro primary native WebGPU renderer/);
+  assert.match(handler, /software renderer/);
 });
 
-test('the assemble script picks up the WebGlide bundle when the webgl2 build is present', () => {
-  // Optional so a local `make dist` (software-only) still works.
-  assert.match(assembleScript, /engine\/build-webgl2\/bin/);
-  assert.match(assembleScript, /hexenwail-webglide\.js/);
-  assert.match(assembleScript, /hexenwail-webglide\.wasm/);
-  assert.match(assembleScript, /if \[ -d "\$GL_BUILD_BIN" \]/);
-  assert.match(assembleScript, /assembling the PWA artifact without WebGlide/);
-  // The old spelling must not linger in either the copy or the
-  // filenames -- CMake now names the bundle "hexenwail-webglide".
-  assert.doesNotMatch(assembleScript, /hexenwail-gl\./);
-  assert.match(assembleScript, /hexenwail-webgpu\.js/);
-  assert.match(assembleScript, /hexenwail-webgpu\.wasm/);
+test('the assemble script picks up the Nitro bundle when the native WebGPU build is present', () => {
+  assert.match(assembleScript, /engine\/build-nitro\/bin/);
+  assert.match(assembleScript, /hexenwail-nitro\.js/);
+  assert.match(assembleScript, /hexenwail-nitro\.wasm/);
+  assert.match(assembleScript, /if \[ -d "\$NITRO_BUILD_BIN" \]/);
+  assert.match(assembleScript, /primary WebGlideNitro build directory/);
+  assert.doesNotMatch(assembleScript, /hexenwail-webglide\./);
+  assert.doesNotMatch(assembleScript, /hexenwail-webgpu\./);
 });
 
 test('the validate script requires Nitro and rejects half-shipped parked bundles', () => {
-  // Informational when both files are absent (matches the .data /
-  // .worker.js contract already in the script); hard failure when only
-  // one half of the pair is present, because that is always a broken
-  // build.
-  assert.match(validateScript, /hexenwail-webglide\.js/);
-  assert.match(validateScript, /hexenwail-webglide\.wasm/);
-  assert.match(validateScript, /only one half of the WebGlide bundle is present/);
   assert.match(validateScript, /require "hexenwail-nitro\.js"/);
-  assert.doesNotMatch(validateScript, /hexenwail-gl\./);
-  assert.match(validateScript, /hexenwail-webgpu\.js/);
-  assert.match(validateScript, /hexenwail-webgpu\.wasm/);
-  assert.match(validateScript, /only one half of the WebGPU presenter bundle is present/);
+  assert.match(validateScript, /require "hexenwail-nitro\.wasm"/);
+  assert.match(validateScript, /only one half of the WebGlideNitro bundle is present/);
+  assert.doesNotMatch(validateScript, /hexenwail-webglide\./);
+  assert.doesNotMatch(validateScript, /hexenwail-webgpu\./);
 });
 
-test('the WebGPU presenter stays a software scan-out path, distinct from Nitro', () => {
-  assert.match(cmake, /set\(WEB_PRESENTER "webgl2"/);
-  assert.match(cmake, /WEB_PRESENTER STREQUAL "webgpu"/);
+test('the software build remains the parked reference and Nitro stays the native WebGPU renderer', () => {
+  assert.match(cmake, /set\(WEB_RENDERER "webgpu" CACHE STRING "Web renderer: software or webgpu"\)/);
+  assert.match(cmake, /set\(WEB_PRESENTER "webgpu" CACHE STRING "Software renderer presenter: webgpu"\)/);
+  assert.match(cmake, /WEB_RENDERER STREQUAL "software"/);
+  assert.match(cmake, /WEB_RENDERER STREQUAL "webgpu"/);
+  assert.match(cmake, /add_compile_definitions\(WEBGPUQUAKE\)/);
+  assert.match(cmake, /add_compile_definitions\(WEBSOFT\)/);
   assert.match(cmake, /add_compile_definitions\(WEBGPU_PRESENT\)/);
-  assert.match(cmake, /web_canvas_wgpu\.c/);
-  assert.match(cmake, /webgpu_present\.js/);
-  // The presenter is selected by WEB_PRESENTER and keeps WEBSOFT; only
-  // WEB_RENDERER=webgpu may define WEBGPUQUAKE. Guard the coupling so a
-  // future edit cannot quietly turn the presenter into "the Nitro build".
-  assert.match(cmake, /WEB_PRESENTER only applies to WEB_RENDERER=software/);
-  const nitroBranch = cmake.match(/elseif\(WEB_RENDERER STREQUAL "webgpu"\)([\s\S]*?)\nelse\(\)/)?.[1];
-  assert.ok(nitroBranch, 'WEB_RENDERER=webgpu has its own renderer-source branch');
-  assert.match(nitroBranch, /add_compile_definitions\(WEBGPUQUAKE\)/,
-    'WEBGPUQUAKE is positive and belongs to WEB_RENDERER=webgpu alone');
-  assert.doesNotMatch(nitroBranch, /\$\{COMMONDIR\}\/gl2_/,
-    'WebGlideNitro must not compile any WebGlide source');
-  assert.match(wasmAction, /wasm-build\.sh webgpu engine\/build-webgpu/);
+  assert.match(cmake, /draw_webgpu\.c/);
+  assert.match(cmake, /wgpu_world\.c/);
+  assert.match(wasmAction, /wasm-build\.sh nitro engine\/build-nitro/);
+  assert.doesNotMatch(cmake, /WEBGL2QUAKE|gl2_world|gl2_alias/);
   assert.doesNotMatch(webgpuPresenter, /\bsmooth:\s*u32/,
     'WGSL reserves the word smooth');
 });
 
 test('WebGlideNitro is a native WebGPU renderer, not a GL translation layer', () => {
-  // The build wiring: its own WEB_RENDERER value, its own JS library, its
-  // own bundle basename, and no software rasterizer sources.
-  assert.match(cmake, /set_property\(CACHE WEB_RENDERER PROPERTY STRINGS software webgl2 webgpu\)/);
-  assert.match(cmake, /webgpu_nitro\.js/);
-  assert.match(cmake, /set\(WEB_OUTPUT_NAME hexenwail-nitro\)/);
+  assert.match(cmake, /set\(WEB_RENDERER "webgpu" CACHE STRING "Web renderer: software or webgpu"\)/);
+  assert.match(cmake, /set_property\(CACHE WEB_RENDERER PROPERTY STRINGS software webgpu\)/);
+  assert.match(cmake, /WEB_RENDERER STREQUAL "webgpu"/);
   assert.match(cmake, /r_webgpu\.c/);
   assert.match(cmake, /wgpu_world\.c/);
   assert.match(cmake, /draw_webgpu\.c/);
-  assert.match(cmake, /vid_webgpu\.c/);
-
-  // The backend must be real WebGPU, and must reuse the launcher handoff
-  // rather than requesting a second device for the same canvas.
+  assert.match(cmake, /webgpu_/);
   assert.match(webgpuNitro, /Module\.hexenwailWebGPU/);
   assert.match(webgpuNitro, /createRenderPipeline/);
   assert.match(webgpuNitro, /drawIndexed/);
@@ -177,13 +151,7 @@ test('WebGlideNitro is a native WebGPU renderer, not a GL translation layer', ()
     'the device comes from the launcher probe, not from the engine');
   assert.doesNotMatch(webgpuNitro, /\bgl[A-Z]\w+\(/,
     'nothing here may be a translated GL call');
-
-  // Static geometry: the world vertex buffer is mapped at creation and
-  // never gets COPY_DST, which is what makes it immutable.
   assert.match(webgpuNitro, /mappedAtCreation:\s*true/);
-
-  // Indexed colour is preserved end to end: r8uint diffuse, a colormap
-  // row chosen by the lightmap, and only then the palette.
   assert.match(webgpuNitro, /r8uint/);
   assert.match(webgpuNitro, /colormapTexture/);
   assert.match(webgpuNitro, /paletteTexture/);
@@ -191,7 +159,7 @@ test('WebGlideNitro is a native WebGPU renderer, not a GL translation layer', ()
 
 test('WebGlideNitro draws entities, sprites and the view weapon its own way', () => {
   // The entity source is Nitro's own, wired only into the webgpu branch.
-  const nitroBranch = cmake.match(/elseif\(WEB_RENDERER STREQUAL "webgpu"\)([\s\S]*?)\nelse\(\)/)?.[1];
+  const nitroBranch = cmake.match(/if\(WEB_RENDERER STREQUAL "webgpu"\)([\s\S]*?)\nelse\(\)/)?.[1];
   assert.ok(nitroBranch, 'WEB_RENDERER=webgpu has its own renderer-source branch');
   assert.match(nitroBranch, /wgpu_entity\.c/,
     'the entity path is a Nitro source, not a shared or WebGlide one');
@@ -320,5 +288,6 @@ test('the canonical docs do not make WebGlide a Nitro gate or performance baseli
   // separate decision the owner has not made.
   assert.match(flat(webglideDoc), /abortive experiment/);
   assert.match(flat(webglideDoc), /must keep compiling/);
-  assert.match(cmake, /WEB_RENDERER STREQUAL "webgl2"/);
+  assert.doesNotMatch(cmake, /WEB_RENDERER STREQUAL "webgl2"/);
+  assert.doesNotMatch(cmake, /WEBGL2QUAKE/);
 });

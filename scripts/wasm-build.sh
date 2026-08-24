@@ -7,8 +7,8 @@
 #
 # Usage: wasm-build.sh [renderer] [build-dir]
 #   renderer   nitro (default) | software
-#              software uses the classic 8bpp rasterizer with the WebGPU
-#              presenter; nitro is WebGlideNitro, the native WebGPU renderer.
+#              software builds the classic 8bpp rasterizer; the PWA always uses
+#              the WebGPU presenter, while nitro is the native WebGPU renderer.
 #   build-dir  defaults to engine/build
 #
 # Requires: emcmake/emmake on PATH (i.e. `source "$EMSDK/emsdk_env.sh"` first).

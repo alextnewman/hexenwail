@@ -1,0 +1,69 @@
+name: PR preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  EMSDK_VERSION: '4.0.23'
+
+concurrency:
+  group: pr-preview-${{ github.event.pull_request.number || github.run_number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    name: PWA / PR preview
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.preview.outputs.preview_url }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build + validate the PWA artifact
+        uses: ./.github/actions/wasm-build
+        with:
+          emsdk-version: ${{ env.EMSDK_VERSION }}
+          dist-dir: dist
+
+      - name: Validate assembled preview artifact
+        run: ./scripts/wasm-validate-artifact.sh dist
+
+      - name: Prepare single device-preview variant
+        id: preview
+        shell: bash
+        run: |
+          set -eu
+          pr_number="${{ github.event.pull_request.number || github.run_number }}"
+          preview_root="site/pr/${pr_number}"
+          mkdir -p "$preview_root"
+          cp -a dist/. "$preview_root"/
+          preview_url="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/pr/${pr_number}/"
+          echo "preview_url=${preview_url}" >> "$GITHUB_OUTPUT"
+          echo "Preview URL: ${preview_url}"
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy PR preview variant
+        id: deployment
+        uses: actions/deploy-pages@v4
