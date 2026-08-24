@@ -265,7 +265,7 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 		return;
 	info->cached_dlight = 0;
 
-	if (r_fullbright.integer || !cl.worldmodel->lightdata || !samples)
+	if (r_fullbright.integer || !cl.worldmodel->lightdata)
 	{
 		for (i = 0; i < size; i++)
 			blocklights[i] = 255 * 256;
@@ -281,7 +281,8 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 		for (i = 0; i < size; i++)
 			blocklights[i] = ambient;
 
-		for (maps = 0; maps < MAXLIGHTMAPS && surf->styles[maps] != 255; maps++)
+		for (maps = 0; samples && maps < MAXLIGHTMAPS &&
+		     surf->styles[maps] != 255; maps++)
 		{
 			int	scale = d_lightstylevalue[surf->styles[maps]];
 
