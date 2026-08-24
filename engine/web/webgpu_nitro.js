@@ -939,7 +939,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       };
       const effectPipeline = (label, entryPoint, blend, stencil = false,
           depthCompare = 'less-equal', vertexEntryPoint = 'vertexMain',
-          writeMask = GPUColorWrite.ALL) =>
+          writeMask = GPUColorWrite.ALL, stencilDepthFail = 'keep') =>
         device.createRenderPipeline({
           label,
           layout: modelLayout,
@@ -958,13 +958,13 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
               stencilFront: {
                 compare: 'equal',
                 failOp: 'keep',
-                depthFailOp: 'keep',
+                depthFailOp: stencilDepthFail,
                 passOp: 'increment-clamp',
               },
               stencilBack: {
                 compare: 'equal',
                 failOp: 'keep',
-                depthFailOp: 'keep',
+                depthFailOp: stencilDepthFail,
                 passOp: 'increment-clamp',
               },
               stencilReadMask: 0xff,
@@ -979,7 +979,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           ALPHA_BLEND, true, 'greater-equal', 'shadowBack', 0);
       const modelShadowPipeline =
         effectPipeline('WebGlideNitro shadows', 'shadowMain', ALPHA_BLEND, true,
-          'less-equal', 'shadowFront');
+          'less-equal', 'shadowFront', GPUColorWrite.ALL, 'zero');
 
       const scanoutPipeline = device.createRenderPipeline({
         label: 'WebGlideNitro scan-out',

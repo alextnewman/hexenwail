@@ -296,6 +296,8 @@ test('WebGlideNitro implements the authored visual effects', () => {
     'the shadow mask must reject pixels with no receiver');
   assert.match(webgpuNitro, /'less-equal', 'shadowFront'/,
     'the shadow draw must reject nearer occluding geometry');
+  assert.match(webgpuNitro, /GPUColorWrite\.ALL, 'zero'/,
+    'occluded mask fragments must not leak into later shadow batches');
   assert.match(webgpuNitro, /pass\.setStencilReference\(1\)/);
   assert.match(webgpuNitro, /format: 'depth24plus-stencil8'/);
   assert.match(webgpuNitro, /stencilLoadOp: 'clear'/);
