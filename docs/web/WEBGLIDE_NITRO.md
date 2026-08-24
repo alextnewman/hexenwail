@@ -267,8 +267,9 @@ specification here.
 The renderer prints its own gaps once per map (`r_nitro_report 0` silences
 it) so a running build never quietly implies more than it does.
 
-Model frames still step rather than interpolate. Projected shadows are planar
-and deliberately cheap rather than traced against sloped world geometry.
+Model frames still step rather than interpolate. Projected shadows use the
+sampled world floor and a stencil-bounded planar silhouette; they remain
+deliberately cheap rather than conforming to sloped world geometry.
 Sky uses both authored palette-indexed layers, projected from the eye direction
 and scrolled independently. Authored light styles animate world lightmaps and
 model-light-style entities; touched atlas pages are rebuilt and uploaded only

@@ -314,7 +314,7 @@ void WGPUWorld_EndOpaque (void);
 void WGPUWorld_SubmitScene (wgpuscene_t *scene);
 qboolean WGPUWorld_Ready (void);
 void WGPUWorld_ReportGaps (void);
-int  WGPUWorld_LightPoint (const vec3_t point);
+int  WGPUWorld_LightPoint (const vec3_t point, vec3_t lightspot);
 
 /*
 =============================================================================

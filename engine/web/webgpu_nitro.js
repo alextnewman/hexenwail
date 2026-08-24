@@ -617,7 +617,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       state.sceneDepth = state.device.createTexture({
         label: 'WebGlideNitro scene depth',
         size: { width, height },
-        format: 'depth24plus',
+        format: 'depth24plus-stencil8',
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
       });
       state.sceneColorView = state.sceneColor.createView();
@@ -803,7 +803,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         },
         primitive: worldPrimitive,
         depthStencil: {
-          format: 'depth24plus',
+          format: 'depth24plus-stencil8',
           depthWriteEnabled: true,
           depthCompare: 'less-equal',
         },
@@ -826,7 +826,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         },
         primitive: worldPrimitive,
         depthStencil: {
-          format: 'depth24plus',
+          format: 'depth24plus-stencil8',
           depthWriteEnabled: true,
           depthCompare: 'less-equal',
         },
@@ -846,7 +846,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         },
         primitive: worldPrimitive,
         depthStencil: {
-          format: 'depth24plus',
+          format: 'depth24plus-stencil8',
           depthWriteEnabled: false,
           depthCompare: 'less-equal',
         },
@@ -886,7 +886,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           },
           primitive: modelPrimitive,
           depthStencil: {
-            format: 'depth24plus',
+            format: 'depth24plus-stencil8',
             depthWriteEnabled: depthWrite,
             depthCompare: 'less-equal',
           },
@@ -911,7 +911,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           ],
         }],
       };
-      const effectPipeline = (label, entryPoint, blend) =>
+      const effectPipeline = (label, entryPoint, blend, stencil = false) =>
         device.createRenderPipeline({
           label,
           layout: modelLayout,
@@ -923,15 +923,31 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           },
           primitive: modelPrimitive,
           depthStencil: {
-            format: 'depth24plus',
+            format: 'depth24plus-stencil8',
             depthWriteEnabled: false,
             depthCompare: 'less-equal',
+            ...(stencil ? {
+              stencilFront: {
+                compare: 'equal',
+                failOp: 'keep',
+                depthFailOp: 'keep',
+                passOp: 'increment-clamp',
+              },
+              stencilBack: {
+                compare: 'equal',
+                failOp: 'keep',
+                depthFailOp: 'keep',
+                passOp: 'increment-clamp',
+              },
+              stencilReadMask: 0xff,
+              stencilWriteMask: 0xff,
+            } : {}),
           },
         });
       const modelGlowPipeline =
         effectPipeline('WebGlideNitro glows', 'glowMain', ADD_BLEND);
       const modelShadowPipeline =
-        effectPipeline('WebGlideNitro shadows', 'shadowMain', ALPHA_BLEND);
+        effectPipeline('WebGlideNitro shadows', 'shadowMain', ALPHA_BLEND, true);
 
       const scanoutPipeline = device.createRenderPipeline({
         label: 'WebGlideNitro scan-out',
@@ -974,7 +990,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         },
         primitive: { topology: 'triangle-list' },
         depthStencil: {
-          format: 'depth24plus',
+          format: 'depth24plus-stencil8',
           depthWriteEnabled: false,
           depthCompare: 'less-equal',
         },
@@ -1575,8 +1591,12 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         depthClearValue: 1.0,
         depthLoadOp: 'clear',
         depthStoreOp: 'discard',
+        stencilClearValue: 0,
+        stencilLoadOp: 'clear',
+        stencilStoreOp: 'discard',
       },
     });
+    pass.setStencilReference(0);
     state.sceneReady = true;
 
     const worldReady = state.world && entityBound && indexBuffer &&

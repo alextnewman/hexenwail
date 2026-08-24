@@ -1254,7 +1254,8 @@ the software renderer feeds into a colormap row, so a model standing in a
 dark corner is exactly as dark as it is under the rasteriser.
 ================
 */
-static int WGPUWorld_RecursiveLightPoint (mnode_t *node, const vec3_t start, const vec3_t end)
+static int WGPUWorld_RecursiveLightPoint (mnode_t *node, const vec3_t start,
+					const vec3_t end, vec3_t lightspot)
 {
 	float		front, back, frac;
 	int		side, i, r, maps;
@@ -1290,7 +1291,7 @@ loc0:
 	mid[1] = start[1] + (end[1] - start[1]) * frac;
 	mid[2] = start[2] + (end[2] - start[2]) * frac;
 
-	r = WGPUWorld_RecursiveLightPoint (node->children[side], start, mid);
+	r = WGPUWorld_RecursiveLightPoint (node->children[side], start, mid, lightspot);
 	if (r >= 0)
 		return r;
 
@@ -1315,6 +1316,8 @@ loc0:
 		if (ds > surf->extents[0] || dt > surf->extents[1])
 			continue;
 
+		if (lightspot)
+			VectorCopy (mid, lightspot);
 		if (!surf->samples)
 			return 0;
 
@@ -1331,15 +1334,15 @@ loc0:
 		return r >> 8;
 	}
 
-	return WGPUWorld_RecursiveLightPoint (node->children[!side], mid, end);
+	return WGPUWorld_RecursiveLightPoint (node->children[!side], mid, end, lightspot);
 }
 
-int WGPUWorld_LightPoint (const vec3_t point)
+int WGPUWorld_LightPoint (const vec3_t point, vec3_t lightspot)
 {
 	vec3_t	start, end;
 	int	r;
 
-	if (!cl.worldmodel || !cl.worldmodel->lightdata)
+	if (!cl.worldmodel)
 		return 255;
 
 	VectorCopy (point, start);
@@ -1347,7 +1350,9 @@ int WGPUWorld_LightPoint (const vec3_t point)
 	end[1] = point[1];
 	end[2] = point[2] - 2048;
 
-	r = WGPUWorld_RecursiveLightPoint (cl.worldmodel->nodes, start, end);
+	r = WGPUWorld_RecursiveLightPoint (cl.worldmodel->nodes, start, end, lightspot);
+	if (!cl.worldmodel->lightdata)
+		return 255;
 	if (r < 0)
 		r = 0;
 	if (r < (int)r_ambient.value)
