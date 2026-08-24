@@ -1587,12 +1587,12 @@ loc0:
 			if (color)
 			{
 				if (colored)
-				VectorMA (color, (float)scale, colored, color);
+					VectorMA (color, (float)scale, colored, color);
 				else
 				{
-				color[0] += *lightmap * scale;
-				color[1] += *lightmap * scale;
-				color[2] += *lightmap * scale;
+					color[0] += *lightmap * scale;
+					color[1] += *lightmap * scale;
+					color[2] += *lightmap * scale;
 				}
 			}
 			lightmap += ((surf->extents[0] >> 4) + 1) *
