@@ -483,7 +483,8 @@ static void WGPUEntity_SetupLighting (entity_t *entity)
 	if (entity != &cl.viewent && entity->model)
 		adjust[2] += (entity->model->mins[2] + entity->model->maxs[2]) * 0.5f;
 
-	nitro_ambientlight = nitro_shadelight = (float) WGPUWorld_LightPoint (adjust);
+	nitro_ambientlight = nitro_shadelight =
+		(float) WGPUWorld_LightPoint (adjust, NULL);
 
 	if (entity == &cl.viewent && nitro_ambientlight < VIEWMODEL_LIGHT_MIN)
 		nitro_ambientlight = nitro_shadelight = VIEWMODEL_LIGHT_MIN;
@@ -852,7 +853,27 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 	if (r_shadows.integer && entity != &cl.viewent &&
 	    !(flags & (NITROMODEL_BLEND_ALPHA | NITROMODEL_BLEND_ADD)))
 	{
-		float	shadowz = entity->origin[2] + model->mins[2] + 0.25f;
+		vec3_t	lightspot, sample, shadevector, shadowvector;
+		float	an, shadowz;
+
+		VectorCopy (entity->origin, sample);
+		sample[2] += (model->mins[2] + model->maxs[2]) * 0.5f;
+		/* The model foot is the fallback when no world surface lies below it. */
+		VectorCopy (entity->origin, lightspot);
+		lightspot[2] += model->mins[2];
+		WGPUWorld_LightPoint (sample, lightspot);
+
+		shadowz = lightspot[2] + 1.0f;
+		an = entity->angles[YAW] / 180.0f * M_PI;
+		shadevector[0] = cos (-an);
+		shadevector[1] = sin (-an);
+		shadevector[2] = 1.0f;
+		VectorNormalize (shadevector);
+		shadowvector[0] = shadevector[0] * forward[0] +
+			shadevector[1] * right[0] + shadevector[2] * up[0];
+		shadowvector[1] = shadevector[0] * forward[1] +
+			shadevector[1] * right[1] + shadevector[2] * up[1];
+		shadowvector[2] = 0.0f;
 
 		ptri = (const mtriangle_t *)((const byte *)paliashdr + paliashdr->triangles);
 		WGPUEntity_BeginBatch (skin, NITROMODEL_SHADOW);
@@ -877,8 +898,8 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 				world[2] = entity->origin[2] + local[0] * forward[2] +
 					local[1] * right[2] + local[2] * up[2];
 				height = world[2] - shadowz;
-				out->position[0] = world[0] - height * 0.25f;
-				out->position[1] = world[1] - height * 0.25f;
+				out->position[0] = world[0] - shadowvector[0] * height;
+				out->position[1] = world[1] - shadowvector[1] * height;
 				out->position[2] = shadowz;
 				out->texcoord[0] = out->texcoord[1] = 0.5f;
 				out->light = -1.0f;

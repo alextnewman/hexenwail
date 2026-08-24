@@ -277,6 +277,14 @@ test('WebGlideNitro implements the authored visual effects', () => {
   assert.match(webgpuNitro, /index >= 224u/);
   assert.match(nitroEntity, /NITROMODEL_GLOW/);
   assert.match(nitroEntity, /NITROMODEL_SHADOW/);
+  assert.match(nitroEntity, /WGPUWorld_LightPoint \(sample, lightspot\)/,
+    'alias shadows must land on the sampled world floor');
+  assert.match(nitroEntity, /shadevector\[0\] = cos \(-an\)/,
+    'alias shadows must use the legacy directional projection');
+  assert.match(webgpuNitro, /format: 'depth24plus-stencil8'/);
+  assert.match(webgpuNitro, /stencilLoadOp: 'clear'/);
+  assert.match(webgpuNitro, /passOp: 'increment-clamp'/,
+    'collapsed shadow triangles must shade each pixel only once');
   assert.match(webgpuNitro, /alphaFilter === 'blend'/,
     'translucent liquids must be deferred until opaque models are drawn');
 });
