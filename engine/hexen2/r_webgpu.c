@@ -80,6 +80,7 @@ cvar_t r_lavaalpha = {"r_lavaalpha", "0", CVAR_NONE};
 cvar_t r_slimealpha = {"r_slimealpha", "0", CVAR_NONE};
 cvar_t r_telealpha = {"r_telealpha", "0", CVAR_NONE};
 cvar_t r_turbalpha = {"r_turbalpha", "1", CVAR_NONE};
+cvar_t r_shadows = {"r_shadows", "1", CVAR_ARCHIVE};
 cvar_t gl_overbright = {"gl_overbright", "1", CVAR_NONE};
 cvar_t gl_missile_glows = {"gl_missile_glows", "1", CVAR_ARCHIVE};
 cvar_t gl_flashintensity = {"gl_flashintensity", "1", CVAR_ARCHIVE};
@@ -130,7 +131,13 @@ int wgpu_frame_polys;
 wgpuparticle_t *wgpu_particles;
 int wgpu_particle_count;
 
-static qboolean wgpu_frame_open;
+static qboolean	wgpu_frame_open;
+
+extern float	r_fog_density;
+extern float	r_fog_color[3];
+void Fog_Init (void);
+void Fog_NewMap (void);
+void Fog_SetupFrame (void);
 static qboolean wgpu_initialized;
 static int wgpu_particle_max;
 
@@ -517,11 +524,15 @@ static void WGPU_SetupScene (wgpuscene_t *scene)
 
 	if (r_fullbright.integer || r_lightmap.integer)
 		scene->flags |= NITROSCENE_FULLBRIGHT;
+	if (gl_fullbrights.integer)
+		scene->flags |= NITROSCENE_MODEL_FULLBRIGHTS;
 
 	VectorScale (vright, 1.5f, scene->particle_right);
 	VectorScale (vup, 1.5f, scene->particle_up);
 	VectorCopy (r_origin, scene->sky_eye);
 	scene->sky_time = (float)fmod (cl.time, 32768.0);
+	VectorCopy (r_fog_color, scene->fog_color);
+	scene->fog_density = r_fog_density;
 }
 
 /*
@@ -554,6 +565,7 @@ static void Web_RegisterRendererCvars (void)
 	Cvar_RegisterVariable(&r_slimealpha);
 	Cvar_RegisterVariable(&r_telealpha);
 	Cvar_RegisterVariable(&r_turbalpha);
+	Cvar_RegisterVariable(&r_shadows);
 	Cvar_RegisterVariable(&gl_overbright);
 	Cvar_RegisterVariable(&gl_missile_glows);
 	Cvar_RegisterVariable(&gl_flashintensity);
@@ -667,6 +679,7 @@ void R_Init (void)
 	if (!playerTranslation)
 		Sys_Error("Couldn't load gfx/player.lmp");
 	WebGPU_Init();
+	Fog_Init();
 
 	/* gfx/tinttab.lmp is the 256x256 index-to-index table R_AliasDrawModel
 	 * builds globalcolormap from when an entity has a colorshade.  Handing
@@ -682,10 +695,6 @@ void R_NewMap (void)
 {
 	int i;
 
-	/* Lightmaps are baked once at load, so light styles are frozen at the
-	 * neutral value the software renderer starts from.  Hexen II's model
-	 * light styles read the same table, so they are static too; both are
-	 * in the per-map gap report. */
 	for (i = 0; i < 256; ++i)
 		d_lightstylevalue[i] = 264;
 
@@ -700,7 +709,43 @@ void R_NewMap (void)
 
 	WGPUWorld_NewMap();
 	WGPUEntity_NewMap();
+	Fog_NewMap();
 	WGPUWorld_ReportGaps();
+}
+
+static void WGPU_AnimateLight (void)
+{
+	int	i, c, v;
+	int	defaultLocus;
+	int	locusHz[3];
+
+	defaultLocus = locusHz[0] = (int)(cl.time * 10);
+	locusHz[1] = (int)(cl.time * 20);
+	locusHz[2] = (int)(cl.time * 30);
+	for (i = 0; i < MAX_LIGHTSTYLES; i++)
+	{
+		if (!cl_lightstyle[i].length)
+		{
+			d_lightstylevalue[i] = 256;
+			continue;
+		}
+		c = cl_lightstyle[i].map[0];
+		if (c == '1' || c == '2' || c == '3')
+		{
+			/* Hexen II uses the first character as an explicit 10/20/30 Hz
+			 * rate tag; only the remaining characters are light frames. */
+			if (cl_lightstyle[i].length == 1)
+			{
+				d_lightstylevalue[i] = 256;
+				continue;
+			}
+			v = locusHz[c - '1'] % (cl_lightstyle[i].length - 1);
+			d_lightstylevalue[i] = (cl_lightstyle[i].map[v + 1] - 'a') * 22;
+			continue;
+		}
+		v = defaultLocus % cl_lightstyle[i].length;
+		d_lightstylevalue[i] = (cl_lightstyle[i].map[v] - 'a') * 22;
+	}
 }
 
 void R_RenderView (void)
@@ -714,7 +759,10 @@ void R_RenderView (void)
 
 	WebGPU_BeginFrame ();
 	WGPU_SetupFrame ();
+	WGPU_AnimateLight ();
+	Fog_SetupFrame ();
 	WGPU_SetupScene (&scene);
+	WGPUWorld_UpdateLightstyles ();
 	wgpu_particle_count = 0;
 	R_DrawParticles ();
 
@@ -767,15 +815,13 @@ void R_SetVrect (vrect_t *pvrectin, vrect_t *pvrect, int lineadj)
 ===============
 R_PushDlights
 
-World dynamic lights are not implemented: the lightmap atlas is uploaded
-once at load time and never touched again, so there is nothing for a dlight
-to mark.  Model lighting does sample cl_dlights directly, in
-WGPUEntity_SetupLighting(), the way the software renderer does.  The client
-still calls this every frame.
+Marks world surfaces touched by the active dynamic lights.  The lightmap
+update path rebuilds those rectangles and uploads each dirty atlas page once.
 ===============
 */
 void R_PushDlights (void)
 {
+	WGPUWorld_PushDlights ();
 }
 
 /*
@@ -805,26 +851,6 @@ void D_InitCaches (void *buffer, int size) { (void)buffer; (void)size; }
 int D_SurfaceCacheForRes (int width, int height) { (void)width; (void)height; return 0; }
 void D_EnableBackBufferAccess (void) {}
 void D_DisableBackBufferAccess (void) {}
-
-/*
-================
-Fog_ParseServerMessage
-
-svc_fog is a renderer-owned message: cl_parse.c dispatches it
-unconditionally and each renderer supplies the handler.  Nitro has no fog,
-but the payload -- [byte] density, [byte] red, [byte] green, [byte] blue,
-[short] fade time -- still has to be drained or the rest of the server
-message is parsed at the wrong offset.
-================
-*/
-void Fog_ParseServerMessage (void)
-{
-	MSG_ReadByte();
-	MSG_ReadByte();
-	MSG_ReadByte();
-	MSG_ReadByte();
-	MSG_ReadShort();
-}
 
 /*
 ================

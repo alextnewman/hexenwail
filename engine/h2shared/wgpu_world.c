@@ -67,6 +67,8 @@ typedef struct
 	int	chain;		/* next surface in this frame's texture chain */
 	short	light_s, light_t;
 	short	smax, tmax;
+	int	cached_style[MAXLIGHTMAPS];
+	int	cached_dlight;
 } nitrosurf_t;
 
 static nitrosurf_t	*nitro_surfaces;
@@ -101,6 +103,7 @@ static int	nitro_numlightmaps;
 
 static qboolean	nitro_world_ready;
 static qboolean	nitro_reported;
+static int	nitro_dlightframecount;
 
 /*
 =============================================================================
@@ -171,16 +174,12 @@ static int WGPUWorld_AllocLightmapBlock (int w, int h, short *x, short *y)
 ================
 WGPUWorld_BuildLightmapBlock
 
-r_surf.c's arithmetic, once, at load time.  Values accumulate in 8.8 fixed
+r_surf.c's arithmetic.  Values accumulate in 8.8 fixed
 point exactly as the software renderer's blocklights do, then collapse to
 the one byte the shader turns back into a colormap row.
-
-Light styles are frozen at the value R_NewMap seeds d_lightstylevalue with,
-and dynamic lights are not accumulated at all: the slice has no per-frame
-lightmap upload path.  Both gaps are reported at map load.
 ================
 */
-static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, const nitrosurf_t *info)
+static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *info)
 {
 	int		smax = info->smax;
 	int		tmax = info->tmax;
@@ -194,6 +193,7 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, const nitrosur
 		return;
 	if (size <= 0 || size > NITRO_LIGHTMAP_SIZE * NITRO_LIGHTMAP_SIZE)
 		return;
+	info->cached_dlight = 0;
 
 	if (r_fullbright.integer || !cl.worldmodel->lightdata || !samples)
 	{
@@ -215,9 +215,60 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, const nitrosur
 		{
 			int	scale = d_lightstylevalue[surf->styles[maps]];
 
+			info->cached_style[maps] = scale;
 			for (i = 0; i < size; i++)
 				blocklights[i] += samples[i] * scale;
 			samples += size;
+		}
+
+		if (surf->dlightframe == nitro_dlightframecount && r_dynamic.integer)
+		{
+			int	lnum;
+
+			for (lnum = 0; lnum < MAX_DLIGHTS; lnum++)
+			{
+				const dlight_t	*light = &cl_dlights[lnum];
+				const mtexinfo_t *tex = surf->texinfo;
+				vec3_t		impact, local;
+				float		dist, rad, minlight, sign;
+				int		s, t, sd, td, j;
+
+				if (!(surf->dlightbits & (1u << lnum)))
+					continue;
+				rad = light->radius;
+				dist = DotProduct (light->origin, surf->plane->normal) -
+					surf->plane->dist;
+				rad -= fabs (dist);
+				minlight = light->minlight;
+				if (rad < minlight)
+					continue;
+				minlight = rad - minlight;
+				for (j = 0; j < 3; j++)
+					impact[j] = light->origin[j] - surf->plane->normal[j] * dist;
+				local[0] = DotProduct (impact, tex->vecs[0]) + tex->vecs[0][3] -
+					surf->texturemins[0];
+				local[1] = DotProduct (impact, tex->vecs[1]) + tex->vecs[1][3] -
+					surf->texturemins[1];
+				sign = light->dark ? -1.0f : 1.0f;
+
+				for (t = 0; t < info->tmax; t++)
+				{
+					td = abs ((int)(local[1] - t * 16));
+					for (s = 0; s < info->smax; s++)
+					{
+						float	lightdist, add;
+
+						sd = abs ((int)(local[0] - s * 16));
+						lightdist = (sd > td) ? (float)(sd + (td >> 1)) :
+							(float)(td + (sd >> 1));
+						if (lightdist >= minlight)
+							continue;
+						add = (minlight - lightdist) * 256.0f * sign;
+						blocklights[t * info->smax + s] += (int)add;
+					}
+				}
+			}
+			info->cached_dlight = 1;
 		}
 	}
 
@@ -238,6 +289,58 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, const nitrosur
 				value = 255;
 			row[s] = (byte)value;
 		}
+	}
+}
+
+/*
+================
+WGPUWorld_UpdateLightstyles
+
+Rebuild surfaces whose authored light style or dynamic-light state changed,
+then upload each touched atlas page once. Keeping the implementation
+page-granular leaves rectangle uploads to target-device measurement.
+================
+*/
+void WGPUWorld_UpdateLightstyles (void)
+{
+	qboolean	dirty[NITRO_MAX_LIGHTMAPS];
+	int		surfnum, numsurfaces, maps, layer;
+
+	if (!nitro_world_ready || !cl.worldmodel)
+		return;
+
+	numsurfaces = q_min(nitro_numsurfaces, cl.worldmodel->numsurfaces);
+	memset (dirty, 0, sizeof(dirty));
+	for (surfnum = 0; surfnum < numsurfaces; surfnum++)
+	{
+		msurface_t	*surf = &cl.worldmodel->surfaces[surfnum];
+		nitrosurf_t	*info = &nitro_surfaces[surfnum];
+		qboolean	changed = false;
+
+		if (info->lightmap < 0)
+			continue;
+		for (maps = 0; maps < MAXLIGHTMAPS && surf->styles[maps] != 255; maps++)
+		{
+			if (info->cached_style[maps] != d_lightstylevalue[surf->styles[maps]])
+			{
+				changed = true;
+				break;
+			}
+		}
+		if (!changed && !info->cached_dlight &&
+		    !(surf->dlightframe == nitro_dlightframecount && r_dynamic.integer))
+			continue;
+
+		WGPUWorld_BuildLightmapBlock (surf, info);
+		dirty[info->lightmap] = true;
+	}
+
+	for (layer = 0; layer < nitro_numlightmaps; layer++)
+	{
+		if (!dirty[layer])
+			continue;
+		Nitro_UploadLightmap (layer, nitro_lightmap_data[layer]);
+		WebPerf_CountUpload (NITRO_LIGHTMAP_SIZE * NITRO_LIGHTMAP_SIZE);
 	}
 }
 
@@ -318,6 +421,8 @@ static void WGPUWorld_LoadTextures (qmodel_t *world)
 		}
 		if (texture->name[0] == '{')
 			flags |= NITROTEX_HOLEY;
+		if (texture->name[0] == '*')
+			flags |= NITROTEX_TURB;
 
 		nitro_texture_ids[i] = Nitro_CreateTexture (texture->name,
 				(int)texture->width, (int)texture->height,
@@ -733,11 +838,36 @@ and appends a single batch descriptor.  Everything a texture contributes to
 the frame becomes one drawIndexed, however many surfaces it covers.
 ================
 */
-static void WGPUWorld_GatherChain (int head, int textureid, int entity)
+static float WGPUWorld_ClampAlpha (float alpha)
+{
+	return CLAMP(0.1f, alpha, 1.0f);
+}
+
+static float WGPUWorld_LiquidAlpha (const texture_t *texture, qboolean translucent)
+{
+	const char	*name;
+
+	if (!texture)
+		return WGPUWorld_ClampAlpha (r_turbalpha.value);
+	name = (texture->name[0] == '*') ? texture->name + 1 : texture->name;
+	if (!q_strncasecmp (name, "lava", 4))
+		return (r_lavaalpha.value <= 0) ? 1.0f : WGPUWorld_ClampAlpha (r_lavaalpha.value);
+	if (!q_strncasecmp (name, "slime", 5))
+		return (r_slimealpha.value <= 0) ? 1.0f : WGPUWorld_ClampAlpha (r_slimealpha.value);
+	if (!q_strncasecmp (name, "tele", 4))
+		return (r_telealpha.value <= 0) ? 0.7f : WGPUWorld_ClampAlpha (r_telealpha.value);
+	if (translucent || strstr (name, "water") || strstr (name, "ice") ||
+	    strstr (name, "glass"))
+		return WGPUWorld_ClampAlpha (r_wateralpha.value);
+	return WGPUWorld_ClampAlpha (r_turbalpha.value);
+}
+
+static void WGPUWorld_GatherChain (int head, int texindex, int textureid, int entity)
 {
 	int		first = nitro_frame_cursor;
 	int		surfnum = head;
 	wgpubatch_t	*batch;
+	qboolean	turbulent = false, translucent = false;
 
 	if (head < 0 || textureid <= 0)
 		return;
@@ -745,9 +875,12 @@ static void WGPUWorld_GatherChain (int head, int textureid, int entity)
 	while (surfnum >= 0)
 	{
 		const nitrosurf_t	*info = &nitro_surfaces[surfnum];
+		const msurface_t	*surf = &cl.worldmodel->surfaces[surfnum];
 
 		if (info->numindices > 0)
 		{
+			turbulent |= (surf->flags & SURF_DRAWTURB) != 0;
+			translucent |= (surf->flags & SURF_TRANSLUCENT) != 0;
 			WGPUWorld_ReserveIndices (info->numindices);
 			memcpy (nitro_frame_indices + nitro_frame_cursor,
 				nitro_surf_indices + info->firstindex,
@@ -761,6 +894,18 @@ static void WGPUWorld_GatherChain (int head, int textureid, int entity)
 
 	if (nitro_frame_cursor == first)
 		return;
+
+	if (turbulent && entity >= 0 && entity < nitro_entity_count)
+	{
+		const wgpuentity_t	*source = &nitro_entities[entity];
+		wgpumatrix_t		mvp;
+		float			alpha = WGPUWorld_LiquidAlpha (
+			(texindex >= 0 && texindex < nitro_numtextures) ?
+				cl.worldmodel->textures[texindex] : NULL, translucent);
+
+		memcpy (mvp.m, source->mvp, sizeof(mvp.m));
+		entity = WGPUWorld_NewEntityBlock (&mvp, source->alpha * alpha, source->light);
+	}
 
 	batch = WGPUWorld_NewBatch ();
 	batch->texture = textureid;
@@ -844,7 +989,59 @@ static void WGPUWorld_DrawChains (int frame, int entity)
 		if (textureid <= 0)
 			textureid = nitro_texture_ids[i];
 
-		WGPUWorld_GatherChain (nitro_texchain[i], textureid, entity);
+		WGPUWorld_GatherChain (nitro_texchain[i], animated, textureid, entity);
+	}
+}
+
+static void WGPUWorld_MarkLightsNode (const dlight_t *light, unsigned int bit,
+					mnode_t *node)
+{
+	mplane_t	*plane;
+	msurface_t	*surf;
+	float		dist;
+	int		i;
+
+	if (!node || node->contents < 0)
+		return;
+	plane = node->plane;
+	dist = DotProduct (light->origin, plane->normal) - plane->dist;
+	if (dist > light->radius)
+	{
+		WGPUWorld_MarkLightsNode (light, bit, node->children[0]);
+		return;
+	}
+	if (dist < -light->radius)
+	{
+		WGPUWorld_MarkLightsNode (light, bit, node->children[1]);
+		return;
+	}
+	surf = cl.worldmodel->surfaces + node->firstsurface;
+	for (i = 0; i < node->numsurfaces; i++, surf++)
+	{
+		if (surf->dlightframe != nitro_dlightframecount)
+		{
+			surf->dlightbits = 0;
+			surf->dlightframe = nitro_dlightframecount;
+		}
+		surf->dlightbits |= bit;
+	}
+	WGPUWorld_MarkLightsNode (light, bit, node->children[0]);
+	WGPUWorld_MarkLightsNode (light, bit, node->children[1]);
+}
+
+void WGPUWorld_PushDlights (void)
+{
+	const dlight_t	*light;
+	int		i;
+
+	if (!cl.worldmodel || !r_dynamic.integer)
+		return;
+	nitro_dlightframecount++;
+	for (i = 0, light = cl_dlights; i < MAX_DLIGHTS; i++, light++)
+	{
+		if (light->die < cl.time || !light->radius)
+			continue;
+		WGPUWorld_MarkLightsNode (light, 1u << i, cl.worldmodel->nodes);
 	}
 }
 
@@ -883,8 +1080,8 @@ void WGPUWorld_DrawWorld (void)
 	WGPUWorld_ResetChains ();
 	WGPUWorld_RecursiveWorldNode (cl.worldmodel->nodes);
 
-	/* Sky and liquids ride the normal chains.  The backend selects the sky
-	 * pipeline from the texture entry; liquids remain opaque and unwarped. */
+	/* Sky and liquids ride the normal chains. The backend selects their
+	 * pipelines from texture flags and defers translucent liquid batches. */
 	WGPUWorld_DrawChains (0, 0);
 }
 
@@ -1055,10 +1252,6 @@ r_light.c's RecursiveLightPoint, kept here because the software renderer's
 copy is not compiled into this build.  It returns the same scalar intensity
 the software renderer feeds into a colormap row, so a model standing in a
 dark corner is exactly as dark as it is under the rasteriser.
-
-Light styles are frozen at the value R_NewMap seeds d_lightstylevalue with,
-so the sum below is static for a given map -- which is also why a flickering
-torch does not make the monster beside it flicker.  That gap is reported.
 ================
 */
 static int WGPUWorld_RecursiveLightPoint (mnode_t *node, const vec3_t start, const vec3_t end)
@@ -1217,6 +1410,7 @@ void WGPUWorld_Shutdown (void)
 	nitro_entity_capacity = 0;
 	nitro_entity_count = 0;
 	nitro_world_ready = false;
+	nitro_dlightframecount = 0;
 }
 
 void WGPUWorld_NewMap (void)
@@ -1242,9 +1436,8 @@ void WGPUWorld_NewMap (void)
 ================
 WGPUWorld_ReportGaps
 
-The renderer still has deliberate content gaps.  They are stated out loud
-once per map rather than left for the player to discover by walking into an
-invisible monster.  Silence it with r_nitro_report 0.
+The renderer reports its scene coverage and deliberate approximations once per
+map. Silence it with r_nitro_report 0.
 ================
 */
 void WGPUWorld_ReportGaps (void)
@@ -1255,8 +1448,5 @@ void WGPUWorld_ReportGaps (void)
 
 	Con_Printf ("WebGlideNitro: world, entities and particles (%d surfaces, %d lightmap pages)\n",
 			nitro_numsurfaces, nitro_numlightmaps);
-	Con_Printf ("  not drawn: shadows, model glows and fullbright skin pixels\n");
-	Con_Printf ("  not applied: animated light styles, world dynamic lights, fog\n");
 	Con_Printf ("  approximated: model frames step rather than interpolate\n");
-	Con_Printf ("  approximated: liquids are opaque and unwarped\n");
 }

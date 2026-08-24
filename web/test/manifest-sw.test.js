@@ -27,34 +27,29 @@ test('service worker precaches repo-managed launcher assets', () => {
     const relativePath = asset === '' ? 'index.html' : asset;
     assert.equal(existsSync(join(repoRoot, 'web', relativePath)), true, `missing precache asset ${asset}`);
   }
-  assert.ok(matches.includes('hexenwail.js'));
-  assert.ok(matches.includes('hexenwail.wasm'));
+  assert.ok(matches.includes('hexenwail-nitro.js'));
+  assert.ok(matches.includes('hexenwail-nitro.wasm'));
   assert.ok(matches.includes('lib/phone-controls.js'));
 });
 
-test('service worker keeps optional GPU bundles out of the install precache', () => {
-  // The WebGlide bundle is runtime-cached on first use rather than
-  // precached. Two reasons: precaching megabytes of experimental code
-  // would slow the first paint for the ~all users who never toggle it
-  // on; and cache.addAll is atomic, so a 404 on a software-only local
-  // build would abort the whole SW install and leave the launcher
-  // without an offline shell.
+test('service worker precaches Nitro and runtime-caches parked renderers', () => {
   const coreBlock = swText.match(/const CORE_ASSETS = \[([\s\S]*?)\];/)?.[1];
   assert.ok(coreBlock, 'CORE_ASSETS array is defined');
   assert.doesNotMatch(coreBlock, /hexenwail-webglide/,
     'CORE_ASSETS must not precache the experimental WebGlide bundle');
   assert.doesNotMatch(coreBlock, /hexenwail-webgpu/,
     'CORE_ASSETS must not precache the WebGPU presenter preview');
-  assert.doesNotMatch(coreBlock, /hexenwail-nitro/,
-    'CORE_ASSETS must not precache the WebGlideNitro bundle');
+  assert.match(coreBlock, /hexenwail-nitro\.js/);
+  assert.match(coreBlock, /hexenwail-nitro\.wasm/);
   const optionalBlock = swText.match(/const OPTIONAL_ASSETS = \[([\s\S]*?)\];/)?.[1];
   assert.ok(optionalBlock, 'OPTIONAL_ASSETS array is defined');
   assert.match(optionalBlock, /'\.\/hexenwail-webglide\.js'/);
   assert.match(optionalBlock, /'\.\/hexenwail-webglide\.wasm'/);
   assert.match(optionalBlock, /'\.\/hexenwail-webgpu\.js'/);
   assert.match(optionalBlock, /'\.\/hexenwail-webgpu\.wasm'/);
-  assert.match(optionalBlock, /'\.\/hexenwail-nitro\.js'/);
-  assert.match(optionalBlock, /'\.\/hexenwail-nitro\.wasm'/);
+  assert.match(optionalBlock, /'\.\/hexenwail\.js'/);
+  assert.match(optionalBlock, /'\.\/hexenwail\.wasm'/);
+  assert.doesNotMatch(optionalBlock, /'\.\/hexenwail-nitro\.js'/);
   // Runtime-cached on first use, so both core and optional URLs feed the
   // same cache-first fetch path; anything else would break offline play
   // after a single WebGlide session.

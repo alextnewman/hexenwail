@@ -1,14 +1,14 @@
 # WebGlideNitro — WebGPU renderer design
 
-**Status: gate removed by explicit owner instruction; world and entities
-landed.** Nitro is no longer gated on WebGlide in any way, and WebGlide is
+**Status: primary renderer; correctness completion is under way.** Nitro is no longer gated
+on WebGlide in any way, and WebGlide is
 explicitly *not* its performance baseline (see "How Nitro is measured").
 The renderer now exists as a real build configuration
 (`-DWEB_RENDERER=webgpu`, macro `WEBGPUQUAKE`, bundle `hexenwail-nitro`) that
 draws the world, its brush entities, alias models, sprites, particles and the
-view weapon as batched engine polygons through native WebGPU. It is still a
-**technology preview**: animated light styles, world dynamic lights, shadows,
-model glows and fog are missing. See "Where it stops" below.
+view weapon as batched engine polygons through native WebGPU. World dynamic lights,
+fog, liquid warp and alpha, fullbright skin pixels, authored glows and projected
+model shadows are implemented. See "Where it stops" below.
 
 The WebGPU *presenter* preview remains a separate thing: it is part of the
 software-renderer configuration (`-DWEB_PRESENTER=webgpu`, macro
@@ -17,9 +17,9 @@ never share a build.
 
 This document exists so the idea stops being re-derived from scratch in every
 session. It is not a third rendering plan. The settled decisions in
-[`ARCHITECTURE.md`](ARCHITECTURE.md) still hold: the software renderer is the
-default, WebGlide stays in-tree and buildable, and an Ironwail-class modern
-renderer is a non-goal.
+[`ARCHITECTURE.md`](ARCHITECTURE.md) still hold: Nitro is primary, the software
+renderer is parked as a reference, WebGlide stays in-tree and buildable, and an
+Ironwail-class modern renderer is a non-goal.
 
 ## Vision
 
@@ -44,6 +44,44 @@ we are trying to remove.
 It may share renderer-neutral scene preparation with WebGlide where that makes
 ownership clearer, but backend objects never cross that boundary. The software
 renderer remains the default and WebGlide remains buildable.
+
+### The visual north star
+
+Nitro is **the impossible 1998 console port**: what Raven's artists might have
+made if they retained complete control of Hexen II's indexed artwork but had a
+fixed machine with extravagant fill rate and memory bandwidth. It is not a
+modern remaster. Its vocabulary is palette ramps, colormap rows, lightmaps,
+ordered dither, stipple, sprites, retained frames and deliberately finite
+budgets.
+
+Modern APIs are used to make that vocabulary stable, rich and fast, not to
+replace it with PBR, bloom, SSAO, deferred shading or shadow maps. The software
+renderer remains the art-direction anchor. Enhancements should preserve its
+silhouette, contrast, palette membership and readability even when they add
+motion, atmosphere or density.
+
+The intended signature is:
+
+* **living palette lighting** — authored light styles, palette-quantized
+  dynamic light and deliberate transitions between neighbouring colours;
+* **infernal atmosphere** — depth-quantized fog, underwater palette shifts and
+  localized haze rather than generic smooth volumetrics;
+* **supernatural liquids** — period sine warping, dithered translucency and
+  retained-frame refraction for water, lava and portals;
+* **spell-specific motion** — dense indexed particles, stippled trails, glow
+  orbs and restrained T-buffer afterimages whose rhythm distinguishes fire,
+  ice, poison and necromancy;
+* **grounded entities** — fullbright pixels, authored glows and cheap planar
+  shadows, with any pose interpolation restrained enough to retain the
+  stop-motion character;
+* **Nitro scan-out** — a crisp panel-resolution HUD over a scalable scene with
+  optional 16-bit ordered dither, a 2x2 “22-bit” resolve and restrained
+  persistence.
+
+Correctness comes first: complete the effects already authored by the game
+before inventing new ones. Performance work then protects the look through
+adaptive scene scale and measured fixed budgets; it must not erase the chunky
+pixels and hard lighting transitions that define it.
 
 ## How Nitro is measured
 
@@ -229,11 +267,12 @@ specification here.
 The renderer prints its own gaps once per map (`r_nitro_report 0` silences
 it) so a running build never quietly implies more than it does.
 
-Not drawn: model shadows, model glows and fullbright skin pixels. Not applied:
-animated light styles, world dynamic lights (model lighting *does* take
-dlights), fog. Approximated: liquids are opaque and unwarped, and model frames
-step rather than interpolate. Sky uses both authored palette-indexed layers,
-projected from the eye direction and scrolled independently.
+Model frames still step rather than interpolate. Projected shadows are planar
+and deliberately cheap rather than traced against sloped world geometry.
+Sky uses both authored palette-indexed layers, projected from the eye direction
+and scrolled independently. Authored light styles animate world lightmaps and
+model-light-style entities; touched atlas pages are rebuilt and uploaded only
+when a style value changes.
 Texture *animation*, entity animation, player skin translation and particles
 are implemented, so they are deliberately absent from those lists.
 
@@ -243,8 +282,8 @@ models and sprites rather than interleaved in visedict order. That is a
 deliberate batching choice, not an oversight: it keeps a translucent door to
 one `drawIndexed` and it is invisible unless two translucent things overlap.
 
-This is why the launcher still labels `nitro` a technology preview, and why
-the bundle is optional in the service worker rather than precached.
+The launcher labels Nitro as the default and the service worker precaches its
+core bundle.
 
 ## Delivery order
 
@@ -272,10 +311,36 @@ describes — device acquisition and resize via the launcher handoff, offscreen
 scene scan-out with explicit failure reporting, a fully batched 2D layer, the
 static world drawn from immutable geometry with one lightmap texture array
 behind CPU BSP/PVS traversal, and then brush entities, alias models, sprites,
-particles, the view weapon and the moving two-layer sky. What is left of step
-5 is fog, animated light styles, world dynamic lights and the liquid
-approximation, all listed in "Where it stops". Steps 6–7 remain gated on
-measured evidence from Nitro captures on the iPad.
+particles, the view weapon and the moving two-layer sky. The authored effects
+in step 5 are now complete. Steps 6–7 remain gated on measured evidence from
+Nitro captures on the iPad.
+
+## Visual horizon order
+
+This is the locked direction, ordered so later expression rests on correct game
+content rather than disguising omissions:
+
+1. **Finish the authored world (delivered):** animated light styles, world dynamic lights,
+   warped/translucent liquids, fullbright pixels, model glows, fog and cheap
+   projected shadows.
+2. **Establish Nitro's scan-out:** optional ordered 16-bit dither, the restrained
+   2x2 resolve and T-buffer persistence, always beneath panel-resolution UI.
+3. **Deepen palette lighting and atmosphere:** quantized coloured light,
+   fog bands, underwater shifts, localized haze and lightning expressed through
+   palette/colormap operations.
+4. **Give liquids supernatural material identity:** distinct water, slime, lava
+   and portal movement, translucency and retained-frame refraction without
+   physically based material simulation.
+5. **Make magic spectacular:** GPU-pulled indexed particles, stippled trails,
+   sprite ribbons, glow orbs and spell-family temporal signatures.
+6. **Protect the result under load:** measured adaptive scene scale first;
+   checkerboarding, decoupled scan-out and more aggressive retained history only
+   where target-iPad captures justify them.
+
+Each horizon ships in small reversible slices. Defaults may be expressive, but
+every newly invented effect needs an off switch; authored correctness does not.
+Cross-renderer screenshots establish meaning, not performance. Performance is
+always a Nitro-before/Nitro-after capture on the target iPad.
 
 ## Candidate tricks
 
@@ -324,5 +389,5 @@ judge it against *that*. WebGlide's frame cost is not an input to any of them.
   and usable as an optional visual reference. Not a performance baseline.
 * [`PERF_CAPTURE.md`](PERF_CAPTURE.md) — the instrument used to measure Nitro
   on the target iPad, against Nitro's own earlier captures.
-* [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md) — the default renderer, and
-  the specification Nitro's output answers to.
+* [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md) — the parked renderer, and the
+  specification Nitro's output answers to.

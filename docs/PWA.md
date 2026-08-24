@@ -44,12 +44,13 @@ cd emsdk
 source ./emsdk_env.sh
 
 cd /path/to/hexenwail
-./scripts/wasm-build.sh software                    # shipping default
+./scripts/wasm-build.sh nitro engine/build-nitro   # primary renderer
+./scripts/wasm-build.sh software                    # parked reference
 ./scripts/wasm-build.sh webgl2 engine/build-webgl2  # retained GPU renderer
 ```
 
 `scripts/wasm-build.sh` is the same script CI runs, so the two cannot drift.
-Build output lands in `engine/build/bin/`.
+Primary build output lands in `engine/build-nitro/bin/`.
 
 ## Assemble a local PWA site
 
@@ -190,16 +191,21 @@ panel that small has no chrome worth returning to; ☰ → **Sync & exit to
 launcher** still works. Being a pure function of size, this is self-healing:
 rotate or resize back above the breakpoint and the chrome returns on its own.
 
-## Renderer (experimental)
+## Renderer
 
 The launcher ships several WebAssembly engine bundles side by side and picks
-which one to load at startup. The choice lives in the **Renderer
-(experimental)** card in the launcher panel:
+which one to load at startup. The choice lives in the **Renderer** card in the
+launcher panel:
 
-- **Software (default, stable)** — the classic 8bpp software rasteriser
-  presented on an accelerated canvas. This is the shipping, supported path
-  and what every fresh install loads. Unless the card explicitly opts into
-  WebGlide, this is what runs.
+- **WebGlideNitro (default)** — the primary native WebGPU renderer. It builds
+  batched scene geometry while preserving indexed palette and colormap
+  semantics, and implements the complete playable scene plus dynamic lights,
+  fog, warped/translucent liquids, fullbrights, glows and projected shadows.
+  Build option value `webgpu`, macro `WEBGPUQUAKE`, bundle
+  `hexenwail-nitro.*`.
+- **Software (parked reference)** — the classic 8bpp software rasteriser
+  presented on an accelerated canvas. It remains available as the exact
+  authored-pixel reference but is no longer the primary path.
 - **WebGlide (experimental GPU)** — an abortive experiment at a GPU renderer
   chasing the mid-90s 3Dfx look — filtered textures, coloured light,
   translucent water, fog, optional CRT scan-out — with modern shaders
@@ -210,15 +216,6 @@ which one to load at startup. The choice lives in the **Renderer
   "maximum GL2" WebGL2 profile — the shared build option value stays
   `webgl2`, but the shipped bundle basename (`hexenwail-webglide.*`) and
   the user-facing renderer name are WebGlide.
-- **WebGlideNitro (native WebGPU, technology preview)** — a separate,
-  genuinely native WebGPU renderer that draws the world as batched engine
-  polygons from immutable buffers, keeping the indexed palette and colormap
-  look. It now draws the world, brush entities, alias models, sprites,
-  particles and the view weapon, so a map can be played through; animated
-  light styles, world dynamic lights, shadows, model glows and fog are
-  still missing, and it prints its own gaps once per map. It needs a device
-  with WebGPU support. Build option value `webgpu`, macro `WEBGPUQUAKE`,
-  bundle `hexenwail-nitro.*`.
 
 The engine bundle is chosen once per launcher load, so a change reloads
 the launcher automatically when no game is running; if the engine is
@@ -227,17 +224,16 @@ launcher load (exit to the launcher via ☰ → **Sync & exit to launcher**).
 The preference is stored in the same local browser storage as the touch
 controls settings, alongside your other launcher preferences.
 
-If a selected non-default bundle is missing from the artifact (a local
-`make dist` builds only the software renderer by default), the launcher
+If a selected parked bundle is missing from the artifact, the launcher
 fails loudly on load, names the toggle, and explains how to switch back to
 the software renderer so the launcher never ends up dead. To ship the
 other bundles locally, build those configurations explicitly before
 assembling `dist/`:
 
 ```bash
-./scripts/wasm-build.sh software                    # shipping default
+./scripts/wasm-build.sh nitro engine/build-nitro   # primary renderer
+./scripts/wasm-build.sh software                    # parked reference
 ./scripts/wasm-build.sh webgl2 engine/build-webgl2  # WebGlide bundle
-./scripts/wasm-build.sh nitro  engine/build-nitro   # WebGlideNitro bundle
 ./scripts/wasm-assemble-artifact.sh dist
 ```
 

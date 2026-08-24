@@ -56,11 +56,14 @@ const HexenwailNitroLibrary = {
     TEX_HOLEY: 1,
     TEX_ALPHA: 2,
     TEX_WRAP: 4,
+    TEX_TURB: 8,
 
     /* Model batch flags, mirrored by wgpu_nitro.h. */
     MODEL_BLEND_ALPHA: 1,
     MODEL_BLEND_ADD: 2,
     MODEL_VIEWMODEL: 4,
+    MODEL_GLOW: 8,
+    MODEL_SHADOW: 16,
 
     /* The view weapon is drawn into the near 30% of the depth range so it
      * cannot poke through the wall the player is standing against.  WebGPU
@@ -71,9 +74,13 @@ const HexenwailNitroLibrary = {
 struct Frame {
   mvp : mat4x4f,
   fullbright : f32,
-  pad0 : f32,
+  modelFullbrights : f32,
   pad1 : f32,
   pad2 : f32,
+  eye : vec3f,
+  time : f32,
+  fogColor : vec3f,
+  fogDensity : f32,
 }
 
 struct TexParams {
@@ -108,6 +115,7 @@ struct VertexOutput {
   @builtin(position) position : vec4f,
   @location(0) uv : vec2f,
   @location(1) lightmap : vec3f,
+  @location(2) fogDistance : f32,
 }
 
 @vertex
@@ -118,13 +126,21 @@ fn vertexMain(@location(0) position : vec3f,
   output.position = entity.mvp * vec4f(position, 1.0);
   output.uv = uv;
   output.lightmap = lightmap;
+  output.fogDistance = abs(output.position.w);
   return output;
 }
 
 @fragment
 fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   let size = vec2i(texParams.size);
-  let texel = vec2i(floor(input.uv * texParams.size));
+  var uv = input.uv;
+  if ((texParams.flags & 8u) != 0u) {
+    let phase = frame.time * 1.5;
+    uv += vec2f(sin(input.uv.y * texParams.size.y * 0.125 + phase),
+                sin(input.uv.x * texParams.size.x * 0.125 + phase)) *
+          (2.0 / texParams.size);
+  }
+  let texel = vec2i(floor(uv * texParams.size));
   let wrapped = ((texel % size) + size) % size;
   let index = textureLoad(diffuseTexture, wrapped, 0).r;
 
@@ -151,8 +167,10 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     }
   }
   let shaded = textureLoad(colormapTexture, vec2i(i32(index), row), 0).r;
-  return vec4f(textureLoad(paletteTexture, vec2i(i32(shaded), 0), 0).rgb,
-               entity.alpha);
+  let rgb = textureLoad(paletteTexture, vec2i(i32(shaded), 0), 0).rgb;
+  let fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
+      input.fogDistance * input.fogDistance), 0.0, 1.0);
+  return vec4f(mix(rgb, frame.fogColor, fog), entity.alpha);
 }`,
 
     /*
@@ -166,11 +184,13 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
 struct Frame {
   mvp : mat4x4f,
   fullbright : f32,
-  pad0 : f32,
+  modelFullbrights : f32,
   pad1 : f32,
   pad2 : f32,
   eye : vec3f,
   time : f32,
+  fogColor : vec3f,
+  fogDensity : f32,
 }
 
 struct Entity {
@@ -216,7 +236,11 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   let solid = skyIndex(solidTexture, projection + vec2f(frame.time * 8.0));
   let cloud = skyIndex(cloudTexture, projection + vec2f(frame.time * 16.0));
   let index = select(solid, cloud, cloud != 0u);
-  return vec4f(textureLoad(paletteTexture, vec2i(i32(index), 0), 0).rgb, 1.0);
+  let rgb = textureLoad(paletteTexture, vec2i(i32(index), 0), 0).rgb;
+  let distance = length(direction);
+  let fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
+      distance * distance), 0.0, 1.0);
+  return vec4f(mix(rgb, frame.fogColor, fog), 1.0);
 }`,
 
     /*
@@ -231,9 +255,13 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
 struct Frame {
   mvp : mat4x4f,
   fullbright : f32,
-  pad0 : f32,
+  modelFullbrights : f32,
   pad1 : f32,
   pad2 : f32,
+  eye : vec3f,
+  time : f32,
+  fogColor : vec3f,
+  fogDensity : f32,
 }
 
 struct TexParams {
@@ -256,6 +284,7 @@ struct VertexOutput {
   @location(1) light : f32,
   @location(2) alpha : f32,
   @location(3) @interpolate(flat) tint : u32,
+  @location(4) fogDistance : f32,
 }
 
 @vertex
@@ -269,6 +298,7 @@ fn vertexMain(@location(0) position : vec3f,
   output.light = light;
   output.alpha = f32(shade.x) / 255.0;
   output.tint = shade.y;
+  output.fogDistance = abs(output.position.w);
   return output;
 }
 
@@ -289,7 +319,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   var shaded = index;
   /* A negative row is the unlit sentinel sprites use: d_sprite.c never
    * touches the colormap, so neither does this. */
-  if (input.light >= 0.0 && frame.fullbright == 0.0) {
+  if (input.light >= 0.0 && frame.fullbright == 0.0 &&
+      !(frame.modelFullbrights != 0.0 && index >= 224u)) {
     let row = clamp(i32(input.light), 0, 63);
     shaded = textureLoad(colormapTexture, vec2i(i32(index), row), 0).r;
   }
@@ -297,17 +328,74 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     shaded = textureLoad(tintTexture,
         vec2i(i32(shaded), i32(input.tint)), 0).r;
   }
-  return vec4f(textureLoad(paletteTexture, vec2i(i32(shaded), 0), 0).rgb,
-               input.alpha);
+  let rgb = textureLoad(paletteTexture, vec2i(i32(shaded), 0), 0).rgb;
+  let fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
+      input.fogDistance * input.fogDistance), 0.0, 1.0);
+  return vec4f(mix(rgb, frame.fogColor, fog), input.alpha);
+}`,
+
+    effectShader: `
+struct Frame {
+  mvp : mat4x4f,
+  fullbright : f32,
+  modelFullbrights : f32,
+  pad1 : f32,
+  pad2 : f32,
+  eye : vec3f,
+  time : f32,
+  fogColor : vec3f,
+  fogDensity : f32,
+}
+@group(0) @binding(0) var<uniform> frame : Frame;
+
+struct VertexOutput {
+  @builtin(position) position : vec4f,
+  @location(0) uv : vec2f,
+  @location(1) color : vec4f,
+  @location(2) fogDistance : f32,
+}
+
+@vertex
+fn vertexMain(@location(0) position : vec3f,
+              @location(1) uv : vec2f,
+              /* Location 2 is model light; effects carry packed RGBA at 3. */
+              @location(3) color : vec4f) -> VertexOutput {
+  var output : VertexOutput;
+  output.position = frame.mvp * vec4f(position, 1.0);
+  output.uv = uv;
+  output.color = color;
+  output.fogDistance = abs(output.position.w);
+  return output;
+}
+
+@fragment
+fn glowMain(input : VertexOutput) -> @location(0) vec4f {
+  let radius = length(input.uv - vec2f(0.5)) * 2.0;
+  let falloff = 1.0 - smoothstep(0.0, 1.0, radius);
+  let fog = exp2(-frame.fogDensity * frame.fogDensity *
+      input.fogDistance * input.fogDistance);
+  return vec4f(input.color.rgb * falloff * fog, input.color.a * falloff);
+}
+
+@fragment
+fn shadowMain(input : VertexOutput) -> @location(0) vec4f {
+  let fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
+      input.fogDistance * input.fogDistance), 0.0, 1.0);
+  return vec4f(mix(vec3f(0.0), frame.fogColor, fog),
+      input.color.a * (1.0 - fog));
 }`,
 
     particleShader: `
 struct Frame {
   mvp : mat4x4f,
   fullbright : f32,
-  pad0 : f32,
+  modelFullbrights : f32,
   pad1 : f32,
   pad2 : f32,
+  eye : vec3f,
+  time : f32,
+  fogColor : vec3f,
+  fogDensity : f32,
 }
 
 struct ParticleParams {
@@ -321,6 +409,7 @@ struct ParticleParams {
 struct VertexOutput {
   @builtin(position) position : vec4f,
   @location(0) color : vec4f,
+  @location(1) fogDistance : f32,
 }
 
 @vertex
@@ -337,12 +426,15 @@ fn vertexMain(@builtin(vertex_index) vertexIndex : u32,
   var output : VertexOutput;
   output.position = frame.mvp * vec4f(position, 1.0);
   output.color = color;
+  output.fogDistance = abs(output.position.w);
   return output;
 }
 
 @fragment
 fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
-  return input.color;
+  let fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
+      input.fogDistance * input.fogDistance), 0.0, 1.0);
+  return vec4f(mix(input.color.rgb, frame.fogColor, fog), input.color.a);
 }`,
 
     scanoutShader: `
@@ -667,6 +759,9 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       const modelModule = device.createShaderModule({
         label: 'WebGlideNitro models', code: Nitro.modelShader,
       });
+      const effectModule = device.createShaderModule({
+        label: 'WebGlideNitro model effects', code: Nitro.effectShader,
+      });
 
       const ALPHA_BLEND = {
         color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
@@ -803,6 +898,40 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         modelPipeline('WebGlideNitro models blended', ALPHA_BLEND, false);
       const modelAddPipeline =
         modelPipeline('WebGlideNitro models additive', ADD_BLEND, false);
+      const effectVertex = {
+        module: effectModule,
+        entryPoint: 'vertexMain',
+        buffers: [{
+          arrayStride: Nitro.MODEL_STRIDE,
+          attributes: [
+            { shaderLocation: 0, offset: 0, format: 'float32x3' },
+            { shaderLocation: 1, offset: 12, format: 'float32x2' },
+            { shaderLocation: 2, offset: 20, format: 'float32' },
+            { shaderLocation: 3, offset: 24, format: 'unorm8x4' },
+          ],
+        }],
+      };
+      const effectPipeline = (label, entryPoint, blend) =>
+        device.createRenderPipeline({
+          label,
+          layout: modelLayout,
+          vertex: effectVertex,
+          fragment: {
+            module: effectModule,
+            entryPoint,
+            targets: [{ format: 'rgba8unorm', blend }],
+          },
+          primitive: modelPrimitive,
+          depthStencil: {
+            format: 'depth24plus',
+            depthWriteEnabled: false,
+            depthCompare: 'less-equal',
+          },
+        });
+      const modelGlowPipeline =
+        effectPipeline('WebGlideNitro glows', 'glowMain', ADD_BLEND);
+      const modelShadowPipeline =
+        effectPipeline('WebGlideNitro shadows', 'shadowMain', ALPHA_BLEND);
 
       const scanoutPipeline = device.createRenderPipeline({
         label: 'WebGlideNitro scan-out',
@@ -884,7 +1013,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
 
       const frameUniform = device.createBuffer({
         label: 'WebGlideNitro frame uniform',
-        size: 96,
+        size: 128,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
       const scanoutUniform = device.createBuffer({
@@ -958,6 +1087,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         particlePipeline, scanoutPipeline,
         uiPipeline,
         modelOpaquePipeline, modelAlphaPipeline, modelAddPipeline,
+        modelGlowPipeline, modelShadowPipeline,
         frameUniform, scanoutUniform, uiUniform, particleUniform,
         paletteTexture, colormapTexture, tintTexture, lightmapSampler, sceneSampler,
         placeholderLightmap,
@@ -1339,10 +1469,11 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
    *   [20]     gamma        [21] contrast
    *   [22]     scene width  [23] scene height   (integers)
    *   [24..27] destination rect on the canvas   (integers)
-   *   [28]     flags: 1 = fullbright
+   *   [28]     flags: 1 = fullbright, 2 = model fullbright pixels
    *   [29..32] particle right basis vector
    *   [33..36] particle up basis vector
    *   [37..39] sky eye position    [40] sky time
+   *   [41..43] fog colour          [44] fog density
    *
    * data (see wgpuscenedata_t in wgpu_nitro.h) is fourteen ints:
    *   [0]  world index arena     [1]  index count
@@ -1364,7 +1495,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     const state = Nitro.checkDevice();
     if (!state?.encoder) return;
 
-    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 41);
+    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 45);
     const integers = HEAP32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 29);
     const data = HEAP32.subarray(dataPointer >> 2, (dataPointer >> 2) + 14);
     const indexPointer = data[0], indexCount = data[1];
@@ -1385,10 +1516,12 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       width: Math.max(integers[26], 1), height: Math.max(integers[27], 1),
     };
 
-    const frame = new Float32Array(24);
+    const frame = new Float32Array(28);
     frame.set(floats.subarray(0, 16));
     frame[16] = (integers[28] & 1) ? 1.0 : 0.0;
+    frame[17] = (integers[28] & 2) ? 1.0 : 0.0;
     frame.set(floats.subarray(37, 41), 20);
+    frame.set(floats.subarray(41, 45), 24);
     state.device.queue.writeBuffer(state.frameUniform, 0, frame);
 
     const scan = new Float32Array(8);
@@ -1455,7 +1588,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
 
     /* World and brush-entity surfaces: same vertex buffer, same index
      * arena, one dynamic offset per entity. */
-    const drawWorldBatches = (from, to, blended) => {
+    const drawWorldBatches = (from, to, blended, alphaFilter = 'all') => {
       if (!worldReady || from >= to) return;
       const batches = HEAP32.subarray(batchPointer >> 2,
         (batchPointer >> 2) + batchCount * 4);
@@ -1471,8 +1604,11 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         const count = batches[i * 4 + 2];
         const entity = batches[i * 4 + 3];
         if (!entry || count <= 0 || entity < 0 || entity >= entityCount) continue;
+        const alpha = HEAPF32[(entityPointer + entity * Nitro.ENTITY_STRIDE + 64) >> 2];
+        if ((alphaFilter === 'opaque' && alpha < 0.999) ||
+            (alphaFilter === 'blend' && alpha >= 0.999)) continue;
         const pipeline = entry.sky ? state.skyPipeline
-          : blended ? state.worldBlendPipeline : state.worldPipeline;
+          : (blended || alpha < 0.999) ? state.worldBlendPipeline : state.worldPipeline;
         if (boundPipeline !== pipeline) {
           pass.setPipeline(pipeline);
           pass.setBindGroup(0, state.frameBindGroup);
@@ -1495,7 +1631,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
 
     /* Alias models and sprites: unindexed triangles whose transform is
      * already baked in, so the batch's own flags are all that changes. */
-    const drawModelBatches = (from, to) => {
+    const drawModelBatches = (from, to, blendFilter = 'all') => {
       if (!modelBuffer || from >= to) return;
       const batches = HEAP32.subarray(modelBatchPointer >> 2,
         (modelBatchPointer >> 2) + modelBatchCount * 4);
@@ -1506,8 +1642,15 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         const first = batches[i * 4 + 1];
         const count = batches[i * 4 + 2];
         const flags = batches[i * 4 + 3];
+        const blends = (flags & (Nitro.MODEL_BLEND_ALPHA | Nitro.MODEL_BLEND_ADD |
+          Nitro.MODEL_GLOW | Nitro.MODEL_SHADOW)) !== 0;
         if (!entry || count <= 0) continue;
-        const pipeline = (flags & Nitro.MODEL_BLEND_ADD)
+        if ((blendFilter === 'opaque' && blends) ||
+            (blendFilter === 'blend' && !blends)) continue;
+        const pipeline = (flags & Nitro.MODEL_GLOW)
+          ? state.modelGlowPipeline
+          : (flags & Nitro.MODEL_SHADOW) ? state.modelShadowPipeline
+          : (flags & Nitro.MODEL_BLEND_ADD)
           ? state.modelAddPipeline
           : (flags & Nitro.MODEL_BLEND_ALPHA) ? state.modelAlphaPipeline
                                               : state.modelOpaquePipeline;
@@ -1542,9 +1685,14 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
 
     /* Opaque first, both kinds, then everything that blends -- the order
      * the software renderer's own edge list produces. */
-    drawWorldBatches(0, opaqueBatches, false);
-    drawModelBatches(0, opaqueModelBatches);
+    drawWorldBatches(0, opaqueBatches, false, 'opaque');
+    drawModelBatches(0, opaqueModelBatches, 'opaque');
+    /* Turbulent world batches are gathered with the world for batching, but
+     * alpha makes them translucent. Defer them until opaque models are down
+     * so an entity behind water cannot draw over the water surface. */
+    drawWorldBatches(0, opaqueBatches, true, 'blend');
     drawWorldBatches(opaqueBatches, batchCount, true);
+    drawModelBatches(0, opaqueModelBatches, 'blend');
     drawModelBatches(opaqueModelBatches, modelBatchCount);
 
     if (particlePointer && particleCount > 0) {

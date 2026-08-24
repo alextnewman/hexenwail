@@ -23,9 +23,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "quakedef.h"
 #include "mathlib.h"
+#if !defined(WEBGPUQUAKE)
 #include "gl_shader.h"
+#endif
 
+#ifndef CLAMP
 #define CLAMP(min,val,max) ((val) < (min) ? (min) : ((val) > (max) ? (max) : (val)))
+#endif
 
 //==============================================================================
 //

@@ -12,10 +12,9 @@
  * like is defined by the software rasteriser, and what it costs is measured
  * on the target iPad against Nitro's own captures.
  *
- * The shipping renderer is still the 8bpp software rasteriser (see
- * docs/web/SOFTWARE_RENDERER.md); Nitro is reached through the launcher's
- * "WebGlideNitro" renderer option, and its design lives in
- * docs/web/WEBGLIDE_NITRO.md.
+ * WebGlideNitro is the primary renderer. Its design lives in
+ * docs/web/WEBGLIDE_NITRO.md; the software rasteriser is parked as its
+ * correctness reference.
  *
  * The rules this file encodes:
  *
@@ -125,6 +124,7 @@ void WGPU_PolyBlendColor (float *rgba);
 #define NITROTEX_HOLEY		1u	/* palette index 0 is clear ('{' textures) */
 #define NITROTEX_ALPHA		2u	/* palette index 255 is clear (2D pics) */
 #define NITROTEX_WRAP		4u	/* repeat instead of clamping */
+#define NITROTEX_TURB		8u	/* authored liquid sine warp */
 
 /* Vertex layouts; mirrored by the pipeline descriptors in webgpu_nitro.js. */
 typedef struct
@@ -179,6 +179,8 @@ typedef struct
 #define NITROMODEL_BLEND_ALPHA	1u	/* src-alpha / one-minus-src-alpha */
 #define NITROMODEL_BLEND_ADD	2u	/* EF_SPECIAL_TRANS: additive */
 #define NITROMODEL_VIEWMODEL	4u	/* compressed depth range */
+#define NITROMODEL_GLOW		8u	/* authored additive billboard */
+#define NITROMODEL_SHADOW	16u	/* cheap projected alias shadow */
 
 typedef struct
 {
@@ -211,6 +213,7 @@ _Static_assert (sizeof(wgpuentity_t) == NITRO_ENTITY_ALIGN,
 
 /* The whole per-frame scene description, uploaded in one go. */
 #define NITROSCENE_FULLBRIGHT	1
+#define NITROSCENE_MODEL_FULLBRIGHTS	2
 
 typedef struct
 {
@@ -229,6 +232,8 @@ typedef struct
 	float	particle_up[4];
 	float	sky_eye[3];
 	float	sky_time;
+	float	fog_color[3];
+	float	fog_density;
 } wgpuscene_t;
 
 typedef struct
@@ -244,10 +249,9 @@ typedef struct
  * as one description.  Keeping it in a struct is what keeps a frame at
  * four calls into JavaScript however much is on screen.
  *
- * Both batch lists are emitted opaque-first, and the two "opaque" counts
- * are where each list stops being opaque.  That is the whole ordering
- * contract: world, opaque entities, translucent entities, view model,
- * particles.
+ * Both batch lists mark where entity gathering switches from opaque to
+ * translucent. The backend additionally defers alpha liquids, glows and
+ * shadows that share the opaque gathering phase.
  */
 typedef struct
 {
@@ -301,6 +305,8 @@ extern void Nitro_EndFrame (const wgpuui_params_t *params, const wgpuui_vertex_t
 
 void WGPUWorld_NewMap (void);
 void WGPUWorld_Shutdown (void);
+void WGPUWorld_UpdateLightstyles (void);
+void WGPUWorld_PushDlights (void);
 void WGPUWorld_BeginScene (void);
 void WGPUWorld_DrawWorld (void);
 void WGPUWorld_DrawBrushEntity (entity_t *entity);
