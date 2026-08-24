@@ -285,6 +285,7 @@ struct VertexOutput {
   @location(2) alpha : f32,
   @location(3) @interpolate(flat) tint : u32,
   @location(4) fogDistance : f32,
+  @location(5) @interpolate(flat) fullbright : u32,
 }
 
 @vertex
@@ -299,6 +300,7 @@ fn vertexMain(@location(0) position : vec3f,
   output.alpha = f32(shade.x) / 255.0;
   output.tint = shade.y;
   output.fogDistance = abs(output.position.w);
+  output.fullbright = shade.z;
   return output;
 }
 
@@ -320,7 +322,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   /* A negative row is the unlit sentinel sprites use: d_sprite.c never
    * touches the colormap, so neither does this. */
   if (input.light >= 0.0 && frame.fullbright == 0.0 &&
-      !(frame.modelFullbrights != 0.0 && index >= 224u)) {
+      !(frame.modelFullbrights != 0.0 && input.fullbright != 0u &&
+        index >= 224u)) {
     let row = clamp(i32(input.light), 0, 63);
     shaded = textureLoad(colormapTexture, vec2i(i32(index), row), 0).r;
   }
@@ -911,7 +914,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           ],
         }],
       };
-      const effectPipeline = (label, entryPoint, blend, stencil = false) =>
+      const effectPipeline = (label, entryPoint, blend, stencil = false,
+          depthCompare = 'less-equal') =>
         device.createRenderPipeline({
           label,
           layout: modelLayout,
@@ -925,7 +929,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           depthStencil: {
             format: 'depth24plus-stencil8',
             depthWriteEnabled: false,
-            depthCompare: 'less-equal',
+            depthCompare,
             ...(stencil ? {
               stencilFront: {
                 compare: 'equal',
@@ -947,7 +951,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       const modelGlowPipeline =
         effectPipeline('WebGlideNitro glows', 'glowMain', ADD_BLEND);
       const modelShadowPipeline =
-        effectPipeline('WebGlideNitro shadows', 'shadowMain', ALPHA_BLEND, true);
+        effectPipeline('WebGlideNitro shadows', 'shadowMain', ALPHA_BLEND, true,
+          'greater-equal');
 
       const scanoutPipeline = device.createRenderPipeline({
         label: 'WebGlideNitro scan-out',

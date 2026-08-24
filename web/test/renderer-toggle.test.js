@@ -278,9 +278,21 @@ test('WebGlideNitro implements the authored visual effects', () => {
   assert.match(nitroEntity, /NITROMODEL_GLOW/);
   assert.match(nitroEntity, /NITROMODEL_SHADOW/);
   assert.match(nitroEntity, /WGPUWorld_LightPoint \(sample, lightspot\)/,
-    'alias shadows must land on the sampled world floor');
+    'alias shadows must establish a receiver below the model');
+  assert.match(nitroEntity,
+    /XF_TORCH_GLOW \| XF_GLOW \| XF_MISSILE_GLOW \| EF_GLOW/,
+    'luminous models must not cast projected shadows');
   assert.match(nitroEntity, /shadevector\[0\] = cos \(-an\)/,
     'alias shadows must use the legacy directional projection');
+  assert.match(nitroEntity, /radius = sqrtf\(radius\)/);
+  assert.match(nitroEntity, /mins\[i\] = entity->origin\[i\] - radius/,
+    'alias culling must use transform-safe spherical bounds');
+  assert.match(nitroEntity, /shade \|= 1u << 16/,
+    'only explicitly luminous models may mark their high skin indices fullbright');
+  assert.match(webgpuNitro, /input\.fullbright != 0u/,
+    'incidental high skin indices must remain colormap-lit');
+  assert.match(webgpuNitro, /'greater-equal'/,
+    'shadows must be clipped where the sampled receiver does not exist');
   assert.match(webgpuNitro, /format: 'depth24plus-stencil8'/);
   assert.match(webgpuNitro, /stencilLoadOp: 'clear'/);
   assert.match(webgpuNitro, /passOp: 'increment-clamp'/,
