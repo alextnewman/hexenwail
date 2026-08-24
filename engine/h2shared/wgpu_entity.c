@@ -87,6 +87,10 @@ static int			nitro_model_batch_capacity;
 static int			nitro_model_batch_count;
 static int			nitro_model_opaque_batches;
 
+static vec3_t			*nitro_shadow_positions;
+static byte			*nitro_shadow_cached;
+static int			nitro_shadow_capacity;
+
 static int		nitro_batch_texture;
 static unsigned int	nitro_batch_flags;
 static int		nitro_batch_open;
@@ -866,6 +870,26 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 		vec3_t	lightspot, sample, shadevector, shadowvector;
 		float	an, shadowz;
 
+		if (pmdl->numverts > nitro_shadow_capacity)
+		{
+			vec3_t	*positions = (vec3_t *) realloc (nitro_shadow_positions,
+					(size_t)pmdl->numverts * sizeof(vec3_t));
+			byte	*cached = (byte *) realloc (nitro_shadow_cached,
+					(size_t)pmdl->numverts);
+
+			if (!positions || !cached)
+			{
+				free (positions);
+				free (cached);
+				Sys_Error ("WebGlideNitro: out of memory for %d shadow vertices",
+						pmdl->numverts);
+			}
+			nitro_shadow_positions = positions;
+			nitro_shadow_cached = cached;
+			nitro_shadow_capacity = pmdl->numverts;
+		}
+		memset (nitro_shadow_cached, 0, (size_t)pmdl->numverts);
+
 		VectorCopy (entity->origin, sample);
 		sample[2] += (model->mins[2] + model->maxs[2]) * 0.5f;
 		/* The model foot is the fallback when no world surface lies below it. */
@@ -894,23 +918,42 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 
 			for (j = 0; j < 3; j++)
 			{
-				const trivertx_t	*vert = &poseverts[ptri->vertindex[j]];
-				vec3_t			local, world;
-				float			height;
+				int			vertindex = ptri->vertindex[j];
 
-				local[0] = vert->v[0] * scale[0] + offset[0];
-				local[1] = vert->v[1] * scale[1] + offset[1];
-				local[2] = vert->v[2] * scale[2] + offset[2];
-				world[0] = entity->origin[0] + local[0] * forward[0] +
-					local[1] * right[0] + local[2] * up[0];
-				world[1] = entity->origin[1] + local[0] * forward[1] +
-					local[1] * right[1] + local[2] * up[1];
-				world[2] = entity->origin[2] + local[0] * forward[2] +
-					local[1] * right[2] + local[2] * up[2];
-				height = world[2] - shadowz;
-				out->position[0] = world[0] - shadowvector[0] * height;
-				out->position[1] = world[1] - shadowvector[1] * height;
-				out->position[2] = shadowz;
+				if (!nitro_shadow_cached[vertindex])
+				{
+					const trivertx_t	*vert = &poseverts[vertindex];
+					vec3_t			local, world, receiver;
+					float			height;
+
+					local[0] = vert->v[0] * scale[0] + offset[0];
+					local[1] = vert->v[1] * scale[1] + offset[1];
+					local[2] = vert->v[2] * scale[2] + offset[2];
+					world[0] = entity->origin[0] + local[0] * forward[0] +
+						local[1] * right[0] + local[2] * up[0];
+					world[1] = entity->origin[1] + local[0] * forward[1] +
+						local[1] * right[1] + local[2] * up[1];
+					world[2] = entity->origin[2] + local[0] * forward[2] +
+						local[1] * right[2] + local[2] * up[2];
+
+					height = world[2] - shadowz;
+					sample[0] = world[0] - shadowvector[0] * height;
+					sample[1] = world[1] - shadowvector[1] * height;
+					sample[2] = world[2];
+					receiver[0] = sample[0];
+					receiver[1] = sample[1];
+					receiver[2] = shadowz - 1.0f;
+					WGPUWorld_LightPoint (sample, receiver);
+
+					height = world[2] - (receiver[2] + 0.25f);
+					nitro_shadow_positions[vertindex][0] =
+						world[0] - shadowvector[0] * height;
+					nitro_shadow_positions[vertindex][1] =
+						world[1] - shadowvector[1] * height;
+					nitro_shadow_positions[vertindex][2] = receiver[2] + 0.25f;
+					nitro_shadow_cached[vertindex] = 1;
+				}
+				VectorCopy (nitro_shadow_positions[vertindex], out->position);
 				out->texcoord[0] = out->texcoord[1] = 0.5f;
 				out->light = -1.0f;
 				out->shade = 96u << 24;
@@ -1347,12 +1390,17 @@ void WGPUEntity_Shutdown (void)
 
 	free (nitro_model_vertices);
 	free (nitro_model_batches);
+	free (nitro_shadow_positions);
+	free (nitro_shadow_cached);
 	nitro_model_vertices = NULL;
 	nitro_model_batches = NULL;
+	nitro_shadow_positions = NULL;
+	nitro_shadow_cached = NULL;
 	nitro_model_capacity = 0;
 	nitro_model_count = 0;
 	nitro_model_batch_capacity = 0;
 	nitro_model_batch_count = 0;
 	nitro_model_opaque_batches = 0;
+	nitro_shadow_capacity = 0;
 	nitro_batch_open = 0;
 }
