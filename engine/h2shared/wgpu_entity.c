@@ -723,17 +723,25 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 	wgpumodel_vertex_t	*out;
 	vec3_t			mins, maxs, scale, offset, angles;
 	vec3_t			forward, right, up, plightvec;
-	float			alpha = 1.0f;
+	float			alpha = 1.0f, radius;
 	float			iw, ih;
 	unsigned int		flags = extraflags;
 	unsigned int		shade;
-	int			i, pose, numtris, skin, alphabyte;
+	int			i, pose, numtris, skin, alphabyte, pimp_flags;
 
 	if (!model)
 		return;
 
-	VectorAdd (entity->origin, model->mins, mins);
-	VectorAdd (entity->origin, model->maxs, maxs);
+	radius = model->radius;
+	if (entity->scale && entity->scale > 100)
+		radius *= (float)entity->scale / 100.0f;
+	if (model->flags & EF_ROTATE)
+		radius += 5.5f;
+	for (i = 0; i < 3; i++)
+	{
+		mins[i] = entity->origin[i] - radius;
+		maxs[i] = entity->origin[i] + radius;
+	}
 	if (entity != &cl.viewent && WGPU_CullBox (mins, maxs))
 		return;
 
@@ -850,7 +858,9 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 	c_alias_polys += numtris;
 	wgpu_frame_polys += numtris;
 
+	pimp_flags = R_GetPimpFlags (entity, NULL);
 	if (r_shadows.integer && entity != &cl.viewent &&
+	    !(pimp_flags & (XF_TORCH_GLOW | XF_GLOW | XF_MISSILE_GLOW | EF_GLOW)) &&
 	    !(flags & (NITROMODEL_BLEND_ALPHA | NITROMODEL_BLEND_ADD)))
 	{
 		vec3_t	lightspot, sample, shadevector, shadowvector;
