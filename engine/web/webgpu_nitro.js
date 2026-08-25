@@ -85,6 +85,7 @@ struct Frame {
   liquidStipple : f32,
   liquidRefract : f32,
   historyValid : f32,
+  liquidGlow : f32,
 }
 
 struct TexParams {
@@ -221,6 +222,11 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         lightColor = lightmap.rgb / lightmap.a;
       }
     }
+  }
+  if (turbulent && frame.liquidGlow > 0.0 &&
+      (material == 2u || material == 3u)) {
+    let glowRow = select(8.0, 4.0, material == 3u);
+    row = min(row, i32(round(mix(f32(row), glowRow, frame.liquidGlow))));
   }
   let shaded = textureLoad(colormapTexture, vec2i(i32(index), row), 0).r;
   var rgb = textureLoad(paletteTexture, vec2i(i32(shaded), 0), 0).rgb;
@@ -1290,7 +1296,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
 
       const frameUniform = device.createBuffer({
         label: 'WebGlideNitro frame uniform',
-        size: 128,
+        size: 144,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
       const scanoutUniform = device.createBuffer({
@@ -1801,7 +1807,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
    *   [47] dither  [48] 2x2 resolve  [49] retained-frame persistence
    *   [50] palette-domain contents and flash shifts
    *   [51] liquid material motion   [52] liquid stipple
-   *   [53] retained-frame liquid refraction
+   *   [53] retained-frame liquid refraction  [54] palette-domain liquid glow
    *
    * data (see wgpuscenedata_t in wgpu_nitro.h) is fourteen ints:
    *   [0]  world index arena     [1]  index count
@@ -1823,7 +1829,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     const state = Nitro.checkDevice();
     if (!state?.encoder) return;
 
-    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 54);
+    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 55);
     const integers = HEAP32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 29);
     const data = HEAP32.subarray(dataPointer >> 2, (dataPointer >> 2) + 14);
     const indexPointer = data[0], indexCount = data[1];
@@ -1844,7 +1850,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       width: Math.max(integers[26], 1), height: Math.max(integers[27], 1),
     };
 
-    const frame = new Float32Array(32);
+    const frame = new Float32Array(36);
     frame.set(floats.subarray(0, 16));
     frame[16] = (integers[28] & 1) ? 1.0 : 0.0;
     frame[17] = (integers[28] & 2) ? 1.0 : 0.0;
@@ -1856,6 +1862,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     frame[29] = floats[52];
     frame[30] = floats[53];
     frame[31] = state.historyValid ? 1.0 : 0.0;
+    frame[32] = floats[54];
     state.device.queue.writeBuffer(state.frameUniform, 0, frame);
 
     const scan = new Float32Array(12);

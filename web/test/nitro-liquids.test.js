@@ -13,6 +13,7 @@ test('Nitro liquid effects are archived and independently reversible', () => {
     'r_nitro_liquidmotion',
     'r_nitro_liquidstipple',
     'r_nitro_liquidrefract',
+    'r_nitro_liquidglow',
   ]) {
     assert.match(header, new RegExp(`extern cvar_t\\s+${name}`));
     assert.match(renderer, new RegExp(`${name} = \\{"${name}".*CVAR_ARCHIVE`));
@@ -27,6 +28,11 @@ test('world textures retain a compact material identity', () => {
   assert.match(world, /NITROTEX_LIQUID_LAVA/);
   assert.match(world, /NITROTEX_LIQUID_PORTAL/);
   assert.match(world, /flags \|= NITROTEX_TURB \| WGPUWorld_LiquidFlags \(texture\)/);
+  assert.match(world, /switch \(texture->content_class\)/);
+  assert.match(world, /case CONTENTS_SLIME:[\s\S]*NITROTEX_LIQUID_SLIME/);
+  assert.match(world, /case CONTENTS_LAVA:[\s\S]*NITROTEX_LIQUID_LAVA/);
+  assert.match(world, /"portal", 6\)[\s\S]*NITROTEX_LIQUID_PORTAL[\s\S]*switch \(texture->content_class\)/,
+    'named portals override the generic water contents class');
 });
 
 test('liquid motion is material-specific with the authored warp as its off state', () => {
@@ -46,6 +52,10 @@ test('liquid translucency uses stable ordered coverage', () => {
   assert.match(world, /1\.0f - 0\.06f \* style/);
   assert.match(world, /r_wateralpha\.value >= 1\.0f/,
     'authored alpha values just below one must not be replaced by Nitro defaults');
+  assert.doesNotMatch(world, /!translucent && r_wateralpha\.value >= 1\.0f/,
+    'authored translucent water must receive Nitro coverage at the default alpha');
+  assert.match(world, /!translucent && !texture->translucent_turb[\s\S]*return 1\.0f/,
+    'opaque water-content rtex surfaces retain authored opacity');
 });
 
 test('liquid refraction samples only retained scene colour and returns to the palette', () => {
@@ -56,6 +66,14 @@ test('liquid refraction samples only retained scene colour and returns to the pa
     /paletteQuantize\(mix\(rgb, history, frame\.liquidRefract \* finalScale\)\)/);
   assert.match(backend,
     /fogDensity : f32,\s+liquidMotion : f32,\s+liquidStipple : f32,\s+liquidRefract : f32,\s+historyValid : f32,/);
-  assert.match(backend, /const frame = new Float32Array\(32\)/);
+  assert.match(backend, /const frame = new Float32Array\(36\)/);
   assert.match(backend, /frame\[31\] = state\.historyValid \? 1\.0 : 0\.0/);
+});
+
+test('lava and portals receive reversible palette-domain luminosity', () => {
+  assert.match(backend, /frame\.liquidGlow > 0\.0/);
+  assert.match(backend, /material == 2u \|\| material == 3u/);
+  assert.match(backend, /row = min\(row,[\s\S]*frame\.liquidGlow/);
+  assert.match(backend, /label: 'WebGlideNitro frame uniform',\s+size: 144/);
+  assert.doesNotMatch(backend, /liquidGlow[\s\S]{0,200}(bloom|hdr)/i);
 });

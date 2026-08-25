@@ -352,15 +352,21 @@ result is snapped back into the palette. This is retained-frame refraction, not
 a physically based material or a new render pass.
 
 The compatibility alpha cvars still win when explicitly set below opaque.
-Otherwise the Nitro treatment gives water, slime and lava respective coverage
-targets of 0.82, 0.88 and 0.94; portals retain their authored 0.7 default.
-Turning stipple off restores the previous opaque compatibility defaults.
+Otherwise the Nitro treatment gives authored translucent water, slime and lava
+respective coverage targets of 0.82, 0.88 and 0.94; portals retain their
+authored 0.7 default. Opaque water-content `*rtex` surfaces remain opaque.
+Liquid identity comes from the BSP contents classification rather than the
+often-generic texture name. Lava and portals also cap their colormap darkness
+row to provide restrained self-luminosity; this remains palette-domain shading,
+not bloom or HDR. Turning stipple or glow off restores the corresponding
+compatibility treatment.
 
 | Cvar | Default | Meaning |
 | --- | --- | --- |
 | `r_nitro_liquidmotion` | `1` | Distinct per-material movement; `0` restores the common authored sine warp. |
 | `r_nitro_liquidstipple` | `1` | Ordered liquid coverage and Nitro material alpha; `0` restores ordinary alpha and compatibility opacity. |
 | `r_nitro_liquidrefract` | `0.12` | Previous-frame refraction strength, clamped to 0.25; `0` disables it. |
+| `r_nitro_liquidglow` | `1` | Palette-domain lava and portal luminosity; `0` restores ordinary lightmap shading. |
 
 ### Where it stops
 

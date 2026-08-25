@@ -629,6 +629,18 @@ static unsigned int WGPUWorld_LiquidFlags (const texture_t *texture)
 	if (!texture)
 		return NITROTEX_LIQUID_WATER;
 	name = (texture->name[0] == '*') ? texture->name + 1 : texture->name;
+	if (!q_strncasecmp (name, "tele", 4) ||
+	    !q_strncasecmp (name, "portal", 6))
+		return NITROTEX_LIQUID_PORTAL;
+	switch (texture->content_class)
+	{
+	case CONTENTS_SLIME:
+		return NITROTEX_LIQUID_SLIME;
+	case CONTENTS_LAVA:
+		return NITROTEX_LIQUID_LAVA;
+	case CONTENTS_WATER:
+		return NITROTEX_LIQUID_WATER;
+	}
 	if (!q_strncasecmp (name, "slime", 5))
 		return NITROTEX_LIQUID_SLIME;
 	if (!q_strncasecmp (name, "lava", 4))
@@ -1102,6 +1114,28 @@ static float WGPUWorld_LiquidAlpha (const texture_t *texture, qboolean transluce
 		return alpha;
 	}
 	name = (texture->name[0] == '*') ? texture->name + 1 : texture->name;
+	if (!q_strncasecmp (name, "tele", 4) ||
+	    !q_strncasecmp (name, "portal", 6))
+		return (r_telealpha.value <= 0) ? 0.7f : WGPUWorld_ClampAlpha (r_telealpha.value);
+	switch (texture->content_class)
+	{
+	case CONTENTS_LAVA:
+		if (r_lavaalpha.value > 0)
+			return WGPUWorld_ClampAlpha (r_lavaalpha.value);
+		return 1.0f - 0.06f * style;
+	case CONTENTS_SLIME:
+		if (r_slimealpha.value > 0)
+			return WGPUWorld_ClampAlpha (r_slimealpha.value);
+		return 1.0f - 0.12f * style;
+	case CONTENTS_WATER:
+		if (!translucent && !texture->translucent_turb)
+			return 1.0f;
+		alpha = WGPUWorld_ClampAlpha (r_wateralpha.value);
+		if (r_wateralpha.value >= 1.0f)
+			alpha += (0.82f - alpha) * style;
+		return alpha;
+	}
+
 	if (!q_strncasecmp (name, "lava", 4))
 	{
 		if (r_lavaalpha.value > 0)
@@ -1114,21 +1148,15 @@ static float WGPUWorld_LiquidAlpha (const texture_t *texture, qboolean transluce
 			return WGPUWorld_ClampAlpha (r_slimealpha.value);
 		return 1.0f - 0.12f * style;
 	}
-	if (!q_strncasecmp (name, "tele", 4) ||
-	    !q_strncasecmp (name, "portal", 6))
-		return (r_telealpha.value <= 0) ? 0.7f : WGPUWorld_ClampAlpha (r_telealpha.value);
 	if (translucent || strstr (name, "water") || strstr (name, "ice") ||
 	    strstr (name, "glass"))
 	{
 		alpha = WGPUWorld_ClampAlpha (r_wateralpha.value);
-		if (!translucent && r_wateralpha.value >= 1.0f)
+		if (r_wateralpha.value >= 1.0f)
 			alpha += (0.82f - alpha) * style;
 		return alpha;
 	}
-	alpha = WGPUWorld_ClampAlpha (r_turbalpha.value);
-	if (r_turbalpha.value >= 1.0f)
-		alpha += (0.82f - alpha) * style;
-	return alpha;
+	return WGPUWorld_ClampAlpha (r_turbalpha.value);
 }
 
 static void WGPUWorld_GatherChain (int head, int texindex, int textureid, int entity)

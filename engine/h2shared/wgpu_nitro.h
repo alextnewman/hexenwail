@@ -70,6 +70,7 @@ extern cvar_t	r_nitro_paletteshifts;	/* palette-snap contents and flash shifts *
 extern cvar_t	r_nitro_liquidmotion;	/* distinct material motion, 0 is legacy */
 extern cvar_t	r_nitro_liquidstipple;	/* ordered liquid translucency, 0 disables */
 extern cvar_t	r_nitro_liquidrefract;	/* retained-frame refraction strength */
+extern cvar_t	r_nitro_liquidglow;	/* palette-domain lava/portal luminosity */
 extern cvar_t	r_nitro_lightvol;	/* shared coarse world/entity irradiance */
 extern cvar_t	r_nitro_lightvol_cell;	/* map-space cell size */
 extern cvar_t	r_nitro_lightvol_budget; /* cells resolved per frame */
@@ -268,9 +269,10 @@ typedef struct
 	float	liquid_motion;
 	float	liquid_stipple;
 	float	liquid_refract;
+	float	liquid_glow;
 } wgpuscene_t;
-_Static_assert (sizeof(wgpuscene_t) == 54 * sizeof(float),
-		"wgpuscene_t must remain a packed 54-word JavaScript contract");
+_Static_assert (sizeof(wgpuscene_t) == 55 * sizeof(float),
+		"wgpuscene_t must remain a packed 55-word JavaScript contract");
 _Static_assert (offsetof(wgpuscene_t, liquid_motion) == 51 * sizeof(float),
 		"wgpuscene_t liquid controls must match JavaScript offsets");
 
