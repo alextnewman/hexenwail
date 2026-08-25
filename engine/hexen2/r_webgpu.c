@@ -117,6 +117,9 @@ cvar_t r_nitro_persistence = {"r_nitro_persistence", "0.06", CVAR_ARCHIVE};
 cvar_t r_nitro_fogbands = {"r_nitro_fogbands", "8", CVAR_ARCHIVE};
 cvar_t r_nitro_haze = {"r_nitro_haze", "0", CVAR_ARCHIVE};
 cvar_t r_nitro_paletteshifts = {"r_nitro_paletteshifts", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_liquidmotion = {"r_nitro_liquidmotion", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_liquidstipple = {"r_nitro_liquidstipple", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_liquidrefract = {"r_nitro_liquidrefract", "0.12", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol = {"r_nitro_lightvol", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol_cell = {"r_nitro_lightvol_cell", "64", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol_budget = {"r_nitro_lightvol_budget", "32", CVAR_ARCHIVE};
@@ -548,6 +551,9 @@ static void WGPU_SetupScene (wgpuscene_t *scene)
 	scene->scan_resolve = CLAMP (0.0f, r_nitro_resolve.value, 1.0f);
 	scene->scan_persistence = CLAMP (0.0f, r_nitro_persistence.value, 0.25f);
 	scene->scan_paletteshifts = r_nitro_paletteshifts.integer ? 1.0f : 0.0f;
+	scene->liquid_motion = CLAMP (0.0f, r_nitro_liquidmotion.value, 1.0f);
+	scene->liquid_stipple = CLAMP (0.0f, r_nitro_liquidstipple.value, 1.0f);
+	scene->liquid_refract = CLAMP (0.0f, r_nitro_liquidrefract.value, 0.25f);
 }
 
 /*
@@ -616,6 +622,9 @@ static void Web_RegisterRendererCvars (void)
 	Cvar_RegisterVariable(&r_nitro_fogbands);
 	Cvar_RegisterVariable(&r_nitro_haze);
 	Cvar_RegisterVariable(&r_nitro_paletteshifts);
+	Cvar_RegisterVariable(&r_nitro_liquidmotion);
+	Cvar_RegisterVariable(&r_nitro_liquidstipple);
+	Cvar_RegisterVariable(&r_nitro_liquidrefract);
 }
 
 void WebGPU_Init (void)

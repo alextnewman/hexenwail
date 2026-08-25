@@ -81,6 +81,10 @@ struct Frame {
   time : f32,
   fogColor : vec3f,
   fogDensity : f32,
+  liquidMotion : f32,
+  liquidStipple : f32,
+  liquidRefract : f32,
+  historyValid : f32,
 }
 
 struct TexParams {
@@ -106,6 +110,7 @@ struct Entity {
 @group(0) @binding(3) var lightmapTexture : texture_2d_array<f32>;
 @group(0) @binding(4) var lightmapSampler : sampler;
 @group(0) @binding(6) var paletteLutTexture : texture_2d<u32>;
+@group(0) @binding(7) var historyTexture : texture_2d<f32>;
 
 @group(1) @binding(0) var diffuseTexture : texture_2d<u32>;
 @group(1) @binding(1) var<uniform> texParams : TexParams;
@@ -145,6 +150,24 @@ fn atmosphereFog(distance : f32, position : vec3f) -> f32 {
   return fog;
 }
 
+fn liquidWarp(uv : vec2f, size : vec2f, material : u32) -> vec2f {
+  let texel = uv * size;
+  let legacy = vec2f(sin(texel.y * 0.125 + frame.time * 1.5),
+                     sin(texel.x * 0.125 + frame.time * 1.5)) * 2.0;
+  var identity = legacy;
+  if (material == 1u) {
+    identity = vec2f(sin(texel.y * 0.070 + frame.time * 0.55),
+                     sin(texel.x * 0.050 - frame.time * 0.35)) * 1.5;
+  } else if (material == 2u) {
+    identity = vec2f(sin((texel.x + texel.y) * 0.090 + frame.time * 0.70),
+                     cos((texel.x - texel.y) * 0.110 - frame.time * 0.50)) * 2.8;
+  } else if (material == 3u) {
+    identity = vec2f(sin((texel.x + texel.y) * 0.120 + frame.time * 2.20),
+                     cos((texel.x - texel.y) * 0.120 - frame.time * 1.80)) * 3.5;
+  }
+  return mix(legacy, identity, frame.liquidMotion) / size;
+}
+
 @vertex
 fn vertexMain(@location(0) position : vec3f,
               @location(1) uv : vec2f,
@@ -161,12 +184,13 @@ fn vertexMain(@location(0) position : vec3f,
 @fragment
 fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   let size = vec2i(texParams.size);
+  let turbulent = (texParams.flags & 8u) != 0u;
+  let material = (texParams.flags >> 4u) & 3u;
   var uv = input.uv;
-  if ((texParams.flags & 8u) != 0u) {
-    let phase = frame.time * 1.5;
-    uv += vec2f(sin(input.uv.y * texParams.size.y * 0.125 + phase),
-                sin(input.uv.x * texParams.size.x * 0.125 + phase)) *
-          (2.0 / texParams.size);
+  var warp = vec2f(0.0);
+  if (turbulent) {
+    warp = liquidWarp(input.uv, texParams.size, material);
+    uv += warp;
   }
   let texel = vec2i(floor(uv * texParams.size));
   let wrapped = ((texel % size) + size) % size;
@@ -203,8 +227,35 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   if (length(lightColor - vec3f(1.0)) > 0.01) {
     rgb = paletteQuantize(rgb * lightColor);
   }
+  if (turbulent && frame.historyValid != 0.0 && frame.liquidRefract > 0.0) {
+    let historySize = vec2i(textureDimensions(historyTexture));
+    let refractScale = select(1.0, 0.55, material == 1u);
+    let materialScale = select(refractScale, 0.30, material == 2u);
+    let finalScale = select(materialScale, 1.35, material == 3u);
+    let offset = warp * texParams.size * (1.5 * finalScale);
+    let historyTexel = clamp(vec2i(input.position.xy + offset), vec2i(0),
+                             historySize - vec2i(1));
+    let history = textureLoad(historyTexture, historyTexel, 0).rgb;
+    rgb = paletteQuantize(mix(rgb, history, frame.liquidRefract * finalScale));
+  }
   let fog = atmosphereFog(input.fogDistance, input.worldPosition);
-  return vec4f(paletteQuantize(mix(rgb, frame.fogColor, fog)), entity.alpha);
+  var alpha = entity.alpha;
+  if (turbulent && alpha < 0.999 && frame.liquidStipple > 0.0) {
+    let bayer = array<f32, 16>(
+         0.0,  8.0,  2.0, 10.0,
+        12.0,  4.0, 14.0,  6.0,
+         3.0, 11.0,  1.0,  9.0,
+        15.0,  7.0, 13.0,  5.0);
+    let ditherIndex = (i32(input.position.y) & 3) * 4 +
+                      (i32(input.position.x) & 3);
+    let threshold = (bayer[ditherIndex] + 0.5) / 16.0;
+    let coverage = mix(1.0, alpha, frame.liquidStipple);
+    if (threshold > coverage) {
+      discard;
+    }
+    alpha /= coverage;
+  }
+  return vec4f(paletteQuantize(mix(rgb, frame.fogColor, fog)), alpha);
 }`,
 
     /*
@@ -733,9 +784,9 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       return Nitro.state;
     },
 
-    /* The frame bind group holds the palette, the colormap, the tint table
-     * and the map's lightmap array; only the last of those ever changes,
-     * and only when a map is loaded or unloaded. */
+    /* The frame bind group holds the palette, colormap, tint table, lightmap
+     * array and previous scene colour.  The last two change only on map load
+     * or scene resize. */
     rebuildFrameBindGroup() {
       const state = Nitro.state;
       state.frameBindGroup = state.device.createBindGroup({
@@ -749,6 +800,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           { binding: 4, resource: state.lightmapSampler },
           { binding: 5, resource: state.tintTexture.createView() },
           { binding: 6, resource: state.paletteLutTexture.createView() },
+          { binding: 7, resource: state.historyColorView ||
+              state.placeholderHistory.createView() },
         ],
       });
     },
@@ -819,6 +872,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       state.sceneWidth = width;
       state.sceneHeight = height;
       state.historyValid = false;
+      Nitro.rebuildFrameBindGroup();
     },
 
     ensureUploadBuffer(name, bytes, usage) {
@@ -868,6 +922,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
             texture: { sampleType: 'uint' } },
           { binding: 6, visibility: GPUShaderStage.FRAGMENT,
             texture: { sampleType: 'uint' } },
+          { binding: 7, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: 'float' } },
         ],
       });
       /* One layout for every indexed texture in the game, shared by the
@@ -1289,6 +1345,12 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         format: 'rgba8unorm',
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
       });
+      const placeholderHistory = device.createTexture({
+        label: 'WebGlideNitro history placeholder',
+        size: { width: 1, height: 1 },
+        format: 'rgba8unorm',
+        usage: GPUTextureUsage.TEXTURE_BINDING,
+      });
       const lightmapSampler = device.createSampler({
         label: 'WebGlideNitro lightmap sampler',
         magFilter: 'linear', minFilter: 'linear',
@@ -1313,7 +1375,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         frameUniform, scanoutUniform, uiUniform, particleUniform,
         paletteTexture, paletteLutTexture, colormapTexture, tintTexture,
         lightmapSampler, sceneSampler,
-        placeholderLightmap,
+        placeholderLightmap, placeholderHistory,
         lightmapTexture: null, lightmapView: placeholderLightmap.createView({
           dimension: '2d-array',
         }),
@@ -1379,6 +1441,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     state.entityBuffer?.destroy();
     state.lightmapTexture?.destroy();
     state.placeholderLightmap?.destroy();
+    state.placeholderHistory?.destroy();
     state.sceneColor?.destroy();
     state.sceneDepth?.destroy();
     state.historyColor?.destroy();
@@ -1731,6 +1794,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
    *   [45] fog bands               [46] localized haze
    *   [47] dither  [48] 2x2 resolve  [49] retained-frame persistence
    *   [50] palette-domain contents and flash shifts
+   *   [51] liquid material motion   [52] liquid stipple
+   *   [53] retained-frame liquid refraction
    *
    * data (see wgpuscenedata_t in wgpu_nitro.h) is fourteen ints:
    *   [0]  world index arena     [1]  index count
@@ -1752,7 +1817,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     const state = Nitro.checkDevice();
     if (!state?.encoder) return;
 
-    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 51);
+    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 54);
     const integers = HEAP32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 29);
     const data = HEAP32.subarray(dataPointer >> 2, (dataPointer >> 2) + 14);
     const indexPointer = data[0], indexCount = data[1];
@@ -1773,7 +1838,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       width: Math.max(integers[26], 1), height: Math.max(integers[27], 1),
     };
 
-    const frame = new Float32Array(28);
+    const frame = new Float32Array(32);
     frame.set(floats.subarray(0, 16));
     frame[16] = (integers[28] & 1) ? 1.0 : 0.0;
     frame[17] = (integers[28] & 2) ? 1.0 : 0.0;
@@ -1781,6 +1846,10 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     frame[19] = floats[46];
     frame.set(floats.subarray(37, 41), 20);
     frame.set(floats.subarray(41, 45), 24);
+    frame[28] = floats[51];
+    frame[29] = floats[52];
+    frame[30] = floats[53];
+    frame[31] = state.historyValid ? 1.0 : 0.0;
     state.device.queue.writeBuffer(state.frameUniform, 0, frame);
 
     const scan = new Float32Array(12);
