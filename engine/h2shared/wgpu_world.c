@@ -1097,7 +1097,7 @@ static float WGPUWorld_LiquidAlpha (const texture_t *texture, qboolean transluce
 	if (!texture)
 	{
 		alpha = WGPUWorld_ClampAlpha (r_turbalpha.value);
-		if (alpha >= 0.999f)
+		if (r_turbalpha.value >= 1.0f)
 			alpha += (0.82f - alpha) * style;
 		return alpha;
 	}
@@ -1121,12 +1121,12 @@ static float WGPUWorld_LiquidAlpha (const texture_t *texture, qboolean transluce
 	    strstr (name, "glass"))
 	{
 		alpha = WGPUWorld_ClampAlpha (r_wateralpha.value);
-		if (!translucent && alpha >= 0.999f)
+		if (!translucent && r_wateralpha.value >= 1.0f)
 			alpha += (0.82f - alpha) * style;
 		return alpha;
 	}
 	alpha = WGPUWorld_ClampAlpha (r_turbalpha.value);
-	if (alpha >= 0.999f)
+	if (r_turbalpha.value >= 1.0f)
 		alpha += (0.82f - alpha) * style;
 	return alpha;
 }

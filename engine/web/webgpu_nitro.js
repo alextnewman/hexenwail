@@ -229,9 +229,14 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   }
   if (turbulent && frame.historyValid != 0.0 && frame.liquidRefract > 0.0) {
     let historySize = vec2i(textureDimensions(historyTexture));
-    let refractScale = select(1.0, 0.55, material == 1u);
-    let materialScale = select(refractScale, 0.30, material == 2u);
-    let finalScale = select(materialScale, 1.35, material == 3u);
+    var finalScale = 1.0;
+    if (material == 1u) {
+      finalScale = 0.55;
+    } else if (material == 2u) {
+      finalScale = 0.30;
+    } else if (material == 3u) {
+      finalScale = 1.35;
+    }
     let offset = warp * texParams.size * (1.5 * finalScale);
     let historyTexel = clamp(vec2i(input.position.xy + offset), vec2i(0),
                              historySize - vec2i(1));

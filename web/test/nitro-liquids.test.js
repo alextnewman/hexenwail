@@ -44,6 +44,8 @@ test('liquid translucency uses stable ordered coverage', () => {
   assert.match(world, /0\.82f - alpha/);
   assert.match(world, /0\.88f - 1\.0f/);
   assert.match(world, /0\.94f - 1\.0f/);
+  assert.match(world, /r_wateralpha\.value >= 1\.0f/,
+    'authored alpha values just below one must not be replaced by Nitro defaults');
 });
 
 test('liquid refraction samples only retained scene colour and returns to the palette', () => {
@@ -52,5 +54,8 @@ test('liquid refraction samples only retained scene colour and returns to the pa
   assert.match(backend, /textureLoad\(historyTexture, historyTexel, 0\)/);
   assert.match(backend,
     /paletteQuantize\(mix\(rgb, history, frame\.liquidRefract \* finalScale\)\)/);
+  assert.match(backend,
+    /fogDensity : f32,\s+liquidMotion : f32,\s+liquidStipple : f32,\s+liquidRefract : f32,\s+historyValid : f32,/);
+  assert.match(backend, /const frame = new Float32Array\(32\)/);
   assert.match(backend, /frame\[31\] = state\.historyValid \? 1\.0 : 0\.0/);
 });
