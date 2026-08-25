@@ -269,6 +269,10 @@ typedef struct
 	float	liquid_stipple;
 	float	liquid_refract;
 } wgpuscene_t;
+_Static_assert (sizeof(wgpuscene_t) == 54 * sizeof(float),
+		"wgpuscene_t must remain a packed 54-word JavaScript contract");
+_Static_assert (offsetof(wgpuscene_t, liquid_motion) == 51 * sizeof(float),
+		"wgpuscene_t liquid controls must match JavaScript offsets");
 
 typedef struct
 {
