@@ -67,6 +67,9 @@ extern cvar_t	r_nitro_persistence;	/* coloured-light history, 0 disables */
 extern cvar_t	r_nitro_fogbands;	/* depth steps in authored fog, 0 is smooth */
 extern cvar_t	r_nitro_haze;		/* world-space fog pockets, 0 disables */
 extern cvar_t	r_nitro_paletteshifts;	/* palette-snap contents and flash shifts */
+extern cvar_t	r_nitro_liquidmotion;	/* distinct material motion, 0 is legacy */
+extern cvar_t	r_nitro_liquidstipple;	/* ordered liquid translucency, 0 disables */
+extern cvar_t	r_nitro_liquidrefract;	/* retained-frame refraction strength */
 extern cvar_t	r_nitro_lightvol;	/* shared coarse world/entity irradiance */
 extern cvar_t	r_nitro_lightvol_cell;	/* map-space cell size */
 extern cvar_t	r_nitro_lightvol_budget; /* cells resolved per frame */
@@ -134,6 +137,12 @@ void WGPU_PolyBlendColor (float *rgba);
 #define NITROTEX_ALPHA		2u	/* palette index 255 is clear (2D pics) */
 #define NITROTEX_WRAP		4u	/* repeat instead of clamping */
 #define NITROTEX_TURB		8u	/* authored liquid sine warp */
+#define NITROTEX_LIQUID_SHIFT	4u
+#define NITROTEX_LIQUID_MASK	(3u << NITROTEX_LIQUID_SHIFT)
+#define NITROTEX_LIQUID_WATER	(0u << NITROTEX_LIQUID_SHIFT)
+#define NITROTEX_LIQUID_SLIME	(1u << NITROTEX_LIQUID_SHIFT)
+#define NITROTEX_LIQUID_LAVA	(2u << NITROTEX_LIQUID_SHIFT)
+#define NITROTEX_LIQUID_PORTAL	(3u << NITROTEX_LIQUID_SHIFT)
 
 /* Vertex layouts; mirrored by the pipeline descriptors in webgpu_nitro.js. */
 typedef struct
@@ -256,7 +265,14 @@ typedef struct
 	float	scan_resolve;
 	float	scan_persistence;
 	float	scan_paletteshifts;
+	float	liquid_motion;
+	float	liquid_stipple;
+	float	liquid_refract;
 } wgpuscene_t;
+_Static_assert (sizeof(wgpuscene_t) == 54 * sizeof(float),
+		"wgpuscene_t must remain a packed 54-word JavaScript contract");
+_Static_assert (offsetof(wgpuscene_t, liquid_motion) == 51 * sizeof(float),
+		"wgpuscene_t liquid controls must match JavaScript offsets");
 
 typedef struct
 {

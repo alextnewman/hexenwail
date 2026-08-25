@@ -343,6 +343,25 @@ one of these operations.
 | `r_nitro_haze` | `0` | Strength of localized palette haze; disabled pending target-device aesthetic validation. |
 | `r_nitro_paletteshifts` | `1` | Palette-snap contents, damage, powerup and lightning/white-flash shifts; `0` restores continuous RGB scan-out tinting. |
 
+Liquids carry a two-bit material identity alongside the existing turbulence
+flag. Water keeps the familiar crossed sine motion, slime drifts slowly, lava
+churns and portals move quickly in opposing directions. Translucent coverage is
+a stable 4x4 ordered stipple rather than noisy alpha, and a restrained sample
+from the previous scene colour bends what appears behind the surface before the
+result is snapped back into the palette. This is retained-frame refraction, not
+a physically based material or a new render pass.
+
+The compatibility alpha cvars still win when explicitly set below opaque.
+Otherwise the Nitro treatment gives water, slime and lava respective coverage
+targets of 0.82, 0.88 and 0.94; portals retain their authored 0.7 default.
+Turning stipple off restores the previous opaque compatibility defaults.
+
+| Cvar | Default | Meaning |
+| --- | --- | --- |
+| `r_nitro_liquidmotion` | `1` | Distinct per-material movement; `0` restores the common authored sine warp. |
+| `r_nitro_liquidstipple` | `1` | Ordered liquid coverage and Nitro material alpha; `0` restores ordinary alpha and compatibility opacity. |
+| `r_nitro_liquidrefract` | `0.12` | Previous-frame refraction strength, clamped to 0.25; `0` disables it. |
+
 ### Where it stops
 
 The renderer prints its own gaps once per map (`r_nitro_report 0` silences
@@ -373,25 +392,12 @@ one `drawIndexed` and it is invisible unless two translucent things overlap.
 `DRF_TRANSLUCENT` is an authored half blend for brush, alias and sprite
 entities; it does not inherit `r_wateralpha`, which controls liquid materials.
 
-Core authored transparency is already active: `DRF_TRANSLUCENT`, entity alpha,
-transparent/special-trans alias models and sprites, teleporter surfaces and
-non-default liquid alpha values select blend pipelines with depth writes off.
-Ordinary water remains opaque at the compatibility default
-`r_wateralpha 1`; changing that cvar exercises the existing path. The later
-“supernatural liquids” horizon adds distinctive dithered translucency and
-retained-frame refraction—it does not introduce basic alpha blending. If an
-authored transparent entity remains opaque with an alpha value below one, that
-is a regression rather than deferred work.
-
-Core authored transparency is already active: `DRF_TRANSLUCENT`, entity alpha,
-transparent/special-trans alias models and sprites, teleporter surfaces and
-non-default liquid alpha values select blend pipelines with depth writes off.
-Ordinary water remains opaque at the compatibility default
-`r_wateralpha 1`; changing that cvar exercises the existing path. The later
-“supernatural liquids” horizon adds distinctive dithered translucency and
-retained-frame refraction—it does not introduce basic alpha blending. If an
-authored transparent entity remains opaque with an alpha value below one, that
-is a regression rather than deferred work.
+Core authored transparency remains active beneath the Nitro treatment:
+`DRF_TRANSLUCENT`, entity alpha, transparent/special-trans alias models and
+sprites, teleporter surfaces and non-default liquid alpha values select blend
+pipelines with depth writes off. If an authored transparent entity remains
+opaque with an alpha value below one, that is a regression rather than an
+invented-effect policy.
 
 The launcher labels Nitro as the default and the service worker precaches its
 core bundle.
@@ -451,9 +457,11 @@ content rather than disguising omissions:
    optional world-space haze provides localized pockets. Each invented
    operation has an independent off switch; target-iPad Nitro-before/Nitro-after
    capture and aesthetic review remain the acceptance gate.
-4. **Give liquids supernatural material identity:** distinct water, slime, lava
-   and portal movement, translucency and retained-frame refraction without
-   physically based material simulation.
+4. **Give liquids supernatural material identity (implemented, target
+   validation pending):** distinct water, slime, lava and portal movement,
+   ordered translucency and restrained retained-frame refraction without
+   physically based material simulation. Each invented part has an independent
+   off switch and the final colour returns through the palette.
 5. **Make magic spectacular:** GPU-pulled indexed particles, stippled trails,
    sprite ribbons, glow orbs and spell-family temporal signatures.
 6. **Protect the result under load:** measured adaptive scene scale first;

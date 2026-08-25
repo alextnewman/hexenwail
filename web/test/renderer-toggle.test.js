@@ -272,7 +272,7 @@ test('WebGlideNitro implements the authored visual effects', () => {
   assert.match(nitroFront, /Fog_SetupFrame \(\)/);
   assert.match(nitroWorld, /surf->dlightbits/);
   assert.match(nitroWorld, /NITROTEX_TURB/);
-  assert.match(webgpuNitro, /sin\(input\.uv\.y/);
+  assert.match(webgpuNitro, /sin\(texel\.y \* 0\.125/);
   assert.match(webgpuNitro, /exp2\(-frame\.fogDensity/);
   assert.match(webgpuNitro, /index >= 224u/);
   assert.match(nitroEntity, /NITROMODEL_GLOW/);
