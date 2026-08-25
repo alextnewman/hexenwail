@@ -77,6 +77,7 @@ static int		nitro_numsurfaces;
 /* One texture id per entry of the map's texture table, plus the chain heads
  * the BSP walk pushes onto. */
 static int	*nitro_texture_ids;
+static byte	*nitro_liquid_classes;
 static int	*nitro_texchain;
 static int	*nitro_animcache;	/* [frame][texture], -1 = not resolved yet */
 static int	nitro_numtextures;
@@ -622,33 +623,66 @@ static int WGPUWorld_LoadSkyTexture (const texture_t *texture)
 	return id;
 }
 
-static unsigned int WGPUWorld_LiquidFlags (const texture_t *texture)
+enum
+{
+	NITROLIQUID_UNKNOWN,
+	NITROLIQUID_WATER,
+	NITROLIQUID_SLIME,
+	NITROLIQUID_LAVA,
+	NITROLIQUID_PORTAL
+};
+
+static byte WGPUWorld_LiquidClass (const qmodel_t *world, const texture_t *texture)
 {
 	const char	*name;
+	int		li, mi;
 
 	if (!texture)
-		return NITROTEX_LIQUID_WATER;
+		return NITROLIQUID_UNKNOWN;
 	name = (texture->name[0] == '*') ? texture->name + 1 : texture->name;
 	if (!q_strncasecmp (name, "tele", 4) ||
 	    !q_strncasecmp (name, "portal", 6))
-		return NITROTEX_LIQUID_PORTAL;
-	switch (texture->content_class)
+		return NITROLIQUID_PORTAL;
+
+	for (li = 0; li < world->numleafs; li++)
 	{
-	case CONTENTS_SLIME:
-		return NITROTEX_LIQUID_SLIME;
-	case CONTENTS_LAVA:
-		return NITROTEX_LIQUID_LAVA;
-	case CONTENTS_WATER:
-		return NITROTEX_LIQUID_WATER;
+		const mleaf_t	*leaf = &world->leafs[li];
+		byte		material;
+
+		switch (leaf->contents)
+		{
+		case CONTENTS_WATER: material = NITROLIQUID_WATER; break;
+		case CONTENTS_SLIME: material = NITROLIQUID_SLIME; break;
+		case CONTENTS_LAVA: material = NITROLIQUID_LAVA; break;
+		default: continue;
+		}
+		for (mi = 0; mi < leaf->nummarksurfaces; mi++)
+		{
+			const msurface_t *surf = leaf->firstmarksurface[mi];
+			if ((surf->flags & SURF_DRAWTURB) &&
+			    surf->texinfo->texture == texture)
+				return material;
+		}
 	}
 	if (!q_strncasecmp (name, "slime", 5))
-		return NITROTEX_LIQUID_SLIME;
+		return NITROLIQUID_SLIME;
 	if (!q_strncasecmp (name, "lava", 4))
-		return NITROTEX_LIQUID_LAVA;
-	if (!q_strncasecmp (name, "tele", 4) ||
-	    !q_strncasecmp (name, "portal", 6))
-		return NITROTEX_LIQUID_PORTAL;
-	return NITROTEX_LIQUID_WATER;
+		return NITROLIQUID_LAVA;
+	if (strstr (name, "water") || strstr (name, "ice") ||
+	    strstr (name, "glass"))
+		return NITROLIQUID_WATER;
+	return NITROLIQUID_UNKNOWN;
+}
+
+static unsigned int WGPUWorld_LiquidFlags (byte material)
+{
+	switch (material)
+	{
+	case NITROLIQUID_SLIME: return NITROTEX_LIQUID_SLIME;
+	case NITROLIQUID_LAVA: return NITROTEX_LIQUID_LAVA;
+	case NITROLIQUID_PORTAL: return NITROTEX_LIQUID_PORTAL;
+	default: return NITROTEX_LIQUID_WATER;
+	}
 }
 
 static void WGPUWorld_LoadTextures (qmodel_t *world)
@@ -657,9 +691,11 @@ static void WGPUWorld_LoadTextures (qmodel_t *world)
 
 	nitro_numtextures = world->numtextures;
 	nitro_texture_ids = (int *) calloc ((size_t)q_max(nitro_numtextures, 1), sizeof(int));
+	nitro_liquid_classes = (byte *) calloc ((size_t)q_max(nitro_numtextures, 1), sizeof(byte));
 	nitro_texchain = (int *) malloc ((size_t)q_max(nitro_numtextures, 1) * sizeof(int));
 	nitro_animcache = (int *) malloc ((size_t)q_max(nitro_numtextures, 1) * 2 * sizeof(int));
-	if (!nitro_texture_ids || !nitro_texchain || !nitro_animcache)
+	if (!nitro_texture_ids || !nitro_liquid_classes ||
+	    !nitro_texchain || !nitro_animcache)
 		Sys_Error ("WebGlideNitro: out of memory for world textures");
 
 	for (i = 0; i < nitro_numtextures; i++)
@@ -679,7 +715,11 @@ static void WGPUWorld_LoadTextures (qmodel_t *world)
 		if (texture->name[0] == '{')
 			flags |= NITROTEX_HOLEY;
 		if (texture->name[0] == '*')
-			flags |= NITROTEX_TURB | WGPUWorld_LiquidFlags (texture);
+		{
+			nitro_liquid_classes[i] = WGPUWorld_LiquidClass (world, texture);
+			flags |= NITROTEX_TURB |
+				WGPUWorld_LiquidFlags (nitro_liquid_classes[i]);
+		}
 
 		nitro_texture_ids[i] = Nitro_CreateTexture (texture->name,
 				(int)texture->width, (int)texture->height,
@@ -1100,7 +1140,8 @@ static float WGPUWorld_ClampAlpha (float alpha)
 	return CLAMP(0.1f, alpha, 1.0f);
 }
 
-static float WGPUWorld_LiquidAlpha (const texture_t *texture, qboolean translucent)
+static float WGPUWorld_LiquidAlpha (const texture_t *texture, byte material,
+				   qboolean translucent)
 {
 	const char	*name;
 	float		style = CLAMP (0.0f, r_nitro_liquidstipple.value, 1.0f);
@@ -1117,18 +1158,19 @@ static float WGPUWorld_LiquidAlpha (const texture_t *texture, qboolean transluce
 	if (!q_strncasecmp (name, "tele", 4) ||
 	    !q_strncasecmp (name, "portal", 6))
 		return (r_telealpha.value <= 0) ? 0.7f : WGPUWorld_ClampAlpha (r_telealpha.value);
-	switch (texture->content_class)
+	switch (material)
 	{
-	case CONTENTS_LAVA:
+	case NITROLIQUID_LAVA:
 		if (r_lavaalpha.value > 0)
 			return WGPUWorld_ClampAlpha (r_lavaalpha.value);
 		return 1.0f - 0.06f * style;
-	case CONTENTS_SLIME:
+	case NITROLIQUID_SLIME:
 		if (r_slimealpha.value > 0)
 			return WGPUWorld_ClampAlpha (r_slimealpha.value);
 		return 1.0f - 0.12f * style;
-	case CONTENTS_WATER:
-		if (!translucent && !texture->translucent_turb)
+	case NITROLIQUID_WATER:
+		if (!translucent && !strstr (name, "water") &&
+		    !strstr (name, "ice") && !strstr (name, "glass"))
 			return 1.0f;
 		alpha = WGPUWorld_ClampAlpha (r_wateralpha.value);
 		if (r_wateralpha.value >= 1.0f)
@@ -1198,7 +1240,10 @@ static void WGPUWorld_GatherChain (int head, int texindex, int textureid, int en
 		wgpumatrix_t		mvp;
 		float			alpha = WGPUWorld_LiquidAlpha (
 			(texindex >= 0 && texindex < nitro_numtextures) ?
-				cl.worldmodel->textures[texindex] : NULL, translucent);
+				cl.worldmodel->textures[texindex] : NULL,
+			(texindex >= 0 && texindex < nitro_numtextures) ?
+				nitro_liquid_classes[texindex] : NITROLIQUID_UNKNOWN,
+			translucent);
 
 		memcpy (mvp.m, source->mvp, sizeof(mvp.m));
 		entity = WGPUWorld_NewEntityBlock (&mvp, source->alpha * alpha, source->light);
@@ -1758,6 +1803,7 @@ void WGPUWorld_Shutdown (void)
 
 	free (nitro_surfaces);
 	free (nitro_texture_ids);
+	free (nitro_liquid_classes);
 	free (nitro_texchain);
 	free (nitro_animcache);
 	free (nitro_surf_indices);
@@ -1766,6 +1812,7 @@ void WGPUWorld_Shutdown (void)
 	free (nitro_entities);
 	nitro_surfaces = NULL;
 	nitro_texture_ids = NULL;
+	nitro_liquid_classes = NULL;
 	nitro_texchain = NULL;
 	nitro_animcache = NULL;
 	nitro_surf_indices = NULL;

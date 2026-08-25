@@ -27,11 +27,10 @@ test('world textures retain a compact material identity', () => {
   assert.match(world, /NITROTEX_LIQUID_SLIME/);
   assert.match(world, /NITROTEX_LIQUID_LAVA/);
   assert.match(world, /NITROTEX_LIQUID_PORTAL/);
-  assert.match(world, /flags \|= NITROTEX_TURB \| WGPUWorld_LiquidFlags \(texture\)/);
-  assert.match(world, /switch \(texture->content_class\)/);
-  assert.match(world, /case CONTENTS_SLIME:[\s\S]*NITROTEX_LIQUID_SLIME/);
-  assert.match(world, /case CONTENTS_LAVA:[\s\S]*NITROTEX_LIQUID_LAVA/);
-  assert.match(world, /"portal", 6\)[\s\S]*NITROTEX_LIQUID_PORTAL[\s\S]*switch \(texture->content_class\)/,
+  assert.match(world, /WGPUWorld_LiquidClass \(world, texture\)/);
+  assert.match(world, /case CONTENTS_SLIME: material = NITROLIQUID_SLIME/);
+  assert.match(world, /case CONTENTS_LAVA: material = NITROLIQUID_LAVA/);
+  assert.match(world, /"portal", 6\)[\s\S]*return NITROLIQUID_PORTAL[\s\S]*for \(li = 0;/,
     'named portals override the generic water contents class');
 });
 
@@ -54,7 +53,7 @@ test('liquid translucency uses stable ordered coverage', () => {
     'authored alpha values just below one must not be replaced by Nitro defaults');
   assert.doesNotMatch(world, /!translucent && r_wateralpha\.value >= 1\.0f/,
     'authored translucent water must receive Nitro coverage at the default alpha');
-  assert.match(world, /!translucent && !texture->translucent_turb[\s\S]*return 1\.0f/,
+  assert.match(world, /!translucent && !strstr \(name, "water"\)[\s\S]*return 1\.0f/,
     'opaque water-content rtex surfaces retain authored opacity');
 });
 
