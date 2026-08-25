@@ -1106,13 +1106,13 @@ static float WGPUWorld_LiquidAlpha (const texture_t *texture, qboolean transluce
 	{
 		if (r_lavaalpha.value > 0)
 			return WGPUWorld_ClampAlpha (r_lavaalpha.value);
-		return 1.0f + (0.94f - 1.0f) * style;
+		return 1.0f - 0.06f * style;
 	}
 	if (!q_strncasecmp (name, "slime", 5))
 	{
 		if (r_slimealpha.value > 0)
 			return WGPUWorld_ClampAlpha (r_slimealpha.value);
-		return 1.0f + (0.88f - 1.0f) * style;
+		return 1.0f - 0.12f * style;
 	}
 	if (!q_strncasecmp (name, "tele", 4) ||
 	    !q_strncasecmp (name, "portal", 6))

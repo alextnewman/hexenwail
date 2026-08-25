@@ -806,7 +806,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
           { binding: 5, resource: state.tintTexture.createView() },
           { binding: 6, resource: state.paletteLutTexture.createView() },
           { binding: 7, resource: state.historyColorView ||
-              state.placeholderHistory.createView() },
+              state.placeholderHistoryView },
         ],
       });
     },
@@ -1356,6 +1356,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         format: 'rgba8unorm',
         usage: GPUTextureUsage.TEXTURE_BINDING,
       });
+      const placeholderHistoryView = placeholderHistory.createView();
       const lightmapSampler = device.createSampler({
         label: 'WebGlideNitro lightmap sampler',
         magFilter: 'linear', minFilter: 'linear',
@@ -1380,7 +1381,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         frameUniform, scanoutUniform, uiUniform, particleUniform,
         paletteTexture, paletteLutTexture, colormapTexture, tintTexture,
         lightmapSampler, sceneSampler,
-        placeholderLightmap, placeholderHistory,
+        placeholderLightmap, placeholderHistory, placeholderHistoryView,
         lightmapTexture: null, lightmapView: placeholderLightmap.createView({
           dimension: '2d-array',
         }),

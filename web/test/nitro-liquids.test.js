@@ -42,8 +42,8 @@ test('liquid translucency uses stable ordered coverage', () => {
   assert.match(backend, /if \(threshold > coverage\)[\s\S]*discard/);
   assert.match(backend, /alpha \/= coverage/);
   assert.match(world, /alpha \+= \(0\.82f - alpha\) \* style/);
-  assert.match(world, /1\.0f \+ \(0\.88f - 1\.0f\) \* style/);
-  assert.match(world, /1\.0f \+ \(0\.94f - 1\.0f\) \* style/);
+  assert.match(world, /1\.0f - 0\.12f \* style/);
+  assert.match(world, /1\.0f - 0\.06f \* style/);
   assert.match(world, /r_wateralpha\.value >= 1\.0f/,
     'authored alpha values just below one must not be replaced by Nitro defaults');
 });
