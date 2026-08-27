@@ -7,7 +7,7 @@ export const PHONE_CONTROL_KEYCODES = Object.freeze({
   right: 100, // D
   attack: 250, // K_GP_RTRIGGER
   jump: 243, // K_GP_A
-  use: 251, // K_GP_LTHUMB (lift/use interaction)
+  use: 245, // K_GP_X (default "use artifact" binding)
   menu: 254, // K_GP_START
   menuBack: 244, // K_GP_B
   menuSelect: 243, // K_GP_A

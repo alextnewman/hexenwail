@@ -779,11 +779,15 @@ function suppressBrowserZoom(event) {
   if (!event || !('preventDefault' in event) || !event.cancelable) {
     return;
   }
+  const playing = state.engineStarted && !state.runtimeExited && (state.immersive || state.phoneMode);
+  if (!playing) {
+    return;
+  }
   const target = event.target;
   const insideGameSurface = target instanceof Element
-    ? target.closest?.('.viewport, .phone-controls, #canvas') != null
+    ? target.closest?.('.viewport, .phone-controls, #canvas, .canvas-hint') != null
     : false;
-  if (insideGameSurface) {
+  if (event.type.startsWith('gesture') || insideGameSurface) {
     event.preventDefault();
   }
 }

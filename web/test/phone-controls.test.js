@@ -106,7 +106,7 @@ test('gameplay controls use movement and action bindings that match their labels
     right: 'd'.charCodeAt(0),
     attack: 250, // K_GP_RTRIGGER
     jump: 243, // K_GP_A
-    use: 251, // K_GP_LTHUMB
+    use: 245, // K_GP_X (use artifact)
   });
 });
 
