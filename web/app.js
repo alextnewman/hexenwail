@@ -783,7 +783,7 @@ function suppressBrowserZoom(event) {
   const insideGameSurface = target instanceof Element
     ? target.closest?.('.viewport, .phone-controls, #canvas') != null
     : false;
-  if (insideGameSurface || state.immersive || state.phoneMode) {
+  if (insideGameSurface) {
     event.preventDefault();
   }
 }
