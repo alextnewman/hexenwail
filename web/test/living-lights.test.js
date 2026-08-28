@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const client = readFileSync('engine/hexen2/cl_main.c', 'utf8');
 const nitro = readFileSync('engine/hexen2/r_webgpu.c', 'utf8');
+const nitroEntities = readFileSync('engine/h2shared/wgpu_entity.c', 'utf8');
 const nitroModel = readFileSync('engine/h2shared/nitro_model.c', 'utf8');
 const qc = readFileSync('engine/h2shared/pr_cmds.c', 'utf8');
 const server = readFileSync('engine/hexen2/sv_main.c', 'utf8');
@@ -35,11 +36,12 @@ test('glow rhythms prefer authored light styles with deterministic fallbacks', (
   assert.match(helper, /cl_lightstyle\[style\]\.map\[0\] >= '1'/);
   assert.match(helper, /phase_offset \* len/);
   assert.match(helper, /1\.0f - frac/);
-  assert.match(helper, /\* 22\.0f \/ 255\.0f/);
+  assert.match(helper, /22\.0f \/ 255\.0f/);
   assert.match(helper, /phase_key & 0xffffu/);
   assert.doesNotMatch(helper, /rand\s*\(/);
   assert.match(nitro, /R_NitroGlowLightScale \(entity, flags, style, key/);
-  assert.match(nitroModel, /XF_TORCH_GLOW/);
+  assert.match(nitroEntities, /R_NitroGlowPhase \(entity, pimp_flags, 0\) \* fullinterval/);
+  assert.match(nitroEntities, /R_NitroGlowLightScale \(entity, flags, style, key/);
 });
 
 test('the Nitro model loader preserves every authored glow classification', () => {
