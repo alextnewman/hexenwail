@@ -855,16 +855,99 @@ void R_SetVrect (vrect_t *pvrectin, vrect_t *pvrect, int lineadj)
 		pvrect->height = 1;
 }
 
-/*
-===============
-R_PushDlights
+static float Nitro_GlowLightScale (int style, int key, float frequency)
+{
+	float	phase;
+	int	frame, rate;
 
-Marks world surfaces touched by the active dynamic lights.  The lightmap
-update path rebuilds those rectangles and uploads each dirty atlas page once.
-===============
-*/
+	if (style >= 0 && style < MAX_LIGHTSTYLES && cl_lightstyle[style].length)
+	{
+		rate = 1;
+		frame = 0;
+		if (cl_lightstyle[style].map[0] >= '1' &&
+		    cl_lightstyle[style].map[0] <= '3' &&
+		    cl_lightstyle[style].length > 1)
+		{
+			rate = cl_lightstyle[style].map[0] - '0';
+			frame = 1;
+		}
+		frame += (int)(cl.time * 10.0 * rate) %
+			 (cl_lightstyle[style].length - frame);
+		return CLAMP (0.0f,
+			(cl_lightstyle[style].map[frame] - 'a') * 22.0f / 255.0f,
+			2.0f);
+	}
+
+	phase = (float)cl.time * frequency + key * 0.6180339f;
+	return 0.84f + 0.11f * sin (phase) + 0.05f * sin (phase * 2.37f + 1.7f);
+}
+
+static void Nitro_AddEntityGlowLight (entity_t *entity, int key)
+{
+	dlight_t	*light;
+	float		*settings;
+	float		radius, scale, zoffset, alpha;
+	int		flags, style;
+
+	flags = R_GetPimpFlags (entity, &settings);
+	style = (int)settings[LIGHT_STYLE];
+	zoffset = 0.0f;
+	alpha = (settings[COLOR_A] != 0.0f) ? settings[COLOR_A] : 1.0f;
+
+	if (flags & EF_ILLUMINATE)
+	{
+		radius = (settings[LIGHT_RADIUS] >= 1.0f) ?
+			 settings[LIGHT_RADIUS] : 200.0f;
+		scale = Nitro_GlowLightScale (style, key, 2.0f);
+	}
+	else if (gl_torch_dlight.integer && (flags & XF_TORCH_GLOW))
+	{
+		radius = 150.0f;
+		scale = Nitro_GlowLightScale (style, key, 7.0f);
+		zoffset = 8.0f;
+		alpha = 0.7f;
+	}
+	else if (gl_missile_glows.integer && (flags & XF_MISSILE_GLOW))
+	{
+		radius = (settings[LIGHT_RADIUS] >= 1.0f) ?
+			 settings[LIGHT_RADIUS] : 120.0f;
+		scale = Nitro_GlowLightScale (style, key, 13.0f);
+	}
+	else if (gl_extra_dynamic_lights.integer && gl_other_glows.integer &&
+		 (flags & (XF_GLOW | EF_GLOW)))
+	{
+		radius = (settings[LIGHT_RADIUS] >= 1.0f) ?
+			 settings[LIGHT_RADIUS] : 96.0f;
+		scale = Nitro_GlowLightScale (style, key, 3.0f);
+	}
+	else
+	{
+		return;
+	}
+
+	light = CL_AllocDlight (key);
+	VectorCopy (entity->origin, light->origin);
+	light->origin[0] += settings[ORB_OFFSET_X];
+	light->origin[1] += settings[ORB_OFFSET_Y];
+	light->origin[2] += settings[ORB_OFFSET_Z] + zoffset;
+	light->radius = radius * scale;
+	light->die = cl.time + 0.001;
+	light->color[0] = (settings[COLOR_R] != 0.0f) ? settings[COLOR_R] : 1.0f;
+	light->color[1] = (settings[COLOR_G] != 0.0f) ? settings[COLOR_G] : 1.0f;
+	light->color[2] = (settings[COLOR_B] != 0.0f) ? settings[COLOR_B] : 1.0f;
+	light->color[3] = alpha;
+}
+
 void R_PushDlights (void)
 {
+	entity_t	*entity;
+	int		i;
+
+	for (i = 1, entity = cl_entities + 1; i < cl.num_entities; i++, entity++)
+	{
+		if (entity->model)
+			Nitro_AddEntityGlowLight (entity, i);
+	}
 	WGPUWorld_PushDlights ();
 }
 
