@@ -25,6 +25,18 @@
 #include "cdaudio.h"
 #include "cl_csqc.h"
 
+#if defined(WEBGPUQUAKE)
+#define CL_MISSILE_GLOWS r_nitro_missile_glows
+#define CL_FLASHINTENSITY r_nitro_flashintensity
+#define CL_TORCH_DLIGHT r_nitro_torch_dlight
+#define CL_EXTRA_DYNAMIC_LIGHTS r_nitro_extra_dynamic_lights
+#else
+#define CL_MISSILE_GLOWS gl_missile_glows
+#define CL_FLASHINTENSITY gl_flashintensity
+#define CL_TORCH_DLIGHT gl_torch_dlight
+#define CL_EXTRA_DYNAMIC_LIGHTS gl_extra_dynamic_lights
+#endif
+
 // we need to declare some mouse variables here, because the menu system
 // references them even when on a unix system.
 
@@ -753,7 +765,7 @@ static void CL_RelinkEntities (void)
 		if (ent->effects & EF_DARKFIELD)
 			R_DarkFieldParticles (ent);
 
-		if ((ent->effects & EF_MUZZLEFLASH) && gl_missile_glows.integer)
+		if ((ent->effects & EF_MUZZLEFLASH) && CL_MISSILE_GLOWS.integer)
 		{
 			vec3_t		fv, rv, uv;
 
@@ -762,7 +774,7 @@ static void CL_RelinkEntities (void)
 			dl->origin[2] += 16;
 			AngleVectors (ent->angles, fv, rv, uv);
 			VectorMA (dl->origin, 18, fv, dl->origin);
-			dl->radius = (200 + (rand() & 31)) * gl_flashintensity.value;
+			dl->radius = (200 + (rand() & 31)) * CL_FLASHINTENSITY.value;
 			dl->minlight = 32;
 			dl->die = cl.time + 0.1;
 			// Make the dynamic light yellow
@@ -776,7 +788,7 @@ static void CL_RelinkEntities (void)
 			dl = CL_AllocDlight (i);
 			VectorCopy (ent->origin,  dl->origin);
 			dl->origin[2] += 16;
-			dl->radius = (400 + (rand() & 31)) * gl_flashintensity.value;
+			dl->radius = (400 + (rand() & 31)) * CL_FLASHINTENSITY.value;
 			dl->die = cl.time + 0.001;
 			dl->color[0] = 0.8;
 			dl->color[1] = 0.8;
@@ -787,7 +799,7 @@ static void CL_RelinkEntities (void)
 		{
 			dl = CL_AllocDlight (i);
 			VectorCopy (ent->origin,  dl->origin);
-			dl->radius = (200 + (rand() & 31)) * gl_flashintensity.value;
+			dl->radius = (200 + (rand() & 31)) * CL_FLASHINTENSITY.value;
 			dl->die = cl.time + 0.001;
 			dl->color[0] = 0.8;
 			dl->color[1] = 0.6;
@@ -820,7 +832,7 @@ static void CL_RelinkEntities (void)
 		{
 			float *gs;
 			int pflags = R_GetPimpFlags(ent, &gs);
-			if (gl_torch_dlight.integer && (pflags & XF_TORCH_GLOW))
+			if (CL_TORCH_DLIGHT.integer && (pflags & XF_TORCH_GLOW))
 			{
 				dl = CL_AllocDlight (i);
 				VectorCopy (ent->origin, dl->origin);
@@ -952,7 +964,7 @@ static void CL_RelinkEntities (void)
 			R_RocketTrail (oldorg, ent->origin, rt_vorpal);
 
 			// extra dynamic lights
-			if (gl_extra_dynamic_lights.integer)
+			if (CL_EXTRA_DYNAMIC_LIGHTS.integer)
 			{
 				dl = CL_AllocDlight (i);
 				VectorCopy (ent->origin, dl->origin);
@@ -974,7 +986,7 @@ static void CL_RelinkEntities (void)
 			if ((rand() & 3) < 1)
 				R_RocketTrail (oldorg, ent->origin, rt_magicmissile);
 			// extra dynamic lights
-			if (gl_extra_dynamic_lights.integer)
+			if (CL_EXTRA_DYNAMIC_LIGHTS.integer)
 			{
 				dl = CL_AllocDlight (i);
 				VectorCopy (ent->origin, dl->origin);
@@ -995,7 +1007,7 @@ static void CL_RelinkEntities (void)
 		{
 			R_RocketTrail (oldorg, ent->origin, rt_scarab);
 			// extra dynamic lights
-			if (gl_extra_dynamic_lights.integer)
+			if (CL_EXTRA_DYNAMIC_LIGHTS.integer)
 			{
 				dl = CL_AllocDlight (i);
 				VectorCopy (ent->origin, dl->origin);

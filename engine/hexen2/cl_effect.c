@@ -23,6 +23,12 @@
 
 #include "quakedef.h"
 
+#if defined(WEBGPUQUAKE)
+#define CL_MISSILE_GLOWS r_nitro_missile_glows
+#else
+#define CL_MISSILE_GLOWS gl_missile_glows
+#endif
+
 // MACROS ------------------------------------------------------------------
 
 // TYPES -------------------------------------------------------------------
@@ -1139,7 +1145,7 @@ void CL_UpdateEffects (void)
 			else
 			{
 				/* suppress muzzle flash sprite when glows are off */
-				if (cl.Effects[idx].type == CE_ACID_MUZZFL && !gl_missile_glows.integer)
+				if (cl.Effects[idx].type == CE_ACID_MUZZFL && !CL_MISSILE_GLOWS.integer)
 					break;
 				CL_LinkEntity(ent);
 			}
