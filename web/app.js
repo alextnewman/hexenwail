@@ -720,6 +720,16 @@ function savePreferences() {
   }
 }
 
+function isTouchControlsVisible() {
+  if (state.preferences.touchControls === 'on') {
+    return true;
+  }
+  if (state.preferences.touchControls === 'off') {
+    return false;
+  }
+  return state.touchOnlyEnvironment;
+}
+
 function applyPreferences() {
   document.body.dataset.touchControls = state.preferences.touchControls;
   document.body.dataset.handedness = state.preferences.handedness;
@@ -739,6 +749,9 @@ function applyPreferences() {
   if (ui.rendererSetting) ui.rendererSetting.value = state.preferences.renderer;
   if (ui.phoneHint && state.preferences.phoneHintSeen) {
     ui.phoneHint.textContent = 'Touch controls are available during play. Landscape remains recommended.';
+  }
+  if (state.runtimeReady && !state.runtimeExited) {
+    callEngine('Web_TouchControlsVisible', null, [['number', isTouchControlsVisible() ? 1 : 0]]);
   }
   state.phoneControls?.setLookSensitivity(state.preferences.lookSensitivity);
 }

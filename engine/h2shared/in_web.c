@@ -36,6 +36,7 @@ qboolean joy_altmodifier_pressed = false;
 
 static double look_x, look_y;
 static qboolean mouse_active;
+static qboolean touch_controls_override;
 static int cursor_hidden = -1;	/* tri-state: -1 = unknown, 0 = shown, 1 = hidden */
 
 /*
@@ -196,6 +197,16 @@ EMSCRIPTEN_KEEPALIVE void Web_TouchLook (double dx, double dy)
 {
 	look_x += dx;
 	look_y += dy;
+}
+
+EMSCRIPTEN_KEEPALIVE void Web_TouchControlsVisible (int visible)
+{
+	touch_controls_override = visible ? true : false;
+}
+
+static qboolean Web_GamepadEnabled (void)
+{
+	return in_gamepad.integer || touch_controls_override;
 }
 
 /*
@@ -526,7 +537,7 @@ static void Web_PollGamepad (void)
 	gpstick_t	move_raw, look_raw;
 	double		ltrig, rtrig;
 
-	if (!in_gamepad.integer)
+	if (!Web_GamepadEnabled())
 	{
 		if (gp_index >= 0)
 			Web_GPDisconnect();

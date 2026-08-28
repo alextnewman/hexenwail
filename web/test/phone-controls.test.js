@@ -175,6 +175,8 @@ test('phone mode DOM includes playing layout, touch visibility rules, and quit h
   assert.match(app, /addEventListener\('hexenwailtouchmode'/);
   assert.match(html, /@media \(pointer: coarse\) and \(hover: none\) \{/);
   assert.match(app, /isLikelyTouchOnlyEnvironment/);
+  assert.match(app, /isTouchControlsVisible/);
+  assert.match(app, /Web_TouchControlsVisible/);
   assert.match(app, /isPhoneModeEnvironment/);
   assert.match(app, /PHONE_VIEWPORT_QUERY/);
   assert.match(app, /gamepadconnected/);
