@@ -797,10 +797,17 @@ function suppressBrowserZoom(event) {
     return;
   }
   const target = event.target;
+  const interactiveOverlay = target instanceof Element
+    ? target.closest?.('#phone-menu-button, .phone-overlay button') != null
+    : false;
   const insideGameSurface = target instanceof Element
     ? target.closest?.('.viewport, .phone-controls, #canvas, .canvas-hint') != null
     : false;
-  if (event.type.startsWith('gesture') || insideGameSurface) {
+  /* The floating menu button and the overlay controls live inside the game
+   * viewport but are launch UI, not game input. Let their taps pass through so
+   * iOS Safari can synthesize the click while the rest of the game surface stays
+   * zoom-proof. */
+  if (event.type.startsWith('gesture') || (insideGameSurface && !interactiveOverlay)) {
     event.preventDefault();
   }
 }

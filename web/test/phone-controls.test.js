@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import vm from 'node:vm';
 import { PhoneControls, PHONE_CONTROL_KEYCODES } from '../lib/phone-controls.js';
 
 function makeElement(action, rect = { left: 0, top: 0, width: 120, height: 120 }) {
@@ -202,6 +203,61 @@ test('the hamburger sends the engine menu command directly', () => {
   assert.match(body, /releasePhoneInputs\(\);/);
   assert.match(body, /engineKey\(PHONE_CONTROL_KEYCODES\.menu, true\);/);
   assert.match(body, /engineKey\(PHONE_CONTROL_KEYCODES\.menu, false\);/);
+});
+
+test('touch taps on the hamburger and overlay buttons bypass viewport zoom suppression', () => {
+  const repoRoot = process.cwd();
+  const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
+  const start = app.indexOf('function suppressBrowserZoom');
+  assert.notEqual(start, -1, 'suppressBrowserZoom exists');
+  const braceStart = app.indexOf('{', start);
+  let depth = 0;
+  let end = -1;
+  for (let index = braceStart; index < app.length; index += 1) {
+    if (app[index] === '{') depth += 1;
+    if (app[index] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        end = index;
+        break;
+      }
+    }
+  }
+  assert.notEqual(end, -1, 'suppressBrowserZoom closes cleanly');
+  const functionText = app.slice(start, end + 1);
+
+  class ElementMock {
+    closest(selector) {
+      return this._closest?.(selector) ?? null;
+    }
+  }
+
+  const suppressBrowserZoom = vm.runInNewContext(`(${functionText})`, {
+    state: { engineStarted: true, runtimeExited: false, immersive: true, phoneMode: false },
+    Element: ElementMock,
+  });
+
+  const menuButton = new ElementMock();
+  menuButton._closest = (selector) => (selector.includes('#phone-menu-button') ? menuButton : null);
+  const menuEvent = {
+    target: menuButton,
+    type: 'touchstart',
+    cancelable: true,
+    preventDefault() { this.defaultPrevented = true; },
+  };
+  suppressBrowserZoom(menuEvent);
+  assert.equal(menuEvent.defaultPrevented, undefined);
+
+  const gameTarget = new ElementMock();
+  gameTarget._closest = (selector) => (selector.includes('.viewport') ? gameTarget : null);
+  const gameEvent = {
+    target: gameTarget,
+    type: 'touchstart',
+    cancelable: true,
+    preventDefault() { this.defaultPrevented = true; },
+  };
+  suppressBrowserZoom(gameEvent);
+  assert.equal(gameEvent.defaultPrevented, true);
 });
 
 test('phone mode keys off the panel short side so iPads are never trapped in it', () => {
