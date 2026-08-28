@@ -1,9 +1,10 @@
 # WebGlide — the experimental GPU renderer
 
 **Status:** **deprecated and parked**. WebGlideNitro (`-DWEB_RENDERER=webgpu`)
-is the only living 3D renderer in the tree. WebGlide remains retained and
-buildable for compatibility and historical reference, but it is no longer a
-shipping target, active development path, or performance baseline. The
+is the only living 3D renderer in the tree. WebGlide is an **abortive
+experiment**: retained and buildable for compatibility and historical
+reference, but it is no longer a shipping target, active development path, or
+performance baseline. It must keep compiling, even as it stays parked. The
 shipping renderer remains the classic 8bpp software rasteriser on an
 accelerated canvas — see [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md).
 
