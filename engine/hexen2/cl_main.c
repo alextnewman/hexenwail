@@ -564,6 +564,87 @@ static float CL_LerpPoint (void)
 	return frac;
 }
 
+static float CL_GlowLightScale (int style, int key, float frequency)
+{
+	float	phase;
+	int	frame, rate;
+
+	if (style >= 0 && style < MAX_LIGHTSTYLES && cl_lightstyle[style].length)
+	{
+		rate = 1;
+		frame = 0;
+		if (cl_lightstyle[style].map[0] >= '1' &&
+		    cl_lightstyle[style].map[0] <= '3' &&
+		    cl_lightstyle[style].length > 1)
+		{
+			rate = cl_lightstyle[style].map[0] - '0';
+			frame = 1;
+		}
+		frame += (int)(cl.time * 10.0 * rate) %
+			 (cl_lightstyle[style].length - frame);
+		return CLAMP (0.0f,
+			(cl_lightstyle[style].map[frame] - 'a') * 22.0f / 256.0f,
+			2.0f);
+	}
+
+	phase = (float)cl.time * frequency + key * 0.6180339f;
+	return 0.84f + 0.11f * sin (phase) + 0.05f * sin (phase * 2.37f + 1.7f);
+}
+
+static void CL_AddEntityGlowLight (entity_t *ent, int key)
+{
+	dlight_t	*dl;
+	float		*settings;
+	float		radius, scale;
+	int		flags, style;
+
+	flags = R_GetPimpFlags (ent, &settings);
+	style = (int)settings[LIGHT_STYLE];
+
+	if (flags & EF_ILLUMINATE)
+	{
+		radius = (settings[LIGHT_RADIUS] >= 1.0f) ?
+			 settings[LIGHT_RADIUS] : 200.0f;
+		scale = CL_GlowLightScale (style, key, 2.0f);
+	}
+	else if (gl_torch_dlight.integer && (flags & XF_TORCH_GLOW))
+	{
+		radius = 150.0f;
+		scale = CL_GlowLightScale (style, key, 7.0f);
+	}
+	else if (gl_missile_glows.integer && (flags & XF_MISSILE_GLOW))
+	{
+		radius = (settings[LIGHT_RADIUS] >= 1.0f) ?
+			 settings[LIGHT_RADIUS] : 120.0f;
+		scale = CL_GlowLightScale (style, key, 13.0f);
+	}
+	else if (gl_extra_dynamic_lights.integer && gl_other_glows.integer &&
+		 (flags & (XF_GLOW | EF_GLOW)))
+	{
+		radius = (settings[LIGHT_RADIUS] >= 1.0f) ?
+			 settings[LIGHT_RADIUS] : 96.0f;
+		scale = CL_GlowLightScale (style, key, 3.0f);
+	}
+	else
+	{
+		return;
+	}
+
+	dl = CL_AllocDlight (key);
+	VectorCopy (ent->origin, dl->origin);
+	dl->origin[0] += settings[ORB_OFFSET_X];
+	dl->origin[1] += settings[ORB_OFFSET_Y];
+	dl->origin[2] += settings[ORB_OFFSET_Z];
+	if (flags & XF_TORCH_GLOW)
+		dl->origin[2] += 8.0f;
+	dl->radius = radius * scale;
+	dl->die = cl.time + 0.001;
+	dl->color[0] = (settings[COLOR_R] != 0.0f) ? settings[COLOR_R] : 1.0f;
+	dl->color[1] = (settings[COLOR_G] != 0.0f) ? settings[COLOR_G] : 1.0f;
+	dl->color[2] = (settings[COLOR_B] != 0.0f) ? settings[COLOR_B] : 1.0f;
+	dl->color[3] = (settings[COLOR_A] != 0.0f) ? settings[COLOR_A] : 1.0f;
+}
+
 
 /*
 ===============
@@ -815,60 +896,7 @@ static void CL_RelinkEntities (void)
 			dl->color[3] = 0.7;
 		}
 
-		/* Wall torch dynamic lights — cast small dlight for
-		 * torch-flagged models so they illuminate nearby entities */
-		{
-			float *gs;
-			int pflags = R_GetPimpFlags(ent, &gs);
-			if (gl_torch_dlight.integer && (pflags & XF_TORCH_GLOW))
-			{
-				dl = CL_AllocDlight (i);
-				VectorCopy (ent->origin, dl->origin);
-				dl->origin[2] += 8;
-				dl->radius = 150;
-				dl->die = cl.time + 0.001;
-				dl->color[0] = gs[COLOR_R];
-				dl->color[1] = gs[COLOR_G];
-				dl->color[2] = gs[COLOR_B];
-				dl->color[3] = 0.7f;
-			}
-		}
-
-		/* Inky: misc_modelpimp cast light */
-		{
-			float *gs;
-			int pflags = R_GetPimpFlags(ent, &gs);
-			if (pflags & EF_ILLUMINATE)
-			{
-				int k, l;
-				float intensity;
-
-				dl = CL_AllocDlight (i);
-				VectorCopy (ent->origin, dl->origin);
-				dl->origin[0] += gs[ORB_OFFSET_X];
-				dl->origin[1] += gs[ORB_OFFSET_Y];
-				dl->origin[2] += gs[ORB_OFFSET_Z];
-				dl->radius = (gs[LIGHT_RADIUS] >= 1.0f) ? gs[LIGHT_RADIUS] : 200;
-				dl->die = cl.time + 0.001;
-				dl->color[0] = (gs[COLOR_R] != 0.0f) ? gs[COLOR_R] : 1.0f;
-				dl->color[1] = (gs[COLOR_G] != 0.0f) ? gs[COLOR_G] : 1.0f;
-				dl->color[2] = (gs[COLOR_B] != 0.0f) ? gs[COLOR_B] : 1.0f;
-				dl->color[3] = (gs[COLOR_A] != 0.0f) ? gs[COLOR_A] : 1.0f;
-				/* Apply light style flicker */
-				k = (int)(cl.time * 10);
-				l = (int)gs[LIGHT_STYLE];
-				if (l <= 0 || !cl_lightstyle[l].length)
-					intensity = 1.0f;
-				else
-				{
-					l = cl_lightstyle[(int)gs[LIGHT_STYLE]].map[k % cl_lightstyle[(int)gs[LIGHT_STYLE]].length] - 'a';
-					intensity = (float)(l * 22) / 255.0f;
-				}
-				dl->color[0] *= intensity;
-				dl->color[1] *= intensity;
-				dl->color[2] *= intensity;
-			}
-		}
+		CL_AddEntityGlowLight (ent, i);
 
 		/* Use per-entity trail flags from PimpModel overrides if set,
 		 * otherwise fall back to the shared model flags */
@@ -1190,4 +1218,3 @@ void CL_Init (void)
 	Cmd_AddCommand ("viewpos", CL_Viewpos_f);
 	Cmd_AddCommand ("r_pos", CL_Viewpos_f);
 }
-

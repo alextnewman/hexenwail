@@ -72,7 +72,8 @@ test('liquid refraction samples only retained scene colour and returns to the pa
 test('lava and portals receive reversible palette-domain luminosity', () => {
   assert.match(backend, /frame\.liquidGlow > 0\.0/);
   assert.match(backend, /material == 2u \|\| material == 3u/);
-  assert.match(backend, /row = min\(row,[\s\S]*frame\.liquidGlow/);
+  assert.match(backend, /let breath = 0\.82 \+ 0\.18 \* sin\(frame\.time/);
+  assert.match(backend, /row = min\(row,[\s\S]*frame\.liquidGlow \* breath/);
   assert.match(backend, /label: 'WebGlideNitro frame uniform',\s+size: 144/);
   assert.doesNotMatch(backend, /liquidGlow[\s\S]{0,200}(bloom|hdr)/i);
 });

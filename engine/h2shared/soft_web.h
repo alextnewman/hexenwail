@@ -52,6 +52,7 @@ extern cvar_t	gl_missile_glows;
 extern cvar_t	gl_torch_dlight;
 extern cvar_t	gl_flashintensity;
 extern cvar_t	gl_extra_dynamic_lights;
+extern cvar_t	gl_other_glows;
 extern cvar_t	r_scale;
 extern cvar_t	r_softemu;
 extern cvar_t	r_dither;

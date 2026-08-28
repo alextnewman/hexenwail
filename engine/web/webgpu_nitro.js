@@ -226,7 +226,11 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   if (turbulent && frame.liquidGlow > 0.0 &&
       (material == 2u || material == 3u)) {
     let glowRow = select(8.0, 4.0, material == 3u);
-    row = min(row, i32(round(mix(f32(row), glowRow, frame.liquidGlow))));
+    let glowRate = select(1.7, 2.6, material == 3u);
+    let breath = 0.82 + 0.18 * sin(frame.time * glowRate +
+        input.worldPosition.x * 0.011 + input.worldPosition.y * 0.013);
+    row = min(row, i32(round(mix(f32(row), glowRow,
+        frame.liquidGlow * breath))));
   }
   let shaded = textureLoad(colormapTexture, vec2i(i32(index), row), 0).r;
   var rgb = textureLoad(paletteTexture, vec2i(i32(shaded), 0), 0).rgb;
