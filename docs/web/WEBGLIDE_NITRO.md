@@ -8,8 +8,9 @@ The renderer now exists as a real build configuration
 draws the world, its brush entities, alias models, sprites, particles and the
 view weapon as batched engine polygons through native WebGPU. Palette-quantized
 `.lit` files and coloured world/actor dynamic lights, authored light styles,
-fog, liquid warp and alpha, fullbright skin pixels, authored glows and projected
-model shadows are implemented. See "Where it stops" below.
+fog, liquid warp and alpha, fullbright skin pixels, authored glows, projected
+model shadows and spell-family particle treatments are implemented. See "Where
+it stops" below.
 
 The WebGPU *presenter* preview remains a separate thing: it is part of the
 software-renderer configuration (`-DWEB_PRESENTER=webgpu`, macro
@@ -367,6 +368,9 @@ compatibility treatment.
 | `r_nitro_liquidstipple` | `1` | Ordered liquid coverage and Nitro material alpha; `0` restores ordinary alpha and compatibility opacity. |
 | `r_nitro_liquidrefract` | `0.12` | Previous-frame refraction strength, clamped to 0.25; `0` disables it. |
 | `r_nitro_liquidglow` | `1` | Palette-domain lava and portal luminosity; `0` restores ordinary lightmap shading. |
+| `r_nitro_glowhaze` | `0.35` | Restrained palette-domain diffusion around bright chromatic liquids, glows and magic; `0` disables it. |
+
+Particles retain their authored palette indices and remain one GPU-pulled instance batch. Nitro classifies existing particle types into fire, ice, poison and necromancy families: fire breathes as a soft ember, ice becomes a narrow sprite ribbon, poison uses a moving stipple and necromancy alternates a hard core with a pulsing ring. `r_nitro_spelleffects 0` restores the original square particles without changing their simulation, count or colours.
 
 ### Where it stops
 
@@ -468,8 +472,10 @@ content rather than disguising omissions:
    ordered translucency and restrained retained-frame refraction without
    physically based material simulation. Each invented part has an independent
    off switch and the final colour returns through the palette.
-5. **Make magic spectacular:** GPU-pulled indexed particles, stippled trails,
-   sprite ribbons, glow orbs and spell-family temporal signatures.
+5. **Make magic spectacular (delivered):** GPU-pulled indexed particles retain
+   authored colours while fire, ice, poison and necromancy receive distinct
+   stipple, ribbon, orb and temporal signatures. Restrained palette-domain haze
+   connects bright magic and glowing liquids to the surrounding atmosphere.
 6. **Protect the result under load:** measured adaptive scene scale first;
    checkerboarding, decoupled scan-out and more aggressive retained history only
    where target-iPad captures justify them.

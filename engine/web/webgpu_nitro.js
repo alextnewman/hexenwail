@@ -45,7 +45,7 @@ const HexenwailNitroLibrary = {
     /* Vertex strides, mirrored by wgpu_nitro.h. */
     WORLD_STRIDE: 32,
     UI_STRIDE: 20,
-    PARTICLE_STRIDE: 20,
+    PARTICLE_STRIDE: 24,
     MODEL_STRIDE: 32,
 
     /* Per-entity uniform block, padded to WebGPU's minimum dynamic uniform
@@ -508,6 +508,8 @@ fn buildEffectVertex(position : vec3f, uv : vec2f,
   output.uv = uv;
   output.color = color;
   output.fogDistance = abs(output.position.w);
+  output.local = corner;
+  output.style = style;
   return output;
 }
 
@@ -579,19 +581,29 @@ struct VertexOutput {
   @builtin(position) position : vec4f,
   @location(0) color : vec4f,
   @location(1) fogDistance : f32,
+  @location(2) local : vec2f,
+  @location(3) @interpolate(flat) style : u32,
 }
 
 @vertex
 fn vertexMain(@builtin(vertex_index) vertexIndex : u32,
               @location(0) origin : vec3f,
               @location(1) scale : f32,
-              @location(2) color : vec4f) -> VertexOutput {
+              @location(2) color : vec4f,
+              @location(3) style : u32) -> VertexOutput {
   const corners = array<vec2f, 6>(
     vec2f(-0.5, -0.5), vec2f(-0.5, 0.5), vec2f(0.5, 0.5),
     vec2f(-0.5, -0.5), vec2f(0.5, 0.5), vec2f(0.5, -0.5));
-  let corner = corners[vertexIndex];
-  let position = origin + particle.right.xyz * corner.x * scale
-                        + particle.up.xyz * corner.y * scale;
+  var corner = corners[vertexIndex];
+  if (particle.up.w > 0.0 && style == 2u) {
+    corner = vec2f(corner.x * 0.48 + corner.y * 0.22, corner.y * 1.8);
+  }
+  let phase = frame.time * select(4.0, 11.0, style == 1u) +
+      dot(origin, vec3f(0.031, 0.047, 0.023));
+  let pulse = select(1.0, 0.88 + 0.18 * sin(phase),
+      particle.up.w > 0.0 && (style == 1u || style == 4u));
+  let position = origin + particle.right.xyz * corner.x * scale * pulse
+                        + particle.up.xyz * corner.y * scale * pulse;
   var output : VertexOutput;
   output.position = frame.mvp * vec4f(position, 1.0);
   output.color = color;
@@ -603,7 +615,28 @@ fn vertexMain(@builtin(vertex_index) vertexIndex : u32,
 fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   let fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
       input.fogDistance * input.fogDistance), 0.0, 1.0);
-  return vec4f(mix(input.color.rgb, frame.fogColor, fog), input.color.a);
+  var mask = 1.0;
+  if (particle.up.w > 0.0 && input.style != 0u) {
+    let radius = length(input.local * 2.0);
+    if (input.style == 1u) {
+      mask = 1.0 - smoothstep(0.45, 1.0, radius);
+    } else if (input.style == 2u) {
+      mask = 1.0 - smoothstep(0.52, 1.0,
+          abs(input.local.x) * 2.6 + abs(input.local.y) * 0.72);
+    } else if (input.style == 3u) {
+      let stipple = (i32(input.position.x) + i32(input.position.y) +
+          i32(floor(frame.time * 8.0))) & 3;
+      mask = (1.0 - smoothstep(0.55, 1.0, radius)) *
+          select(0.38, 1.0, stipple == 0);
+    } else {
+      let ring = 1.0 - smoothstep(0.10, 0.30, abs(radius - 0.58));
+      let core = 1.0 - smoothstep(0.0, 0.34, radius);
+      mask = max(core * 0.65, ring);
+    }
+    mask = mix(1.0, mask, particle.up.w);
+  }
+  return vec4f(mix(input.color.rgb, frame.fogColor, fog),
+      input.color.a * mask);
 }`,
 
     scanoutShader: `
@@ -615,7 +648,7 @@ struct ScanParams {
   tint : vec4f,
   persistence : f32,
   paletteShifts : f32,
-  pad1 : f32,
+  glowHaze : f32,
   pad2 : f32,
 }
 
@@ -636,6 +669,13 @@ fn paletteQuantize(rgb : vec3f) -> vec3f {
   let index = textureLoad(paletteLutTexture,
       vec2i(quantized.x + quantized.z * 32, quantized.y), 0).r;
   return textureLoad(paletteTexture, vec2i(i32(index), 0), 0).rgb;
+}
+
+fn radianceWeight(rgb : vec3f) -> f32 {
+  let luma = dot(rgb, vec3f(0.2126, 0.7152, 0.0722));
+  let chroma = max(max(rgb.r, rgb.g), rgb.b) -
+               min(min(rgb.r, rgb.g), rgb.b);
+  return smoothstep(0.18, 0.58, luma) * smoothstep(0.08, 0.34, chroma);
 }
 
 @vertex
@@ -671,6 +711,29 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   let darkness = 1.0 - smoothstep(0.25, 0.65, luma);
   var rgb = mix(center, average,
       scan.resolve * 0.22 * edgeGuard * (0.4 + darkness * 0.6));
+
+  if (scan.glowHaze > 0.0) {
+    let radius = 3;
+    let offsets = array<vec2i, 4>(
+        vec2i(radius, 0), vec2i(-radius, 0),
+        vec2i(0, radius), vec2i(0, -radius));
+    var hazeColor = vec3f(0.0);
+    var hazeWeight = 0.0;
+    for (var i = 0; i < 4; i++) {
+      let sample = textureLoad(sceneTexture,
+          clamp(texel + offsets[i], vec2i(0), size - vec2i(1)), 0).rgb;
+      let weight = radianceWeight(sample);
+      hazeColor += sample * weight;
+      hazeWeight += weight;
+    }
+    if (hazeWeight > 0.001) {
+      hazeColor /= hazeWeight;
+      let source = clamp(hazeWeight * 0.25, 0.0, 1.0);
+      let receiver = 1.0 - radianceWeight(center);
+      rgb = paletteQuantize(mix(rgb, max(rgb, hazeColor * 0.82),
+          scan.glowHaze * source * receiver * 0.45));
+    }
+  }
 
   let history = textureLoad(historyTexture, texel, 0).rgb;
   let historyLuma = dot(history, vec3f(0.2126, 0.7152, 0.0722));
@@ -987,7 +1050,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       const particleGroupLayout = device.createBindGroupLayout({
         label: 'WebGlideNitro particles',
         entries: [
-          { binding: 0, visibility: GPUShaderStage.VERTEX,
+          { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
             buffer: { type: 'uniform' } },
         ],
       });
@@ -1241,6 +1304,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
               { shaderLocation: 0, offset: 0, format: 'float32x3' },
               { shaderLocation: 1, offset: 12, format: 'float32' },
               { shaderLocation: 2, offset: 16, format: 'unorm8x4' },
+              { shaderLocation: 3, offset: 20, format: 'uint32' },
             ],
           }],
         },
@@ -1808,6 +1872,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
    *   [50] palette-domain contents and flash shifts
    *   [51] liquid material motion   [52] liquid stipple
    *   [53] retained-frame liquid refraction  [54] palette-domain liquid glow
+   *   [55] palette-domain luminous haze
    *
    * data (see wgpuscenedata_t in wgpu_nitro.h) is fourteen ints:
    *   [0]  world index arena     [1]  index count
@@ -1829,7 +1894,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     const state = Nitro.checkDevice();
     if (!state?.encoder) return;
 
-    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 55);
+    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 56);
     const integers = HEAP32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 29);
     const data = HEAP32.subarray(dataPointer >> 2, (dataPointer >> 2) + 14);
     const indexPointer = data[0], indexCount = data[1];
@@ -1873,6 +1938,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     scan.set(floats.subarray(16, 20), 4);
     scan[8] = state.historyValid ? floats[49] : 0.0;
     scan[9] = floats[50];
+    scan[10] = floats[55];
     state.device.queue.writeBuffer(state.scanoutUniform, 0, scan);
 
     /* Every entity's transform, alpha and flat light level in one upload;

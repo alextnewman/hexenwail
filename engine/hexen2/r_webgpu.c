@@ -121,6 +121,8 @@ cvar_t r_nitro_liquidmotion = {"r_nitro_liquidmotion", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_liquidstipple = {"r_nitro_liquidstipple", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_liquidrefract = {"r_nitro_liquidrefract", "0.12", CVAR_ARCHIVE};
 cvar_t r_nitro_liquidglow = {"r_nitro_liquidglow", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_spelleffects = {"r_nitro_spelleffects", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_glowhaze = {"r_nitro_glowhaze", "0.35", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol = {"r_nitro_lightvol", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol_cell = {"r_nitro_lightvol_cell", "64", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol_budget = {"r_nitro_lightvol_budget", "32", CVAR_ARCHIVE};
@@ -556,6 +558,8 @@ static void WGPU_SetupScene (wgpuscene_t *scene)
 	scene->liquid_stipple = CLAMP (0.0f, r_nitro_liquidstipple.value, 1.0f);
 	scene->liquid_refract = CLAMP (0.0f, r_nitro_liquidrefract.value, 0.25f);
 	scene->liquid_glow = CLAMP (0.0f, r_nitro_liquidglow.value, 1.0f);
+	scene->particle_up[3] = CLAMP (0.0f, r_nitro_spelleffects.value, 1.0f);
+	scene->glow_haze = CLAMP (0.0f, r_nitro_glowhaze.value, 1.0f);
 }
 
 /*
@@ -628,6 +632,8 @@ static void Web_RegisterRendererCvars (void)
 	Cvar_RegisterVariable(&r_nitro_liquidstipple);
 	Cvar_RegisterVariable(&r_nitro_liquidrefract);
 	Cvar_RegisterVariable(&r_nitro_liquidglow);
+	Cvar_RegisterVariable(&r_nitro_spelleffects);
+	Cvar_RegisterVariable(&r_nitro_glowhaze);
 }
 
 void WebGPU_Init (void)
@@ -900,6 +906,38 @@ vertices per particle while retaining the software renderer's palette colour
 and distance-scaled size.
 ================
 */
+static unsigned int WebGPU_ParticleStyle (const particle_t *particle)
+{
+	switch ((ptype_t)particle->type)
+	{
+	case pt_fire:
+	case pt_explode:
+	case pt_explode2:
+	case pt_fireball:
+	case pt_redfire:
+		return NITROPARTICLE_FIRE;
+	case pt_c_explode:
+	case pt_c_explode2:
+	case pt_ice:
+		return NITROPARTICLE_ICE;
+	case pt_spit:
+	case pt_scarab:
+	case pt_acidball:
+		return NITROPARTICLE_POISON;
+	case pt_spell:
+	case pt_rd:
+	case pt_vorpal:
+	case pt_setstaff:
+	case pt_magicmissile:
+	case pt_boneshard:
+	case pt_darken:
+	case pt_gravwell:
+		return NITROPARTICLE_NECRO;
+	default:
+		return NITROPARTICLE_CLASSIC;
+	}
+}
+
 void WebGPU_DrawParticles (particle_t *first)
 {
 	particle_t	*particle;
@@ -938,6 +976,7 @@ void WebGPU_DrawParticles (particle_t *first)
 		VectorCopy (particle->org, out->position);
 		out->scale = scale;
 		out->color = color;
+		out->style = WebGPU_ParticleStyle (particle);
 	}
 
 	WebPerf_CountDraw (wgpu_particle_count * 2);
