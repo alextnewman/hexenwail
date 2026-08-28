@@ -39,9 +39,9 @@ test('glow rhythms prefer authored light styles with deterministic fallbacks', (
   assert.match(helper, /22\.0f \/ 255\.0f/);
   assert.match(helper, /phase_key & 0xffffu/);
   assert.doesNotMatch(helper, /rand\s*\(/);
-  assert.match(nitro, /R_NitroGlowLightScale \(entity, flags, style, key/);
-  assert.match(nitroEntities, /R_NitroGlowPhase \(entity, pimp_flags, 0\) \* fullinterval/);
-  assert.match(nitroEntities, /R_NitroGlowLightScale \(entity, flags, style, key/);
+  assert.match(nitro, /R_NitroGlowLightScale \(entity, flags, style,/);
+  assert.match(nitroEntities, /R_NitroGlowPhase \(entity, pimp_flags\) \* fullinterval/);
+  assert.match(nitroEntities, /R_NitroGlowLightScale \(entity, flags, style,/);
 });
 
 test('the Nitro model loader preserves every authored glow classification', () => {

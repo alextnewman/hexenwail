@@ -601,7 +601,7 @@ static int WGPUEntity_AliasPose (const aliashdr_t *paliashdr, const newmdl_t *pm
 	fullinterval = intervals[numframes - 1];
 	time = cl.time + entity->syncbase;
 	if (pimp_flags & XF_TORCH_GLOW)
-		time += R_NitroGlowPhase (entity, pimp_flags, 0) * fullinterval;
+		time += R_NitroGlowPhase (entity, pimp_flags) * fullinterval;
 	targettime = time - ((int)(time / fullinterval)) * fullinterval;
 	for (i = 0; i < numframes - 1; i++)
 	{
@@ -970,7 +970,7 @@ static unsigned int WGPUEntity_GlowColor (const float *settings, float intensity
 	return r | (g << 8) | (b << 16) | (a << 24);
 }
 
-static void WGPUEntity_DrawGlow (entity_t *entity, int key)
+static void WGPUEntity_DrawGlow (entity_t *entity)
 {
 	static const float	corners[6][2] = {
 		{-1, -1}, {-1, 1}, {1, 1}, {-1, -1}, {1, 1}, {1, -1}
@@ -1009,7 +1009,7 @@ static void WGPUEntity_DrawGlow (entity_t *entity, int key)
 	if (style < 0 || style >= MAX_LIGHTSTYLES)
 		style = 0;
 	intensity *= CLAMP(0.0f,
-		R_NitroGlowLightScale (entity, flags, style, key, 3.0f), 1.0f);
+		R_NitroGlowLightScale (entity, flags, style, 3.0f), 1.0f);
 	if (!(flags & XF_TORCH_GLOW))
 		intensity *= CLAMP(0.0f, r_nitro_glow_intensity.value, 1.0f);
 	color = WGPUEntity_GlowColor (settings, intensity);
@@ -1305,7 +1305,7 @@ void WGPUEntity_DrawEntitiesOnList (qboolean translucent)
 		if (WGPUEntity_IsTranslucent (entity) != translucent)
 			continue;
 		WGPUEntity_DrawEntity (entity, 0);
-		WGPUEntity_DrawGlow (entity, i);
+		WGPUEntity_DrawGlow (entity);
 	}
 
 	WGPUEntity_FlushBatch ();

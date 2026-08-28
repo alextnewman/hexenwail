@@ -181,9 +181,9 @@ _Static_assert (sizeof(wgpuparticle_t) == 24,
 extern wgpuparticle_t	*wgpu_particles;
 extern int		wgpu_particle_count;
 
-float R_NitroGlowPhase (const entity_t *entity, int flags, int key);
+float R_NitroGlowPhase (const entity_t *entity, int flags);
 float R_NitroGlowLightScale (const entity_t *entity, int flags, int style,
-			    int key, float frequency);
+			    float frequency);
 
 /*
  * Models and sprites: CPU-transformed, but still indexed.  The vertex
