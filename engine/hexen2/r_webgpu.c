@@ -96,7 +96,7 @@ cvar_t r_nitro_overbright_models = {"r_nitro_overbright_models", "1", CVAR_ARCHI
 cvar_t r_nitro_coloredlight = {"r_nitro_coloredlight", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_flashblend = {"r_nitro_flashblend", "0", CVAR_ARCHIVE};
 cvar_t r_nitro_texture_anisotropy = {"r_nitro_texture_anisotropy", "1", CVAR_ARCHIVE};
-cvar_t r_nitro_texturemode = {"r_nitro_texturemode", "LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE};
+cvar_t r_nitro_texturemode = {"r_nitro_texturemode", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE};
 cvar_t r_dither = {"r_dither", "0", CVAR_ARCHIVE};
 cvar_t r_hdr = {"r_hdr", "0", CVAR_ARCHIVE};
 cvar_t r_hdr_exposure = {"r_hdr_exposure", "1", CVAR_ARCHIVE};
@@ -126,6 +126,50 @@ cvar_t r_nitro_glowhaze = {"r_nitro_glowhaze", "0.35", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol = {"r_nitro_lightvol", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol_cell = {"r_nitro_lightvol_cell", "64", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol_budget = {"r_nitro_lightvol_budget", "32", CVAR_ARCHIVE};
+
+static void WGPU_TextureModeChanged (cvar_t *var)
+{
+	const char *value;
+
+	if (!var || !var->string)
+		return;
+
+	value = var->string;
+	if (!*value)
+		return;
+
+	if (q_strncasecmp (value, "GL_", 3) == 0)
+	{
+		if (!q_strcasecmp (value, "GL_NEAREST") ||
+		    !q_strcasecmp (value, "GL_LINEAR") ||
+		    !q_strcasecmp (value, "GL_NEAREST_MIPMAP_NEAREST") ||
+		    !q_strcasecmp (value, "GL_NEAREST_MIPMAP_LINEAR") ||
+		    !q_strcasecmp (value, "GL_LINEAR_MIPMAP_NEAREST") ||
+		    !q_strcasecmp (value, "GL_LINEAR_MIPMAP_LINEAR"))
+			return;
+		Con_Printf ("bad filter mode: %s\n", value);
+		Cvar_SetQuick (var, "GL_LINEAR_MIPMAP_LINEAR");
+		return;
+	}
+
+	if (!q_strcasecmp (value, "NEAREST"))
+		Cvar_SetQuick (var, "GL_NEAREST");
+	else if (!q_strcasecmp (value, "LINEAR"))
+		Cvar_SetQuick (var, "GL_LINEAR");
+	else if (!q_strcasecmp (value, "NEAREST_MIPMAP_NEAREST"))
+		Cvar_SetQuick (var, "GL_NEAREST_MIPMAP_NEAREST");
+	else if (!q_strcasecmp (value, "NEAREST_MIPMAP_LINEAR"))
+		Cvar_SetQuick (var, "GL_NEAREST_MIPMAP_LINEAR");
+	else if (!q_strcasecmp (value, "LINEAR_MIPMAP_NEAREST"))
+		Cvar_SetQuick (var, "GL_LINEAR_MIPMAP_NEAREST");
+	else if (!q_strcasecmp (value, "LINEAR_MIPMAP_LINEAR"))
+		Cvar_SetQuick (var, "GL_LINEAR_MIPMAP_LINEAR");
+	else
+	{
+		Con_Printf ("bad filter mode: %s\n", value);
+		Cvar_SetQuick (var, "GL_LINEAR_MIPMAP_LINEAR");
+	}
+}
 
 int r_nitro_filter_idx;
 int r_nitro_max_anisotropy = 1;
@@ -609,6 +653,7 @@ static void Web_RegisterRendererCvars (void)
 	Cvar_RegisterVariable(&r_nitro_flashblend);
 	Cvar_RegisterVariable(&r_nitro_texture_anisotropy);
 	Cvar_RegisterVariable(&r_nitro_texturemode);
+	Cvar_SetCallback(&r_nitro_texturemode, WGPU_TextureModeChanged);
 	Cvar_RegisterVariable(&r_dither);
 	Cvar_RegisterVariable(&r_hdr);
 	Cvar_RegisterVariable(&r_hdr_exposure);
