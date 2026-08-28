@@ -261,14 +261,14 @@ than merely raising a model's flat ambient term. Their engine-authored RGB
 colour is luminance-normalised into that sample as well, so the wall, actor and
 view weapon receive the same flickering hue.
 
-The shared client light pool is also the source of living model light. Torches,
-luminous mana and potion pickups, authored illuminate effects and glowing
-missiles emit their model-authored colour and light style into that pool.
-Authored styles remain authoritative; assets without one receive a restrained,
-deterministic source-specific rhythm rather than frame-rate-dependent random
-noise. The same lights therefore reach software, WebGlide and Nitro world
-lighting, while Nitro additionally folds them into actor and view-weapon
-samples.
+Nitro materializes living model light in the established dynamic-light pool.
+Torches, luminous mana and potion pickups, authored illuminate effects and
+glowing missiles emit their model-authored colour and light style into that
+pool. Authored styles remain authoritative; assets without one receive a
+restrained, deterministic source-specific rhythm rather than
+frame-rate-dependent random noise. Those lights therefore share Nitro's world,
+actor and view-weapon lighting path. This is Nitro-owned behavior; it does not
+change the parked software reference or WebGlide.
 
 Interpolation is BSP-aware: a probe contributes only when it shares the
 receiver's convex leaf or the segment between them remains outside solid map

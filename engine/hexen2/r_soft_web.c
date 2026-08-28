@@ -39,7 +39,6 @@ cvar_t	gl_missile_glows = {"gl_missile_glows", "1", CVAR_ARCHIVE};
 cvar_t	gl_torch_dlight = {"gl_torch_dlight", "1", CVAR_ARCHIVE};
 cvar_t	gl_flashintensity = {"gl_flashintensity", "1", CVAR_ARCHIVE};
 cvar_t	gl_extra_dynamic_lights = {"gl_extra_dynamic_lights", "1", CVAR_ARCHIVE};
-cvar_t	gl_other_glows = {"gl_other_glows", "1", CVAR_ARCHIVE};
 
 /* --- GPU-only knobs: present for linkage, hidden in the menu ------- */
 cvar_t	r_scale = {"r_scale", "1", CVAR_ARCHIVE};
@@ -80,7 +79,6 @@ void R_SoftWebInitCvars (void)
 	Cvar_RegisterVariable (&gl_torch_dlight);
 	Cvar_RegisterVariable (&gl_flashintensity);
 	Cvar_RegisterVariable (&gl_extra_dynamic_lights);
-	Cvar_RegisterVariable (&gl_other_glows);
 
 	Cvar_RegisterVariable (&r_scale);
 	Cvar_RegisterVariable (&r_softemu);
