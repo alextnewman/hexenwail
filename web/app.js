@@ -775,6 +775,23 @@ function releasePhoneInputs() {
   state.phoneControls?.releaseAll();
 }
 
+function suppressBrowserZoom(event) {
+  if (!event || !('preventDefault' in event) || !event.cancelable) {
+    return;
+  }
+  const playing = state.engineStarted && !state.runtimeExited && (state.immersive || state.phoneMode);
+  if (!playing) {
+    return;
+  }
+  const target = event.target;
+  const insideGameSurface = target instanceof Element
+    ? target.closest?.('.viewport, .phone-controls, #canvas, .canvas-hint') != null
+    : false;
+  if (event.type.startsWith('gesture') || insideGameSurface) {
+    event.preventDefault();
+  }
+}
+
 function hasConnectedGamepad() {
   try {
     return Boolean(navigator.getGamepads?.().some(Boolean));
@@ -1394,7 +1411,16 @@ function bindUi() {
     }
     document.body.dataset.touchMenu = menu ? 'true' : 'false';
   });
+  /* iOS Safari still tries to zoom the page on double-tap and pinch gestures
+   * once the game owns the surface. Consume them while the engine is running so
+   * the viewport behaves like a game screen instead of a browser page. */
   ui.viewport?.addEventListener('dblclick', (event) => event.preventDefault());
+  ui.viewport?.addEventListener('touchstart', suppressBrowserZoom, { passive: false });
+  ui.viewport?.addEventListener('touchmove', suppressBrowserZoom, { passive: false });
+  ui.viewport?.addEventListener('touchend', suppressBrowserZoom, { passive: false });
+  document.addEventListener('gesturestart', suppressBrowserZoom, { passive: false });
+  document.addEventListener('gesturechange', suppressBrowserZoom, { passive: false });
+  document.addEventListener('gestureend', suppressBrowserZoom, { passive: false });
 
   ui.importButton?.addEventListener('click', () => ui.fileInput?.click());
   ui.directoryButton?.addEventListener('click', () => ui.directoryInput?.click());
