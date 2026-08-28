@@ -1112,7 +1112,6 @@ void Key_Init (void)
 	Key_SetBinding (K_TOUCH_USE, "impulse 23");		/* use artifact */
 	Key_SetBinding (K_TOUCH_NEXT_WEAPON, "impulse 10");	/* next weapon */
 	Key_SetBinding (K_TOUCH_PREV_WEAPON, "impulse 12");	/* prev weapon */
-	Key_SetBinding (K_TOUCH_MENU, "togglemenu");
 	keyreserved[K_TOUCH_MENU] = true;
 	keyreserved[K_TOUCH_MENU_BACK] = true;
 	keyreserved[K_TOUCH_MENU_SELECT] = true;
