@@ -187,7 +187,7 @@ static const byte *WGPUWorld_SurfaceSamples (const msurface_t *surf)
 {
 	ptrdiff_t	offset;
 
-	if (!gl_coloredlight.integer || !nitro_lit_loaded || !surf->samples ||
+	if (!r_nitro_coloredlight.integer || !nitro_lit_loaded || !surf->samples ||
 	    !cl.worldmodel->lightdata)
 		return NULL;
 	offset = surf->samples - cl.worldmodel->lightdata;
@@ -460,7 +460,7 @@ static void WGPUWorld_BuildLightmapBlock (const msurface_t *surf, nitrosurf_t *i
 				color[2] = light->color[2];
 				luminance = color[0] * 0.2126f + color[1] * 0.7152f +
 					color[2] * 0.0722f;
-				if (!gl_coloredlight.integer || light->dark ||
+				if (!r_nitro_coloredlight.integer || light->dark ||
 				    luminance <= 0.001f)
 					color[0] = color[1] = color[2] = 1.0f;
 				else
@@ -535,8 +535,8 @@ void WGPUWorld_UpdateLightstyles (void)
 		return;
 
 	numsurfaces = q_min(nitro_numsurfaces, cl.worldmodel->numsurfaces);
-	colored_changed = nitro_cached_coloredlight != gl_coloredlight.integer;
-	nitro_cached_coloredlight = gl_coloredlight.integer;
+	colored_changed = nitro_cached_coloredlight != r_nitro_coloredlight.integer;
+	nitro_cached_coloredlight = r_nitro_coloredlight.integer;
 	if (colored_changed)
 		WGPULightVol_NewMap ();
 	memset (dirty, 0, sizeof(dirty));
@@ -1861,7 +1861,7 @@ void WGPUWorld_NewMap (void)
 		Sys_Error ("WebGlideNitro: out of memory for %d surfaces", nitro_numsurfaces);
 
 	WGPUWorld_LoadLitFile (world);
-	nitro_cached_coloredlight = gl_coloredlight.integer;
+	nitro_cached_coloredlight = r_nitro_coloredlight.integer;
 	WGPUWorld_LoadTextures (world);
 	WGPUWorld_BuildBuffers (world);
 	WGPULightVol_NewMap ();

@@ -982,9 +982,9 @@ static void WGPUEntity_DrawGlow (entity_t *entity)
 	byte		white = 15;
 
 	flags = R_GetPimpFlags (entity, &settings);
-	if (!((gl_glows.integer && (flags & XF_TORCH_GLOW)) ||
-	      (gl_missile_glows.integer && (flags & XF_MISSILE_GLOW)) ||
-	      (gl_other_glows.integer && (flags & (XF_GLOW | EF_GLOW)))))
+	if (!((r_nitro_glows.integer && (flags & XF_TORCH_GLOW)) ||
+	      (r_nitro_missile_glows.integer && (flags & XF_MISSILE_GLOW)) ||
+	      (r_nitro_other_glows.integer && (flags & (XF_GLOW | EF_GLOW)))))
 		return;
 
 	VectorCopy (entity->origin, origin);
@@ -1008,7 +1008,7 @@ static void WGPUEntity_DrawGlow (entity_t *entity)
 		style = 0;
 	intensity *= CLAMP(0.0f, d_lightstylevalue[style] / 255.0f, 1.0f);
 	if (!(flags & XF_TORCH_GLOW))
-		intensity *= CLAMP(0.0f, gl_glow_intensity.value, 1.0f);
+		intensity *= CLAMP(0.0f, r_nitro_glow_intensity.value, 1.0f);
 	color = WGPUEntity_GlowColor (settings, intensity);
 
 	texture = WGPUEntity_LoadSkin ("__nitro_glow", 1, 1, &white, 0, 1u);

@@ -81,22 +81,22 @@ cvar_t r_slimealpha = {"r_slimealpha", "0", CVAR_NONE};
 cvar_t r_telealpha = {"r_telealpha", "0", CVAR_NONE};
 cvar_t r_turbalpha = {"r_turbalpha", "1", CVAR_NONE};
 cvar_t r_shadows = {"r_shadows", "1", CVAR_ARCHIVE};
-cvar_t gl_overbright = {"gl_overbright", "1", CVAR_NONE};
-cvar_t gl_missile_glows = {"gl_missile_glows", "1", CVAR_ARCHIVE};
-cvar_t gl_flashintensity = {"gl_flashintensity", "1", CVAR_ARCHIVE};
-cvar_t gl_torch_dlight = {"gl_torch_dlight", "1", CVAR_ARCHIVE};
-cvar_t gl_extra_dynamic_lights = {"gl_extra_dynamic_lights", "1", CVAR_ARCHIVE};
-cvar_t gl_particles = {"gl_particles", "1", CVAR_ARCHIVE};
-cvar_t gl_fullbrights = {"gl_fullbrights", "1", CVAR_ARCHIVE};
-cvar_t gl_glows = {"gl_glows", "1", CVAR_ARCHIVE};
-cvar_t gl_other_glows = {"gl_other_glows", "1", CVAR_ARCHIVE};
-cvar_t gl_glow_intensity = {"gl_glow_intensity", "1", CVAR_ARCHIVE};
-cvar_t gl_fxaa = {"gl_fxaa", "0", CVAR_ARCHIVE};
-cvar_t gl_overbright_models = {"gl_overbright_models", "1", CVAR_ARCHIVE};
-cvar_t gl_coloredlight = {"gl_coloredlight", "1", CVAR_ARCHIVE};
-cvar_t gl_flashblend = {"gl_flashblend", "0", CVAR_ARCHIVE};
-cvar_t gl_texture_anisotropy = {"gl_texture_anisotropy", "1", CVAR_ARCHIVE};
-cvar_t gl_texturemode = {"gl_texturemode", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE};
+cvar_t r_nitro_overbright = {"r_nitro_overbright", "1", CVAR_NONE};
+cvar_t r_nitro_missile_glows = {"r_nitro_missile_glows", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_flashintensity = {"r_nitro_flashintensity", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_torch_dlight = {"r_nitro_torch_dlight", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_extra_dynamic_lights = {"r_nitro_extra_dynamic_lights", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_particles = {"r_nitro_particles", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_fullbrights = {"r_nitro_fullbrights", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_glows = {"r_nitro_glows", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_other_glows = {"r_nitro_other_glows", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_glow_intensity = {"r_nitro_glow_intensity", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_fxaa = {"r_nitro_fxaa", "0", CVAR_ARCHIVE};
+cvar_t r_nitro_overbright_models = {"r_nitro_overbright_models", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_coloredlight = {"r_nitro_coloredlight", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_flashblend = {"r_nitro_flashblend", "0", CVAR_ARCHIVE};
+cvar_t r_nitro_texture_anisotropy = {"r_nitro_texture_anisotropy", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_texturemode = {"r_nitro_texturemode", "LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE};
 cvar_t r_dither = {"r_dither", "0", CVAR_ARCHIVE};
 cvar_t r_hdr = {"r_hdr", "0", CVAR_ARCHIVE};
 cvar_t r_hdr_exposure = {"r_hdr_exposure", "1", CVAR_ARCHIVE};
@@ -127,8 +127,8 @@ cvar_t r_nitro_lightvol = {"r_nitro_lightvol", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol_cell = {"r_nitro_lightvol_cell", "64", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol_budget = {"r_nitro_lightvol_budget", "32", CVAR_ARCHIVE};
 
-int gl_filter_idx;
-int gl_max_anisotropy = 1;
+int r_nitro_filter_idx;
+int r_nitro_max_anisotropy = 1;
 byte *playerTranslation;
 const int color_offsets[MAX_PLAYER_CLASS] = {
 	2 * 14 * 256, 0, 1 * 14 * 256, 2 * 14 * 256, 2 * 14 * 256
@@ -539,7 +539,7 @@ static void WGPU_SetupScene (wgpuscene_t *scene)
 
 	if (r_fullbright.integer || r_lightmap.integer)
 		scene->flags |= NITROSCENE_FULLBRIGHT;
-	if (gl_fullbrights.integer)
+	if (r_nitro_fullbrights.integer)
 		scene->flags |= NITROSCENE_MODEL_FULLBRIGHTS;
 
 	VectorScale (vright, 1.5f, scene->particle_right);
@@ -593,22 +593,22 @@ static void Web_RegisterRendererCvars (void)
 	Cvar_RegisterVariable(&r_telealpha);
 	Cvar_RegisterVariable(&r_turbalpha);
 	Cvar_RegisterVariable(&r_shadows);
-	Cvar_RegisterVariable(&gl_overbright);
-	Cvar_RegisterVariable(&gl_missile_glows);
-	Cvar_RegisterVariable(&gl_flashintensity);
-	Cvar_RegisterVariable(&gl_torch_dlight);
-	Cvar_RegisterVariable(&gl_extra_dynamic_lights);
-	Cvar_RegisterVariable(&gl_particles);
-	Cvar_RegisterVariable(&gl_fullbrights);
-	Cvar_RegisterVariable(&gl_glows);
-	Cvar_RegisterVariable(&gl_other_glows);
-	Cvar_RegisterVariable(&gl_glow_intensity);
-	Cvar_RegisterVariable(&gl_fxaa);
-	Cvar_RegisterVariable(&gl_overbright_models);
-	Cvar_RegisterVariable(&gl_coloredlight);
-	Cvar_RegisterVariable(&gl_flashblend);
-	Cvar_RegisterVariable(&gl_texture_anisotropy);
-	Cvar_RegisterVariable(&gl_texturemode);
+	Cvar_RegisterVariable(&r_nitro_overbright);
+	Cvar_RegisterVariable(&r_nitro_missile_glows);
+	Cvar_RegisterVariable(&r_nitro_flashintensity);
+	Cvar_RegisterVariable(&r_nitro_torch_dlight);
+	Cvar_RegisterVariable(&r_nitro_extra_dynamic_lights);
+	Cvar_RegisterVariable(&r_nitro_particles);
+	Cvar_RegisterVariable(&r_nitro_fullbrights);
+	Cvar_RegisterVariable(&r_nitro_glows);
+	Cvar_RegisterVariable(&r_nitro_other_glows);
+	Cvar_RegisterVariable(&r_nitro_glow_intensity);
+	Cvar_RegisterVariable(&r_nitro_fxaa);
+	Cvar_RegisterVariable(&r_nitro_overbright_models);
+	Cvar_RegisterVariable(&r_nitro_coloredlight);
+	Cvar_RegisterVariable(&r_nitro_flashblend);
+	Cvar_RegisterVariable(&r_nitro_texture_anisotropy);
+	Cvar_RegisterVariable(&r_nitro_texturemode);
 	Cvar_RegisterVariable(&r_dither);
 	Cvar_RegisterVariable(&r_hdr);
 	Cvar_RegisterVariable(&r_hdr_exposure);
@@ -900,20 +900,20 @@ static void Nitro_AddEntityGlowLight (entity_t *entity, int key)
 			 settings[LIGHT_RADIUS] : 200.0f;
 		scale = Nitro_GlowLightScale (style, key, 2.0f);
 	}
-	else if (gl_torch_dlight.integer && (flags & XF_TORCH_GLOW))
+	else if (r_nitro_torch_dlight.integer && (flags & XF_TORCH_GLOW))
 	{
 		radius = 150.0f;
 		scale = Nitro_GlowLightScale (style, key, 7.0f);
 		zoffset = 8.0f;
 		alpha = 0.7f;
 	}
-	else if (gl_missile_glows.integer && (flags & XF_MISSILE_GLOW))
+	else if (r_nitro_missile_glows.integer && (flags & XF_MISSILE_GLOW))
 	{
 		radius = (settings[LIGHT_RADIUS] >= 1.0f) ?
 			 settings[LIGHT_RADIUS] : 120.0f;
 		scale = Nitro_GlowLightScale (style, key, 13.0f);
 	}
-	else if (gl_extra_dynamic_lights.integer && gl_other_glows.integer &&
+	else if (r_nitro_extra_dynamic_lights.integer && r_nitro_other_glows.integer &&
 		 (flags & (XF_GLOW | EF_GLOW)))
 	{
 		radius = (settings[LIGHT_RADIUS] >= 1.0f) ?
@@ -1025,7 +1025,7 @@ void WebGPU_DrawParticles (particle_t *first)
 {
 	particle_t	*particle;
 
-	if (!first || !gl_particles.integer)
+	if (!first || !r_nitro_particles.integer)
 		return;
 
 	for (particle = first; particle; particle = particle->next)

@@ -271,7 +271,7 @@ void WGPULightVol_ApplyDynamic (const vec3_t point, wgpulightsample_t *sample)
 				VectorCopy (light->color, color);
 				luminance = color[0] * 0.2126f + color[1] * 0.7152f +
 					color[2] * 0.0722f;
-				if (!gl_coloredlight.integer || luminance <= 0.001f)
+				if (!r_nitro_coloredlight.integer || luminance <= 0.001f)
 					color[0] = color[1] = color[2] = 1.0f;
 				else
 					VectorScale (color, 1.0f / luminance, color);
@@ -354,7 +354,7 @@ qboolean WGPULightVol_Sample (const vec3_t point, wgpulightsample_t *sample)
 		{
 			cell_direction[i] = cell->direction[i] * (2.0f / 255.0f) - 1.0f;
 			color[i] += weight * cell->ambient *
-				(gl_coloredlight.integer ? cell->color[i] * (1.0f / 64.0f) :
+				(r_nitro_coloredlight.integer ? cell->color[i] * (1.0f / 64.0f) :
 				 1.0f);
 		}
 		VectorMA (direction, weight * cell->ambient, cell_direction, direction);

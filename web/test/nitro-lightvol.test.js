@@ -76,15 +76,15 @@ test('coloured lighting stays palette-quantized across world and aliases', () =>
 });
 
 test('white and disabled coloured lights retain neutral colormap shading', () => {
-  assert.match(world, /!gl_coloredlight\.integer \|\| light->dark/);
-  assert.match(volume, /!gl_coloredlight\.integer \|\| luminance <= 0\.001f/);
+  assert.match(world, /!r_nitro_coloredlight\.integer \|\| light->dark/);
+  assert.match(volume, /!r_nitro_coloredlight\.integer \|\| luminance <= 0\.001f/);
   assert.match(backend, /length\(lightColor - vec3f\(1\.0\)\) > 0\.01/);
   assert.match(backend, /length\(input\.lightColor - vec3f\(1\.0\)\) > 0\.01/);
 });
 
 test('coloured-light runtime changes rebuild both world and actor caches', () => {
   assert.match(world,
-    /colored_changed = nitro_cached_coloredlight != gl_coloredlight\.integer/);
+    /colored_changed = nitro_cached_coloredlight != r_nitro_coloredlight\.integer/);
   assert.match(world, /if \(colored_changed\)\s+WGPULightVol_NewMap \(\)/);
   assert.match(world, /qboolean\s+changed = colored_changed/);
 });

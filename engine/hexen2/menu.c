@@ -37,6 +37,74 @@
 #include "sdl_inc.h"
 #endif
 
+#if defined(WEBGPUQUAKE)
+#define MENU_PARTICLES r_nitro_particles
+#define MENU_PARTICLES_NAME "r_nitro_particles"
+#define MENU_FULLBRIGHTS r_nitro_fullbrights
+#define MENU_FULLBRIGHTS_NAME "r_nitro_fullbrights"
+#define MENU_GLOWS r_nitro_glows
+#define MENU_GLOWS_NAME "r_nitro_glows"
+#define MENU_MISSILE_GLOWS r_nitro_missile_glows
+#define MENU_MISSILE_GLOWS_NAME "r_nitro_missile_glows"
+#define MENU_OTHER_GLOWS r_nitro_other_glows
+#define MENU_OTHER_GLOWS_NAME "r_nitro_other_glows"
+#define MENU_GLOW_INTENSITY r_nitro_glow_intensity
+#define MENU_GLOW_INTENSITY_NAME "r_nitro_glow_intensity"
+#define MENU_FLASHINTENSITY r_nitro_flashintensity
+#define MENU_FLASHINTENSITY_NAME "r_nitro_flashintensity"
+#define MENU_FLASHBLEND r_nitro_flashblend
+#define MENU_FLASHBLEND_NAME "r_nitro_flashblend"
+#define MENU_FXAA r_nitro_fxaa
+#define MENU_FXAA_NAME "r_nitro_fxaa"
+#define MENU_OVERBRIGHT_MODELS r_nitro_overbright_models
+#define MENU_OVERBRIGHT_MODELS_NAME "r_nitro_overbright_models"
+#define MENU_COLOREDLIGHT r_nitro_coloredlight
+#define MENU_COLOREDLIGHT_NAME "r_nitro_coloredlight"
+#define MENU_TORCH_DLIGHT r_nitro_torch_dlight
+#define MENU_TORCH_DLIGHT_NAME "r_nitro_torch_dlight"
+#define MENU_FILTER_IDX r_nitro_filter_idx
+#define MENU_MAX_ANISOTROPY r_nitro_max_anisotropy
+#define MENU_TEXTUREMODE_NAME "r_nitro_texturemode"
+#define MENU_TEXTUREMODE_NEAREST_NEAREST "NEAREST_MIPMAP_NEAREST"
+#define MENU_TEXTUREMODE_NEAREST_LINEAR "NEAREST_MIPMAP_LINEAR"
+#define MENU_TEXTUREMODE_LINEAR_NEAREST "LINEAR_MIPMAP_NEAREST"
+#define MENU_TEXTUREMODE_LINEAR_LINEAR "LINEAR_MIPMAP_LINEAR"
+#define MENU_TEXTURE_ANISOTROPY_NAME "r_nitro_texture_anisotropy"
+#else
+#define MENU_PARTICLES gl_particles
+#define MENU_PARTICLES_NAME "gl_particles"
+#define MENU_FULLBRIGHTS gl_fullbrights
+#define MENU_FULLBRIGHTS_NAME "gl_fullbrights"
+#define MENU_GLOWS gl_glows
+#define MENU_GLOWS_NAME "gl_glows"
+#define MENU_MISSILE_GLOWS gl_missile_glows
+#define MENU_MISSILE_GLOWS_NAME "gl_missile_glows"
+#define MENU_OTHER_GLOWS gl_other_glows
+#define MENU_OTHER_GLOWS_NAME "gl_other_glows"
+#define MENU_GLOW_INTENSITY gl_glow_intensity
+#define MENU_GLOW_INTENSITY_NAME "gl_glow_intensity"
+#define MENU_FLASHINTENSITY gl_flashintensity
+#define MENU_FLASHINTENSITY_NAME "gl_flashintensity"
+#define MENU_FLASHBLEND gl_flashblend
+#define MENU_FLASHBLEND_NAME "gl_flashblend"
+#define MENU_FXAA gl_fxaa
+#define MENU_FXAA_NAME "gl_fxaa"
+#define MENU_OVERBRIGHT_MODELS gl_overbright_models
+#define MENU_OVERBRIGHT_MODELS_NAME "gl_overbright_models"
+#define MENU_COLOREDLIGHT gl_coloredlight
+#define MENU_COLOREDLIGHT_NAME "gl_coloredlight"
+#define MENU_TORCH_DLIGHT gl_torch_dlight
+#define MENU_TORCH_DLIGHT_NAME "gl_torch_dlight"
+#define MENU_FILTER_IDX gl_filter_idx
+#define MENU_MAX_ANISOTROPY gl_max_anisotropy
+#define MENU_TEXTUREMODE_NAME "gl_texturemode"
+#define MENU_TEXTUREMODE_NEAREST_NEAREST "GL_NEAREST_MIPMAP_NEAREST"
+#define MENU_TEXTUREMODE_NEAREST_LINEAR "GL_NEAREST_MIPMAP_LINEAR"
+#define MENU_TEXTUREMODE_LINEAR_NEAREST "GL_LINEAR_MIPMAP_NEAREST"
+#define MENU_TEXTUREMODE_LINEAR_LINEAR "GL_LINEAR_MIPMAP_LINEAR"
+#define MENU_TEXTURE_ANISOTROPY_NAME "gl_texture_anisotropy"
+#endif
+
 void (*vid_menudrawfn)(void);
 
 void (*vid_menukeyfn)(int key);
@@ -2256,7 +2324,7 @@ static int M_Display_DetectPreset (void)
 {
 	int se = (int)r_softemu.value;
 	float sc = r_scale.value;
-	int glow = (int)Cvar_VariableValue("gl_glows");
+	int glow = (int)Cvar_VariableValue(MENU_GLOWS_NAME);
 	float mb = Cvar_VariableValue("r_motionblur");
 	int lmb = r_lightmap_bicubic.integer;
 
@@ -2264,13 +2332,13 @@ static int M_Display_DetectPreset (void)
 		return 1;	/* Crunchy */
 	if (sc <= 0.5f && se == 2 && !lmb)
 		return 2;	/* Retro */
-	if (sc >= 1.0f && se == 0 && gl_filter_idx <= 1 && glow && !lmb)
+	if (sc >= 1.0f && se == 0 && MENU_FILTER_IDX <= 1 && glow && !lmb)
 		return 3;	/* Faithful */
-	if (sc >= 1.0f && se == 0 && gl_filter_idx == 2 && glow && !lmb)
+	if (sc >= 1.0f && se == 0 && MENU_FILTER_IDX == 2 && glow && !lmb)
 		return 4;	/* Clean */
-	if (sc >= 1.0f && se == 0 && gl_filter_idx >= 3 && mb <= 0 && lmb)
+	if (sc >= 1.0f && se == 0 && MENU_FILTER_IDX >= 3 && mb <= 0 && lmb)
 		return 5;	/* Modern */
-	if (sc >= 1.0f && se == 0 && gl_filter_idx >= 3 && mb > 0 && lmb)
+	if (sc >= 1.0f && se == 0 && MENU_FILTER_IDX >= 3 && mb > 0 && lmb)
 		return 6;	/* Ultra */
 	return 0;	/* User — custom settings, no preset matches */
 }
@@ -2300,9 +2368,9 @@ static void M_Display_AdjustSliders (int dir)
 		if (preset > 6) preset = 1;
 
 #define PRESET_COMMON \
-	Cvar_SetValue ("gl_flashblend", 0); \
+	Cvar_SetValue (MENU_FLASHBLEND_NAME, 0); \
 	Cvar_SetValue ("r_dynamic", 1); \
-	Cvar_SetValue ("gl_torch_dlight", 1); \
+	Cvar_SetValue (MENU_TORCH_DLIGHT_NAME, 1); \
 	Cvar_SetValue ("scr_menubgstyle", 0);
 
 		if (preset == 1)	/* Crunchy — 25% scale, maximum lo-fi */
@@ -2310,19 +2378,19 @@ static void M_Display_AdjustSliders (int dir)
 			Cvar_SetValue ("r_scale", 0.25f);
 			Cvar_SetValue ("r_softemu", 1);
 			Cvar_SetValue ("r_dither", 1.0f);
-			Cvar_Set ("gl_texturemode", "GL_NEAREST_MIPMAP_NEAREST");
-			Cvar_SetValue ("gl_texture_anisotropy", 1);
-			Cvar_SetValue ("gl_fullbrights", 1);
-			Cvar_SetValue ("gl_fxaa", 0);
+			Cvar_Set (MENU_TEXTUREMODE_NAME, MENU_TEXTUREMODE_NEAREST_NEAREST);
+			Cvar_SetValue (MENU_TEXTURE_ANISOTROPY_NAME, 1);
+			Cvar_SetValue (MENU_FULLBRIGHTS_NAME, 1);
+			Cvar_SetValue (MENU_FXAA_NAME, 0);
 			Cvar_SetValue ("r_lightmap_bicubic", 0);
 			Cvar_SetValue ("r_watercolor", 0);
 			Cvar_SetValue ("r_waterwarp", 0);
 			Cvar_SetValue ("r_motionblur", 0);
-			Cvar_SetValue ("gl_glows", 0);
-			Cvar_SetValue ("gl_missile_glows", 0);
-			Cvar_SetValue ("gl_other_glows", 0);
-			Cvar_SetValue ("gl_glow_intensity", 0.4f);
-			Cvar_SetValue ("gl_torch_dlight", 1);
+			Cvar_SetValue (MENU_GLOWS_NAME, 0);
+			Cvar_SetValue (MENU_MISSILE_GLOWS_NAME, 0);
+			Cvar_SetValue (MENU_OTHER_GLOWS_NAME, 0);
+			Cvar_SetValue (MENU_GLOW_INTENSITY_NAME, 0.4f);
+			Cvar_SetValue (MENU_TORCH_DLIGHT_NAME, 1);
 			Cvar_SetValue ("r_lerpmodels", 0);	/* snappy lo-fi animation */
 			PRESET_COMMON
 		}
@@ -2331,19 +2399,19 @@ static void M_Display_AdjustSliders (int dir)
 			Cvar_SetValue ("r_scale", 0.5f);
 			Cvar_SetValue ("r_softemu", 2);
 			Cvar_SetValue ("r_dither", 0.5f);
-			Cvar_Set ("gl_texturemode", "GL_NEAREST_MIPMAP_NEAREST");
-			Cvar_SetValue ("gl_texture_anisotropy", 1);
-			Cvar_SetValue ("gl_fullbrights", 1);
-			Cvar_SetValue ("gl_fxaa", 0);
+			Cvar_Set (MENU_TEXTUREMODE_NAME, MENU_TEXTUREMODE_NEAREST_NEAREST);
+			Cvar_SetValue (MENU_TEXTURE_ANISOTROPY_NAME, 1);
+			Cvar_SetValue (MENU_FULLBRIGHTS_NAME, 1);
+			Cvar_SetValue (MENU_FXAA_NAME, 0);
 			Cvar_SetValue ("r_lightmap_bicubic", 0);
 			Cvar_SetValue ("r_watercolor", 0);
 			Cvar_SetValue ("r_waterwarp", 1);
 			Cvar_SetValue ("r_motionblur", 0);
-			Cvar_SetValue ("gl_glows", 0);
-			Cvar_SetValue ("gl_missile_glows", 0);
-			Cvar_SetValue ("gl_other_glows", 0);
-			Cvar_SetValue ("gl_glow_intensity", 0.4f);
-			Cvar_SetValue ("gl_torch_dlight", 1);
+			Cvar_SetValue (MENU_GLOWS_NAME, 0);
+			Cvar_SetValue (MENU_MISSILE_GLOWS_NAME, 0);
+			Cvar_SetValue (MENU_OTHER_GLOWS_NAME, 0);
+			Cvar_SetValue (MENU_GLOW_INTENSITY_NAME, 0.4f);
+			Cvar_SetValue (MENU_TORCH_DLIGHT_NAME, 1);
 			Cvar_SetValue ("r_lerpmodels", 0);	/* snappy lo-fi animation */
 			PRESET_COMMON
 		}
@@ -2352,18 +2420,18 @@ static void M_Display_AdjustSliders (int dir)
 			Cvar_SetValue ("r_scale", 1.0f);
 			Cvar_SetValue ("r_softemu", 0);
 			Cvar_SetValue ("r_dither", 0);
-			Cvar_Set ("gl_texturemode", "GL_NEAREST_MIPMAP_NEAREST");
-			Cvar_SetValue ("gl_texture_anisotropy", 1);
-			Cvar_SetValue ("gl_fullbrights", 1);
-			Cvar_SetValue ("gl_fxaa", 0);
+			Cvar_Set (MENU_TEXTUREMODE_NAME, MENU_TEXTUREMODE_NEAREST_NEAREST);
+			Cvar_SetValue (MENU_TEXTURE_ANISOTROPY_NAME, 1);
+			Cvar_SetValue (MENU_FULLBRIGHTS_NAME, 1);
+			Cvar_SetValue (MENU_FXAA_NAME, 0);
 			Cvar_SetValue ("r_lightmap_bicubic", 0);
 			Cvar_SetValue ("r_watercolor", 0);
 			Cvar_SetValue ("r_waterwarp", 0);
 			Cvar_SetValue ("r_motionblur", 0);
-			Cvar_SetValue ("gl_glows", 1);
-			Cvar_SetValue ("gl_missile_glows", 1);
-			Cvar_SetValue ("gl_other_glows", 1);
-			Cvar_SetValue ("gl_glow_intensity", 0.2f);
+			Cvar_SetValue (MENU_GLOWS_NAME, 1);
+			Cvar_SetValue (MENU_MISSILE_GLOWS_NAME, 1);
+			Cvar_SetValue (MENU_OTHER_GLOWS_NAME, 1);
+			Cvar_SetValue (MENU_GLOW_INTENSITY_NAME, 0.2f);
 			PRESET_COMMON
 		}
 		else if (preset == 4)	/* Clean — sharp native, mild effects */
@@ -2371,19 +2439,19 @@ static void M_Display_AdjustSliders (int dir)
 			Cvar_SetValue ("r_scale", 1.0f);
 			Cvar_SetValue ("r_softemu", 0);
 			Cvar_SetValue ("r_dither", 0);
-			Cvar_Set ("gl_texturemode", "GL_NEAREST_MIPMAP_LINEAR");
-			Cvar_SetValue ("gl_texture_anisotropy", 1);
-			Cvar_SetValue ("gl_fullbrights", 1);
-			Cvar_SetValue ("gl_fxaa", 0);
+			Cvar_Set (MENU_TEXTUREMODE_NAME, MENU_TEXTUREMODE_NEAREST_LINEAR);
+			Cvar_SetValue (MENU_TEXTURE_ANISOTROPY_NAME, 1);
+			Cvar_SetValue (MENU_FULLBRIGHTS_NAME, 1);
+			Cvar_SetValue (MENU_FXAA_NAME, 0);
 			Cvar_SetValue ("r_lightmap_bicubic", 0);
 			Cvar_SetValue ("r_watercolor", 0);
 			Cvar_SetValue ("r_waterwarp", 1);
 			Cvar_SetValue ("r_motionblur", 0);
-			Cvar_SetValue ("gl_glows", 1);
-			Cvar_SetValue ("gl_missile_glows", 1);
-			Cvar_SetValue ("gl_other_glows", 1);
-			Cvar_SetValue ("gl_glow_intensity", 0.4f);
-			Cvar_SetValue ("gl_torch_dlight", 1);
+			Cvar_SetValue (MENU_GLOWS_NAME, 1);
+			Cvar_SetValue (MENU_MISSILE_GLOWS_NAME, 1);
+			Cvar_SetValue (MENU_OTHER_GLOWS_NAME, 1);
+			Cvar_SetValue (MENU_GLOW_INTENSITY_NAME, 0.4f);
+			Cvar_SetValue (MENU_TORCH_DLIGHT_NAME, 1);
 			PRESET_COMMON
 		}
 		else if (preset == 5)	/* Modern — smooth, full effects */
@@ -2391,19 +2459,19 @@ static void M_Display_AdjustSliders (int dir)
 			Cvar_SetValue ("r_scale", 1.0f);
 			Cvar_SetValue ("r_softemu", 0);
 			Cvar_SetValue ("r_dither", 0);
-			Cvar_Set ("gl_texturemode", "GL_LINEAR_MIPMAP_NEAREST");
-			Cvar_SetValue ("gl_texture_anisotropy", gl_max_anisotropy);
-			Cvar_SetValue ("gl_fullbrights", 1);
-			Cvar_SetValue ("gl_fxaa", 1);
+			Cvar_Set (MENU_TEXTUREMODE_NAME, MENU_TEXTUREMODE_LINEAR_NEAREST);
+			Cvar_SetValue (MENU_TEXTURE_ANISOTROPY_NAME, MENU_MAX_ANISOTROPY);
+			Cvar_SetValue (MENU_FULLBRIGHTS_NAME, 1);
+			Cvar_SetValue (MENU_FXAA_NAME, 1);
 			Cvar_SetValue ("r_lightmap_bicubic", 1);
 			Cvar_SetValue ("r_watercolor", 1);
 			Cvar_SetValue ("r_waterwarp", 1);
 			Cvar_SetValue ("r_motionblur", 0);
-			Cvar_SetValue ("gl_glows", 1);
-			Cvar_SetValue ("gl_missile_glows", 1);
-			Cvar_SetValue ("gl_other_glows", 1);
-			Cvar_SetValue ("gl_glow_intensity", 1.0f);
-			Cvar_SetValue ("gl_torch_dlight", 1);
+			Cvar_SetValue (MENU_GLOWS_NAME, 1);
+			Cvar_SetValue (MENU_MISSILE_GLOWS_NAME, 1);
+			Cvar_SetValue (MENU_OTHER_GLOWS_NAME, 1);
+			Cvar_SetValue (MENU_GLOW_INTENSITY_NAME, 1.0f);
+			Cvar_SetValue (MENU_TORCH_DLIGHT_NAME, 1);
 			PRESET_COMMON
 		}
 		else if (preset == 6)	/* Ultra — everything maxed */
@@ -2411,19 +2479,19 @@ static void M_Display_AdjustSliders (int dir)
 			Cvar_SetValue ("r_scale", 1.0f);
 			Cvar_SetValue ("r_softemu", 0);
 			Cvar_SetValue ("r_dither", 0);
-			Cvar_Set ("gl_texturemode", "GL_LINEAR_MIPMAP_LINEAR");
-			Cvar_SetValue ("gl_texture_anisotropy", gl_max_anisotropy);
-			Cvar_SetValue ("gl_fullbrights", 1);
-			Cvar_SetValue ("gl_fxaa", 1);
+			Cvar_Set (MENU_TEXTUREMODE_NAME, MENU_TEXTUREMODE_LINEAR_LINEAR);
+			Cvar_SetValue (MENU_TEXTURE_ANISOTROPY_NAME, MENU_MAX_ANISOTROPY);
+			Cvar_SetValue (MENU_FULLBRIGHTS_NAME, 1);
+			Cvar_SetValue (MENU_FXAA_NAME, 1);
 			Cvar_SetValue ("r_lightmap_bicubic", 1);
 			Cvar_SetValue ("r_watercolor", 1);
 			Cvar_SetValue ("r_waterwarp", 1);
 			Cvar_SetValue ("r_motionblur", 1.0f);
-			Cvar_SetValue ("gl_glows", 1);
-			Cvar_SetValue ("gl_missile_glows", 1);
-			Cvar_SetValue ("gl_other_glows", 1);
-			Cvar_SetValue ("gl_glow_intensity", 1.0f);
-			Cvar_SetValue ("gl_torch_dlight", 1);
+			Cvar_SetValue (MENU_GLOWS_NAME, 1);
+			Cvar_SetValue (MENU_MISSILE_GLOWS_NAME, 1);
+			Cvar_SetValue (MENU_OTHER_GLOWS_NAME, 1);
+			Cvar_SetValue (MENU_GLOW_INTENSITY_NAME, 1.0f);
+			Cvar_SetValue (MENU_TORCH_DLIGHT_NAME, 1);
 			PRESET_COMMON
 		}
 #undef PRESET_COMMON
@@ -2473,7 +2541,7 @@ static void M_Display_AdjustSliders (int dir)
 		 * window MSAA.  Window MSAA was removed because it screen-doored
 		 * translucent surfaces (uhexen2-zroc); FXAA is instant (no video
 		 * restart) and needs no multisampled framebuffer. */
-		Cvar_SetValue ("gl_fxaa", Cvar_VariableValue("gl_fxaa") > 0 ? 0 : 1);
+		Cvar_SetValue (MENU_FXAA_NAME, Cvar_VariableValue(MENU_FXAA_NAME) > 0 ? 0 : 1);
 		break;
 	case DISP_VSYNC:
 		VID_MenuAdjustVSync (dir);
@@ -2600,7 +2668,7 @@ static void M_Display_Draw (void)
 			 * window MSAA was removed for uhexen2-zroc. */
 			M_Print (76, 92 + 8*DISP_MSAA, disp_labels[DISP_MSAA]);
 			M_PrintWhite (220, 92 + 8*DISP_MSAA,
-				      Cvar_VariableValue("gl_fxaa") > 0 ? "FXAA" : "Off");
+				      Cvar_VariableValue(MENU_FXAA_NAME) > 0 ? "FXAA" : "Off");
 			(void)is_current; (void)available; (void)ms;
 		}
 
@@ -2912,10 +2980,10 @@ static void M_Rendering_AdjustSliders (int dir)
 		Cvar_SetValue ("r_lightmap_bicubic", !r_lightmap_bicubic.integer);
 		break;
 	case REND_PARTICLES:
-		Cvar_SetValue ("gl_particles", !gl_particles.integer);
+		Cvar_SetValue (MENU_PARTICLES_NAME, !MENU_PARTICLES.integer);
 		break;
 	case REND_FULLBRIGHTS:
-		Cvar_SetValue ("gl_fullbrights", !gl_fullbrights.integer);
+		Cvar_SetValue (MENU_FULLBRIGHTS_NAME, !MENU_FULLBRIGHTS.integer);
 		break;
 	case REND_DYNLIGHT:
 		Cvar_SetValue ("r_dynamic", r_dynamic.integer ? 0 : 1);
@@ -2944,32 +3012,32 @@ static void M_Rendering_AdjustSliders (int dir)
 	{
 		/* cycle: Off(0) -> Torch Only(1) -> Reduced(2) -> All(3) */
 		int cur;
-		if (!gl_glows.integer)
+		if (!MENU_GLOWS.integer)
 			cur = 0;
-		else if (!gl_missile_glows.integer)
+		else if (!MENU_MISSILE_GLOWS.integer)
 			cur = 1;
-		else if (gl_glow_intensity.value < 0.9f)
+		else if (MENU_GLOW_INTENSITY.value < 0.9f)
 			cur = 2;
 		else
 			cur = 3;
 		if (dir > 0) { if (++cur > 3) cur = 0; }
 		else         { if (--cur < 0) cur = 3; }
-		Cvar_SetValue ("gl_glows", cur >= 1 ? 1 : 0);
-		Cvar_SetValue ("gl_missile_glows", cur >= 2 ? 1 : 0);
-		Cvar_SetValue ("gl_other_glows", cur >= 2 ? 1 : 0);
-		Cvar_SetValue ("gl_glow_intensity", cur >= 3 ? 1.0f : 0.4f);
+		Cvar_SetValue (MENU_GLOWS_NAME, cur >= 1 ? 1 : 0);
+		Cvar_SetValue (MENU_MISSILE_GLOWS_NAME, cur >= 2 ? 1 : 0);
+		Cvar_SetValue (MENU_OTHER_GLOWS_NAME, cur >= 2 ? 1 : 0);
+		Cvar_SetValue (MENU_GLOW_INTENSITY_NAME, cur >= 3 ? 1.0f : 0.4f);
 		break;
 	}
 	case REND_FLASHINTENSITY:
 	{
-		float f = gl_flashintensity.value + dir * 0.25f;
+		float f = MENU_FLASHINTENSITY.value + dir * 0.25f;
 		if (f < 0) f = 0;
 		if (f > 2) f = 2;
-		Cvar_SetValue ("gl_flashintensity", f);
+		Cvar_SetValue (MENU_FLASHINTENSITY_NAME, f);
 		break;
 	}
 	case REND_FXAA:
-		Cvar_SetValue ("gl_fxaa", !gl_fxaa.integer);
+		Cvar_SetValue (MENU_FXAA_NAME, !MENU_FXAA.integer);
 		break;
 	case REND_MOTIONBLUR:
 	{
@@ -3055,13 +3123,13 @@ static void M_Rendering_Draw (void)
 	if (!M_Rendering_IsSkip(REND_PARTICLES))
 	{
 		M_Print (76, 92 + 8*REND_PARTICLES, rend_labels[REND_PARTICLES]);
-		M_PrintWhite (220, 92 + 8*REND_PARTICLES, gl_particles.integer ? "Round" : "Square");
+		M_PrintWhite (220, 92 + 8*REND_PARTICLES, MENU_PARTICLES.integer ? "Round" : "Square");
 	}
 
 	if (!M_Rendering_IsSkip(REND_FULLBRIGHTS))
 	{
 		M_Print (76, 92 + 8*REND_FULLBRIGHTS, rend_labels[REND_FULLBRIGHTS]);
-		M_DrawCheckbox (220, 92 + 8*REND_FULLBRIGHTS, gl_fullbrights.integer);
+		M_DrawCheckbox (220, 92 + 8*REND_FULLBRIGHTS, MENU_FULLBRIGHTS.integer);
 	}
 
 	if (!M_Rendering_IsSkip(REND_DYNLIGHT))
@@ -3098,11 +3166,11 @@ static void M_Rendering_Draw (void)
 	if (!M_Rendering_IsSkip(REND_GLOWS))
 	{
 		M_Print (76, 92 + 8*REND_GLOWS, rend_labels[REND_GLOWS]);
-		if (!gl_glows.integer)
+		if (!MENU_GLOWS.integer)
 			M_PrintWhite (220, 92 + 8*REND_GLOWS, "Off");
-		else if (!gl_missile_glows.integer)
+		else if (!MENU_MISSILE_GLOWS.integer)
 			M_PrintWhite (220, 92 + 8*REND_GLOWS, "Torch Only");
-		else if (gl_glow_intensity.value < 0.9f)
+		else if (MENU_GLOW_INTENSITY.value < 0.9f)
 			M_PrintWhite (220, 92 + 8*REND_GLOWS, "Reduced");
 		else
 			M_PrintWhite (220, 92 + 8*REND_GLOWS, "All");
@@ -3111,16 +3179,16 @@ static void M_Rendering_Draw (void)
 	if (!M_Rendering_IsSkip(REND_FLASHINTENSITY))
 	{
 		M_Print (76, 92 + 8*REND_FLASHINTENSITY, rend_labels[REND_FLASHINTENSITY]);
-		if (gl_flashintensity.value <= 0)
+		if (MENU_FLASHINTENSITY.value <= 0)
 			M_PrintWhite (220, 92 + 8*REND_FLASHINTENSITY, "Off");
 		else
-			M_DrawSliderValue (220, 92 + 8*REND_FLASHINTENSITY, gl_flashintensity.value / 2.0f, "%.2f", gl_flashintensity.value);
+			M_DrawSliderValue (220, 92 + 8*REND_FLASHINTENSITY, MENU_FLASHINTENSITY.value / 2.0f, "%.2f", MENU_FLASHINTENSITY.value);
 	}
 
 	if (!M_Rendering_IsSkip(REND_FXAA))
 	{
 		M_Print (76, 92 + 8*REND_FXAA, rend_labels[REND_FXAA]);
-		M_DrawCheckbox (220, 92 + 8*REND_FXAA, gl_fxaa.integer);
+		M_DrawCheckbox (220, 92 + 8*REND_FXAA, MENU_FXAA.integer);
 	}
 
 	if (!M_Rendering_IsSkip(REND_MOTIONBLUR))
@@ -3377,20 +3445,20 @@ static void M_Graphics_AdjustSliders (int dir)
 		break;
 	}
 	case GFX_OVERBRIGHT:
-		Cvar_SetValue ("gl_overbright_models", !gl_overbright_models.integer);
+		Cvar_SetValue (MENU_OVERBRIGHT_MODELS_NAME, !MENU_OVERBRIGHT_MODELS.integer);
 		break;
 	case GFX_COLORED_LM:
-		Cvar_SetValue ("gl_coloredlight", !gl_coloredlight.integer);
+		Cvar_SetValue (MENU_COLOREDLIGHT_NAME, !MENU_COLOREDLIGHT.integer);
 		break;
 	case GFX_TORCH_DLIGHT:
-		Cvar_SetValue ("gl_torch_dlight", !gl_torch_dlight.integer);
+		Cvar_SetValue (MENU_TORCH_DLIGHT_NAME, !MENU_TORCH_DLIGHT.integer);
 		break;
 	case GFX_GLOW_INTENSITY:
 	{
-		float v = gl_glow_intensity.value + dir * 0.1f;
+		float v = MENU_GLOW_INTENSITY.value + dir * 0.1f;
 		if (v < 0.0f) v = 0.0f;
 		if (v > 1.0f) v = 1.0f;
-		Cvar_SetValue ("gl_glow_intensity", v);
+		Cvar_SetValue (MENU_GLOW_INTENSITY_NAME, v);
 		break;
 	}
 	case GFX_SHOWSPEED:
@@ -3498,26 +3566,26 @@ static void M_Graphics_Draw (void)
 	if (!M_Graphics_IsSkip(GFX_OVERBRIGHT))
 	{
 		M_Print (76, 92 + 8*GFX_OVERBRIGHT, gfx_labels[GFX_OVERBRIGHT]);
-		M_DrawCheckbox (220, 92 + 8*GFX_OVERBRIGHT, gl_overbright_models.integer);
+		M_DrawCheckbox (220, 92 + 8*GFX_OVERBRIGHT, MENU_OVERBRIGHT_MODELS.integer);
 	}
 
 	if (!M_Graphics_IsSkip(GFX_COLORED_LM))
 	{
 		M_Print (76, 92 + 8*GFX_COLORED_LM, gfx_labels[GFX_COLORED_LM]);
-		M_DrawCheckbox (220, 92 + 8*GFX_COLORED_LM, gl_coloredlight.integer);
+		M_DrawCheckbox (220, 92 + 8*GFX_COLORED_LM, MENU_COLOREDLIGHT.integer);
 	}
 
 	if (!M_Graphics_IsSkip(GFX_TORCH_DLIGHT))
 	{
 		M_Print (76, 92 + 8*GFX_TORCH_DLIGHT, gfx_labels[GFX_TORCH_DLIGHT]);
-		M_DrawCheckbox (220, 92 + 8*GFX_TORCH_DLIGHT, gl_torch_dlight.integer);
+		M_DrawCheckbox (220, 92 + 8*GFX_TORCH_DLIGHT, MENU_TORCH_DLIGHT.integer);
 	}
 
 	if (!M_Graphics_IsSkip(GFX_GLOW_INTENSITY))
 	{
 		M_Print (76, 92 + 8*GFX_GLOW_INTENSITY, gfx_labels[GFX_GLOW_INTENSITY]);
 		M_DrawSliderValue (220, 92 + 8*GFX_GLOW_INTENSITY,
-			gl_glow_intensity.value, "%.2f", gl_glow_intensity.value);
+			MENU_GLOW_INTENSITY.value, "%.2f", MENU_GLOW_INTENSITY.value);
 	}
 
 	if (!M_Graphics_IsSkip(GFX_SHOWSPEED))
