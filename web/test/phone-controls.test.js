@@ -165,8 +165,8 @@ test('phone mode DOM includes playing layout, touch visibility rules, and quit h
   assert.match(html, /data-phone-action="jump"[^>]*>Jump<\/button>/);
   assert.match(html, /data-phone-action="attack"[^>]*>Atk<\/button>/);
   assert.match(html, /data-phone-action="use"[^>]*>Use<\/button>/);
-  assert.match(html, /data-phone-action="prevWeapon"[^>]*>Previous<\/button>/);
-  assert.match(html, /data-phone-action="nextWeapon"[^>]*>Next<\/button>/);
+  assert.match(html, /data-phone-action="prevWeapon"[^>]*>◀<\/button>/);
+  assert.match(html, /data-phone-action="nextWeapon"[^>]*>▶<\/button>/);
   assert.match(html, /data-phone-action="menu"[^>]*>Menu<\/button>/);
   assert.match(html, /data-phone-action="forward"[^>]*>▲<\/button>/);
   assert.match(html, /data-phone-action="left"[^>]*>◀<\/button>/);
@@ -186,10 +186,22 @@ test('phone mode DOM includes playing layout, touch visibility rules, and quit h
   assert.match(app, /gamepadconnected/);
   assert.match(app, /hexenwailquit/);
   assert.match(app, /Web_ResizeCanvas/);
+  assert.match(html, /\.phone-button\.prev \{[\s\S]*?width: 3rem;/);
+  assert.match(html, /\.phone-button\.next \{[\s\S]*?width: 3rem;/);
   assert.match(app, /const hadController = Boolean\(navigator\.serviceWorker\.controller\)/);
   assert.match(app, /addEventListener\('pageshow', checkForServiceWorkerUpdate\)/);
   assert.equal([...app.matchAll(/startEngineFromUserAction\(/g)].length, 2,
     'engine startup should only be defined and invoked by the launch-button handler');
+});
+
+test('the hamburger sends the engine menu command directly', () => {
+  const repoRoot = process.cwd();
+  const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
+  const body = app.match(/function togglePhoneMenuButton\(\) \{([\s\S]*?)\n\}/)?.[1];
+  assert.ok(body, 'togglePhoneMenuButton is defined');
+  assert.match(body, /releasePhoneInputs\(\);/);
+  assert.match(body, /engineKey\(PHONE_CONTROL_KEYCODES\.menu, true\);/);
+  assert.match(body, /engineKey\(PHONE_CONTROL_KEYCODES\.menu, false\);/);
 });
 
 test('phone mode keys off the panel short side so iPads are never trapped in it', () => {

@@ -849,23 +849,10 @@ function updateTouchOnlyEnvironment(forceOff = false) {
   }
 }
 
-function openPhoneOverlay() {
-  releasePhoneInputs();
-  if (ui.phoneOverlay) ui.phoneOverlay.setAttribute('aria-hidden', 'false');
-}
-
 function togglePhoneMenuButton() {
-  const menuOpen = document.body.dataset.touchMenu === 'true';
-  const overlayOpen = ui.phoneOverlay && ui.phoneOverlay.getAttribute('aria-hidden') !== 'true';
-  if (menuOpen || overlayOpen) {
-    if (menuOpen) {
-      engineKey(PHONE_CONTROL_KEYCODES.menu, true);
-      engineKey(PHONE_CONTROL_KEYCODES.menu, false);
-    }
-    closePhoneOverlay();
-    return;
-  }
-  openPhoneOverlay();
+  releasePhoneInputs();
+  engineKey(PHONE_CONTROL_KEYCODES.menu, true);
+  engineKey(PHONE_CONTROL_KEYCODES.menu, false);
 }
 
 function closePhoneOverlay() {
