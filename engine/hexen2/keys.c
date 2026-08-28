@@ -186,9 +186,22 @@ static keyname_t keynames[] =
 	{"GP_BACK_ALT", K_GP_BACK_ALT},
 	{"GP_START_ALT", K_GP_START_ALT},
 
+	{"TOUCH_FORWARD", K_TOUCH_FORWARD},
+	{"TOUCH_BACK", K_TOUCH_BACK},
+	{"TOUCH_LEFT", K_TOUCH_LEFT},
+	{"TOUCH_RIGHT", K_TOUCH_RIGHT},
+	{"TOUCH_ATTACK", K_TOUCH_ATTACK},
+	{"TOUCH_JUMP", K_TOUCH_JUMP},
+	{"TOUCH_USE", K_TOUCH_USE},
+	{"TOUCH_MENU", K_TOUCH_MENU},
+	{"TOUCH_MENU_BACK", K_TOUCH_MENU_BACK},
+	{"TOUCH_MENU_SELECT", K_TOUCH_MENU_SELECT},
+	{"TOUCH_NEXT_WEAPON", K_TOUCH_NEXT_WEAPON},
+	{"TOUCH_PREV_WEAPON", K_TOUCH_PREV_WEAPON},
+
 	{"PAUSE", K_PAUSE},
 
-	{"SEMICOLON", ';'},	// because a raw semicolon seperates commands
+	{"SEMICOLON", ';'},	// because a raw semicolon separates commands
 
 	{NULL,		0}
 };
@@ -1087,6 +1100,31 @@ void Key_Init (void)
 	Key_SetBinding (K_GP_DPAD_LEFT, "invleft");	/* prev inventory item */
 	Key_SetBinding (K_GP_DPAD_RIGHT, "invright");	/* next inventory item */
 
+	/* Fixed touch-control surface: phone buttons are special and never
+	 * follow the normal key-binding database; reconfiguring a gamepad or
+	 * keyboard must never rotate them out of phase. */
+	Key_SetBinding (K_TOUCH_FORWARD, "+forward");
+	Key_SetBinding (K_TOUCH_BACK, "+back");
+	Key_SetBinding (K_TOUCH_LEFT, "+left");
+	Key_SetBinding (K_TOUCH_RIGHT, "+right");
+	Key_SetBinding (K_TOUCH_ATTACK, "+attack");
+	Key_SetBinding (K_TOUCH_JUMP, "+jump");
+	Key_SetBinding (K_TOUCH_USE, "impulse 23");		/* use artifact */
+	Key_SetBinding (K_TOUCH_NEXT_WEAPON, "impulse 10");	/* next weapon */
+	Key_SetBinding (K_TOUCH_PREV_WEAPON, "impulse 12");	/* prev weapon */
+	keyreserved[K_TOUCH_MENU] = true;
+	keyreserved[K_TOUCH_MENU_BACK] = true;
+	keyreserved[K_TOUCH_MENU_SELECT] = true;
+	keyreserved[K_TOUCH_FORWARD] = true;
+	keyreserved[K_TOUCH_BACK] = true;
+	keyreserved[K_TOUCH_LEFT] = true;
+	keyreserved[K_TOUCH_RIGHT] = true;
+	keyreserved[K_TOUCH_ATTACK] = true;
+	keyreserved[K_TOUCH_JUMP] = true;
+	keyreserved[K_TOUCH_USE] = true;
+	keyreserved[K_TOUCH_NEXT_WEAPON] = true;
+	keyreserved[K_TOUCH_PREV_WEAPON] = true;
+
 // default keyboard bindings — inventory cycle on classic Doom/Heretic/Hexen keys
 	Key_SetBinding ('[', "invleft");
 	Key_SetBinding (']', "invright");
@@ -1195,7 +1233,7 @@ void Key_Event (int key, qboolean down)
 // a keyboard, so if Start ever fails to reach the menu a controller-only player
 // is stuck.  It is reserved (Key_Init) so neither a rebind nor the "unbindall"
 // that heads every config.cfg can take that away.
-	if (key == K_GP_START)
+	if (key == K_GP_START || key == K_TOUCH_MENU)
 	{
 		if (!down)
 			return;
@@ -1224,6 +1262,16 @@ void Key_Event (int key, qboolean down)
 			Sys_Error ("Bad key_dest");
 		}
 		return;
+	}
+
+	// These touch-menu keys stay reserved and fixed, but only resolve to the
+	// normal menu-enter/escape semantics when the menu is active.
+	if (key_dest == key_menu)
+	{
+		if (key == K_TOUCH_MENU_BACK)
+			key = K_ESCAPE;
+		else if (key == K_TOUCH_MENU_SELECT)
+			key = K_ENTER;
 	}
 
 // key up events only generate commands if the game key binding is

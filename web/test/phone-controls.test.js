@@ -100,13 +100,13 @@ test('gameplay controls use movement and action bindings that match their labels
     jump: PHONE_CONTROL_KEYCODES.jump,
     use: PHONE_CONTROL_KEYCODES.use,
   }, {
-    forward: 'w'.charCodeAt(0),
-    back: 's'.charCodeAt(0),
-    left: 'a'.charCodeAt(0),
-    right: 'd'.charCodeAt(0),
-    attack: 250, // K_GP_RTRIGGER
-    jump: 243, // K_GP_A
-    use: 245, // K_GP_X (use artifact)
+    forward: 272, // K_TOUCH_FORWARD
+    back: 273, // K_TOUCH_BACK
+    left: 274, // K_TOUCH_LEFT
+    right: 275, // K_TOUCH_RIGHT
+    attack: 276, // K_TOUCH_ATTACK
+    jump: 277, // K_TOUCH_JUMP
+    use: 278, // K_TOUCH_USE
   });
 });
 

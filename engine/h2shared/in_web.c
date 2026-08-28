@@ -151,15 +151,19 @@ static int Web_TouchKeyForMenu (int key)
 	{
 	case 'w':
 	case 'W':
+	case K_TOUCH_FORWARD:
 		return K_GP_DPAD_UP;
 	case 's':
 	case 'S':
+	case K_TOUCH_BACK:
 		return K_GP_DPAD_DOWN;
 	case 'a':
 	case 'A':
+	case K_TOUCH_LEFT:
 		return K_GP_DPAD_LEFT;
 	case 'd':
 	case 'D':
+	case K_TOUCH_RIGHT:
 		return K_GP_DPAD_RIGHT;
 	default:
 		return key;
