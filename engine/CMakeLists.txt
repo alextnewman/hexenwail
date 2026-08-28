@@ -81,7 +81,6 @@ include_directories(
 
 set(RENDERER_SOURCES
     ${ENGINE_TOP}/hexen2/r_part.c
-    ${COMMONDIR}/model.c
     ${COMMONDIR}/screen.c
     ${COMMONDIR}/web_perf.c
 )
@@ -89,6 +88,7 @@ set(RENDERER_SOURCES
 if(WEB_RENDERER STREQUAL "webgl2")
     add_compile_definitions(WEBGL2QUAKE)
     list(APPEND RENDERER_SOURCES
+        ${COMMONDIR}/model.c
         ${ENGINE_TOP}/hexen2/r_webgl2.c
         ${COMMONDIR}/draw_webgl2.c
         ${COMMONDIR}/gl2_texture.c
@@ -106,6 +106,7 @@ elseif(WEB_RENDERER STREQUAL "webgpu")
     # software r_efrag.c is not (it reaches into the surface cache).
     add_compile_definitions(WEBGPUQUAKE)
     list(APPEND RENDERER_SOURCES
+        ${COMMONDIR}/nitro_model.c
         ${ENGINE_TOP}/hexen2/r_webgpu.c
         ${COMMONDIR}/draw_webgpu.c
         ${COMMONDIR}/wgpu_world.c
@@ -120,6 +121,7 @@ else()
         add_compile_definitions(WEBGPU_PRESENT)
     endif()
     list(APPEND RENDERER_SOURCES
+        ${COMMONDIR}/model.c
         ${ENGINE_TOP}/hexen2/r_alias.c
         ${ENGINE_TOP}/hexen2/r_main.c
         ${ENGINE_TOP}/hexen2/r_misc.c

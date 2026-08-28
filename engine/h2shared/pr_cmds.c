@@ -4049,7 +4049,7 @@ static void PF_set_extra_flags(void)
 		{
 			if (!strcmp(sv.model_precache[i], s))
 			{
-#if !defined(SERVERONLY) && defined(GLQUAKE)
+#if !defined(SERVERONLY) && (defined(GLQUAKE) || defined(WEBGPUQUAKE))
 				sv.models[i]->ex_flags = flags;
 #endif	/* SERVERONLY */
 				return;
@@ -4089,12 +4089,12 @@ static void PF_set_fx_color(void)
 		{
 			if (!strcmp(sv.model_precache[i], s))
 			{
-				#if !defined(SERVERONLY) && defined(GLQUAKE)
+#if !defined(SERVERONLY) && (defined(GLQUAKE) || defined(WEBGPUQUAKE))
 				sv.models[i]->glow_settings[COLOR_R] = j;
 				sv.models[i]->glow_settings[COLOR_G] = k;
 				sv.models[i]->glow_settings[COLOR_B] = l;
 				sv.models[i]->glow_settings[COLOR_A] = m;
-				#endif	/* SERVERONLY */
+#endif	/* SERVERONLY */
 				return;
 			}
 		}

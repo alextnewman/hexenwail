@@ -574,7 +574,7 @@ static void SV_SendServerinfo (client_t *client)
 		// send model effects
 		for (i = 1, s = sv.model_precache + 1; i < MAX_MODELS && *s; s++)
 		{
-			#if !defined(SERVERONLY) && defined(GLQUAKE)
+#if !defined(SERVERONLY) && (defined(GLQUAKE) || defined(WEBGPUQUAKE))
 			if ((sv.models[i] != NULL) && (sv.models[i]->ex_flags != 0))
 			{
 				MSG_WriteString(&client->message, *s);
@@ -584,7 +584,7 @@ static void SV_SendServerinfo (client_t *client)
 				MSG_WriteFloat(&client->message, sv.models[i]->glow_settings[COLOR_B]);
 				MSG_WriteFloat(&client->message, sv.models[i]->glow_settings[COLOR_A]);
 			}
-			#endif
+#endif
 			i++;
 		}
 		MSG_WriteByte(&client->message, 0);
@@ -2481,4 +2481,3 @@ void SV_SpawnServer (const char *server, const char *startspot)
 	loading_stage = 0;
 #endif
 }
-

@@ -541,13 +541,13 @@ static void CL_ParseServerInfo (void)
 			{
 				if (!strcmp(cl.model_precache[j]->name, str))
 				{
-					#ifdef GLQUAKE
+#if defined(GLQUAKE) || defined(WEBGPUQUAKE)
 					cl.model_precache[j]->ex_flags = MSG_ReadShort();
 					cl.model_precache[j]->glow_settings[COLOR_R] = MSG_ReadFloat();
 					cl.model_precache[j]->glow_settings[COLOR_G] = MSG_ReadFloat();
 					cl.model_precache[j]->glow_settings[COLOR_B] = MSG_ReadFloat();
 					cl.model_precache[j]->glow_settings[COLOR_A] = MSG_ReadFloat();
-					#endif
+#endif
 				}
 			}
 		}
@@ -2100,4 +2100,3 @@ void CL_ParseServerMessage (void)
 		}
 	}
 }
-
