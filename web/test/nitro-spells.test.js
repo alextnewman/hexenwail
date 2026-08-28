@@ -29,6 +29,12 @@ test('particle instances carry authored spell families to one GPU-pulled batch',
 });
 
 test('spell families have distinct silhouettes and temporal signatures', () => {
+  const effectShader = backend.match(/effectShader: `([\s\S]*?)`,\s+particleShader:/)?.[1];
+  const particleShader = backend.match(/particleShader: `([\s\S]*?)`,\s+scanoutShader:/)?.[1];
+  assert.ok(effectShader, 'effect shader is defined');
+  assert.ok(particleShader, 'particle shader is defined');
+  assert.doesNotMatch(effectShader, /output\.(local|style)/);
+  assert.match(particleShader, /output\.local = corner;\s+output\.style = style;/);
   assert.match(backend, /frame\.time \* select\(4\.0, 11\.0, style == 1u\)/);
   assert.match(backend, /style == 2u[\s\S]*corner\.x \* 0\.48/);
   assert.match(backend, /input\.style == 3u[\s\S]*stipple/);

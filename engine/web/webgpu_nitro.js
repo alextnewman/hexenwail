@@ -508,8 +508,6 @@ fn buildEffectVertex(position : vec3f, uv : vec2f,
   output.uv = uv;
   output.color = color;
   output.fogDistance = abs(output.position.w);
-  output.local = corner;
-  output.style = style;
   return output;
 }
 
@@ -608,6 +606,8 @@ fn vertexMain(@builtin(vertex_index) vertexIndex : u32,
   output.position = frame.mvp * vec4f(position, 1.0);
   output.color = color;
   output.fogDistance = abs(output.position.w);
+  output.local = corner;
+  output.style = style;
   return output;
 }
 
