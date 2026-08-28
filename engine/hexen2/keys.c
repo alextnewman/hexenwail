@@ -201,7 +201,7 @@ static keyname_t keynames[] =
 
 	{"PAUSE", K_PAUSE},
 
-	{"SEMICOLON", ';'},	// because a raw semicolon seperates commands
+	{"SEMICOLON", ';'},	// because a raw semicolon separates commands
 
 	{NULL,		0}
 };
@@ -1265,10 +1265,15 @@ void Key_Event (int key, qboolean down)
 		return;
 	}
 
-	if (key == K_TOUCH_MENU_BACK)
-		key = K_ESCAPE;
-	else if (key == K_TOUCH_MENU_SELECT)
-		key = K_ENTER;
+	// These touch-menu keys stay reserved and fixed, but only resolve to the
+	// normal menu-enter/escape semantics when the menu is active.
+	if (key_dest == key_menu)
+	{
+		if (key == K_TOUCH_MENU_BACK)
+			key = K_ESCAPE;
+		else if (key == K_TOUCH_MENU_SELECT)
+			key = K_ENTER;
+	}
 
 // key up events only generate commands if the game key binding is
 // a button command (leading + sign).  These will occur even in console mode,
