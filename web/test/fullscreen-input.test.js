@@ -97,9 +97,12 @@ test('the gamepad driver uses the W3C standard mapping and reaches the menus', (
   ]);
 
   // Cursor input is not usable on iPadOS, so a controller alone has to be
-  // able to drive the menus: D-pad/stick navigate, triggers confirm.
+  // able to drive the menus: D-pad only, triggers confirm. Stick input stays
+  // in gameplay so accidental menu drift never drifts between options.
   assert.match(inputBackend, /static void Web_GPNav \(int slot, qboolean down\)/);
   assert.match(inputBackend, /GP_NAV_REPEAT_DELAY/);
+  assert.match(inputBackend, /Menu navigation is intentionally D-pad-only/);
+  assert.doesNotMatch(inputBackend, /D-pad or move stick drive the cursor/);
   const menuKeys = inputBackend.match(/static int Web_GPKeyForButton \(int index, qboolean gamekey\)\n\{([\s\S]*?)\n\}/)?.[1];
   assert.ok(menuKeys, 'Web_GPKeyForButton is defined');
   assert.match(menuKeys, /return K_ENTER;/);

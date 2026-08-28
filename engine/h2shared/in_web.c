@@ -620,9 +620,10 @@ static void Web_PollGamepad (void)
 		return;
 	}
 
-	/* menus and console: D-pad or move stick drive the cursor */
-	nav_x = gp_move.x;
-	nav_y = gp_move.y;
+	/* Menu navigation is intentionally D-pad-only: a stick makes it too easy
+	 * to send accidental cursor drift while browsing options and inventories. */
+	nav_x = 0;
+	nav_y = 0;
 	if (GPB_DPAD_LEFT < state.numButtons && state.digitalButton[GPB_DPAD_LEFT])
 		nav_x = -1;
 	if (GPB_DPAD_RIGHT < state.numButtons && state.digitalButton[GPB_DPAD_RIGHT])
@@ -637,7 +638,7 @@ static void Web_PollGamepad (void)
 	Web_GPNav(GPNAV_UP, nav_y <= -GP_NAV_THRESHOLD);
 	Web_GPNav(GPNAV_DOWN, nav_y >= GP_NAV_THRESHOLD);
 
-	/* the sticks are the menu cursor here, not the view */
+	/* Keep the stick for gameplay only; menu nav is resolved from the D-pad. */
 	gp_move.x = gp_move.y = gp_look.x = gp_look.y = 0;
 }
 
