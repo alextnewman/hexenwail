@@ -574,7 +574,7 @@ static void SV_SendServerinfo (client_t *client)
 		// send model effects
 		for (i = 1, s = sv.model_precache + 1; i < MAX_MODELS && *s; s++)
 		{
-			#if !defined(SERVERONLY) && defined(GLQUAKE)
+#if !defined(SERVERONLY) && (defined(GLQUAKE) || defined(WEBGPUQUAKE))
 			if ((sv.models[i] != NULL) && (sv.models[i]->ex_flags != 0))
 			{
 				MSG_WriteString(&client->message, *s);
@@ -584,7 +584,7 @@ static void SV_SendServerinfo (client_t *client)
 				MSG_WriteFloat(&client->message, sv.models[i]->glow_settings[COLOR_B]);
 				MSG_WriteFloat(&client->message, sv.models[i]->glow_settings[COLOR_A]);
 			}
-			#endif
+#endif
 			i++;
 		}
 		MSG_WriteByte(&client->message, 0);
@@ -2296,6 +2296,14 @@ void SV_SpawnServer (const char *server, const char *startspot)
 // set up the new server
 //
 	//memset (&sv, 0, sizeof(sv));
+#if !defined(SERVERONLY)
+	/* Roll back the previous map before the new map's spawn functions can
+	 * apply PimpModel metadata.  R_NewMap runs after ED_LoadFromFile on a
+	 * listen server, which is too late to distinguish old state from the
+	 * current map's authored state. */
+	Mod_RestoreAliasModelDefaults ();
+	R_ClearPimpOverrides ();
+#endif
 	Host_ClearMemory ();
 
 	q_strlcpy (sv.name, server, sizeof(sv.name));
@@ -2481,4 +2489,3 @@ void SV_SpawnServer (const char *server, const char *startspot)
 	loading_stage = 0;
 #endif
 }
-

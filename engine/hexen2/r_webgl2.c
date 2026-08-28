@@ -623,10 +623,11 @@ void R_NewMap (void)
 		d_lightstylevalue[i] = 264;
 	memset(&r_worldentity, 0, sizeof(r_worldentity));
 	r_worldentity.model = cl.worldmodel;
-	/* Roll back any misc_modelpimp mutations from the previous map
-	 * before clearing the per-entity overrides. uhexen2-oq0a. */
-	Mod_RestoreAliasModelDefaults();
-	R_ClearPimpOverrides();
+	if (!sv.active)
+	{
+		Mod_RestoreAliasModelDefaults();
+		R_ClearPimpOverrides();
+	}
 	R_ClearParticles();
 
 	gl2_viewleaf = NULL;
