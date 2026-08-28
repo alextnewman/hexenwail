@@ -50,18 +50,9 @@ WebGlide remains buildable.
 
 ### The visual north star
 
-Nitro completes Raven's artistic vision without treating 1990s hardware limits
-as sacred. Its vocabulary remains palette ramps, colormap rows, lightmaps,
-ordered dither, stipple, sprites and deliberately finite budgets, but modern GPU
-techniques are welcome when they make that authored world more coherent.
+Nitro is the apex 1990s renderer Raven could not have shipped: an impossibly dynamic, spectacular version of the crunchy source art that should feel like a pre-rendered cutscene of its era. It completes Raven's artistic vision without treating period hardware limits as sacred. Its vocabulary remains palette ramps, colormap rows, lightmaps, ordered dither, stipple, sprites and deliberately finite budgets, but modern GPU techniques are welcome when they make that authored world more coherent.
 
-This is not hardware retro-ism and not a conventional modern remaster. Compute,
-light fields and temporal accumulation may be used where they preserve the
-assets' chunky lighting language and remain efficient on Apple and
-Snapdragon X-era GPUs. PBR is not the destination. The software renderer remains
-the art-direction anchor: enhancements preserve its silhouette, contrast,
-palette membership and readability while extending its world-level vision to
-actors, weapons and effects.
+This is not hardware retro-ism and not a conventional modern remaster. Compute, light fields and temporal accumulation may be used where they preserve the assets' chunky lighting language and remain efficient on Apple and Snapdragon X-era GPUs. PBR is not the destination. The software renderer remains the art-direction anchor: enhancements preserve its silhouette, contrast, palette membership and readability while extending its world-level vision to actors, weapons and effects. Every renderer-independent signal supplied by game code, model data and level content is usable evidence of artist intent; information discovered in another renderer is retained when it can enrich this vocabulary without importing that renderer's architecture.
 
 The intended signature is:
 
@@ -183,6 +174,7 @@ says so.
 
 | Piece | File | Owns |
 | --- | --- | --- |
+| Model loader | `engine/h2shared/nitro_model.c` | Software BSP, sprite and MDL decoding; indexed skins, authored geometry and animation; model-authored effect classifications, colours and light styles. It owns asset description, never drawing or backend objects. |
 | GPU backend | `engine/web/webgpu_nitro.js` | The device, pipelines, bind groups, buffers, textures, the two render passes and the single submit. The only file that touches WebGPU. |
 | Renderer front end | `engine/hexen2/r_webgpu.c` | Cvars, view/frustum setup, the `[0,1]`-depth projection, culling, gamma/contrast, polyblend, frame entry points, `R_*`/`D_*` shared-client surface. |
 | Static world | `engine/h2shared/wgpu_world.c` | Load-time texture and lightmap upload, the immutable vertex/index buffers, BSP/PVS traversal, texture chains, batch emission, brush entities, the per-entity uniform arena, the world light sample, the single scene submit. |
@@ -200,6 +192,8 @@ It is a native WebGPU path, not a translation layer. There is no GL call, no
 GL-shaped state machine and no shared code with `gl2_*`. The device comes from
 the launcher probe (`Module.hexenwailWebGPU`), so the engine never requests a
 second adapter for a canvas that already has one.
+
+The dedicated model loader is copied from the software loader so Nitro retains its BSP/MDL decoding, indexed skin pixels, palette meaning, stepped animation and authored geometry. It selectively carries renderer-independent model knowledge also recognized by the GL path—torch, mana and missile classifications plus their authored colours and light styles—while excluding GL textures, filters, mip generation, external texture replacement, display lists, shaders and caches. Fullbright skin pixels remain palette indices and are recognized directly by Nitro's shader rather than becoming a second texture.
 
 **Real batched polygons, and how draw calls are conserved:**
 
@@ -261,14 +255,7 @@ than merely raising a model's flat ambient term. Their engine-authored RGB
 colour is luminance-normalised into that sample as well, so the wall, actor and
 view weapon receive the same flickering hue.
 
-Nitro materializes living model light in the established dynamic-light pool.
-Torches, luminous mana and potion pickups, authored illuminate effects and
-glowing missiles emit their model-authored colour and light style into that
-pool. Authored styles remain authoritative; assets without one receive a
-restrained, deterministic source-specific rhythm rather than
-frame-rate-dependent random noise. Those lights therefore share Nitro's world,
-actor and view-weapon lighting path. This is Nitro-owned behavior; it does not
-change the parked software reference or WebGlide.
+Nitro materializes living model light in the established dynamic-light pool. Torches, luminous mana and potion pickups, authored illuminate effects and glowing missiles emit their model-authored colour and light style into that pool. Both ordinary client entities and static map entities participate; static emitters use a disjoint stable key range and only claim an available slot, so they cannot evict active gameplay lights. Authored styles remain authoritative; assets without one receive a restrained, deterministic source-specific rhythm rather than frame-rate-dependent random noise. QC-supplied glow colour, alpha, offset, orb radius, light radius and style remain intact through the model-effect path. Those lights therefore share Nitro's world, actor and view-weapon lighting path. This is Nitro-owned behavior; it does not change the parked software reference or WebGlide.
 
 Interpolation is BSP-aware: a probe contributes only when it shares the
 receiver's convex leaf or the segment between them remains outside solid map

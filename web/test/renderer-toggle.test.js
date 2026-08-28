@@ -168,8 +168,16 @@ test('the WebGPU presenter stays a software scan-out path, distinct from Nitro',
   assert.ok(nitroBranch, 'WEB_RENDERER=webgpu has its own renderer-source branch');
   assert.match(nitroBranch, /add_compile_definitions\(WEBGPUQUAKE\)/,
     'WEBGPUQUAKE is positive and belongs to WEB_RENDERER=webgpu alone');
+  assert.match(nitroBranch, /\$\{COMMONDIR\}\/nitro_model\.c/,
+    'Nitro owns a software-derived loader with authored lighting metadata');
+  assert.doesNotMatch(nitroBranch, /\$\{COMMONDIR\}\/model\.c/,
+    'Nitro must not compile both implementations of the model API');
   assert.doesNotMatch(nitroBranch, /\$\{COMMONDIR\}\/gl2_/,
     'WebGlideNitro must not compile any WebGlide source');
+  const webglideBranch = cmake.match(/if\(WEB_RENDERER STREQUAL "webgl2"\)([\s\S]*?)\nelseif\(WEB_RENDERER STREQUAL "webgpu"\)/)?.[1];
+  const softwareBranch = cmake.match(/\nelse\(\)([\s\S]*?)\nendif\(\)\n\nset\(CLIENT_SOURCES/)?.[1];
+  assert.match(webglideBranch, /\$\{COMMONDIR\}\/model\.c/);
+  assert.match(softwareBranch, /\$\{COMMONDIR\}\/model\.c/);
   assert.match(wasmAction, /wasm-build\.sh webgpu engine\/build-webgpu/);
   assert.doesNotMatch(webgpuPresenter, /\bsmooth:\s*u32/,
     'WGSL reserves the word smooth');
