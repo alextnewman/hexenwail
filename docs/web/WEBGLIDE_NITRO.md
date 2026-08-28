@@ -335,7 +335,7 @@ volume. After the ordinary colormap lookup, Nitro applies that chroma and
 snaps the result through a precomputed 32x32x32 nearest-palette cube. White
 lights therefore take the exact old colormap path, mixed coloured lights remain
 bounded, and every coloured result is still one of the game's 256 palette
-entries. `gl_coloredlight 0` restores neutral lighting without disabling the
+entries. `r_nitro_coloredlight 0` restores neutral lighting without disabling the
 underlying scalar light or its authored flicker timing.
 
 Atmosphere follows the same rule. Authored exponential fog is rounded into a
@@ -393,7 +393,7 @@ silhouette both where no receiver exists and where nearer geometry occludes it,
 so raised platforms do not leave a shadow floating beyond their edge; luminous
 glow models do not cast one. The result remains a deliberately cheap planar
 silhouette rather than a shadow map. Model fullbright pixels remain available
-through `gl_fullbrights`, but only models marked as luminous may bypass the
+through `r_nitro_fullbrights`, but only models marked as luminous may bypass the
 colormap: incidental high palette indices in ordinary dim skins no longer
 become bright speckles.
 Sky uses both authored palette-indexed layers, projected from the eye direction
