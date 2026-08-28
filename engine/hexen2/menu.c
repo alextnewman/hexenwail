@@ -65,6 +65,10 @@
 #define MENU_FILTER_IDX r_nitro_filter_idx
 #define MENU_MAX_ANISOTROPY r_nitro_max_anisotropy
 #define MENU_TEXTUREMODE_NAME "r_nitro_texturemode"
+#define MENU_TEXTUREMODE_NEAREST_NEAREST "NEAREST_MIPMAP_NEAREST"
+#define MENU_TEXTUREMODE_NEAREST_LINEAR "NEAREST_MIPMAP_LINEAR"
+#define MENU_TEXTUREMODE_LINEAR_NEAREST "LINEAR_MIPMAP_NEAREST"
+#define MENU_TEXTUREMODE_LINEAR_LINEAR "LINEAR_MIPMAP_LINEAR"
 #define MENU_TEXTURE_ANISOTROPY_NAME "r_nitro_texture_anisotropy"
 #else
 #define MENU_PARTICLES gl_particles
@@ -94,6 +98,10 @@
 #define MENU_FILTER_IDX gl_filter_idx
 #define MENU_MAX_ANISOTROPY gl_max_anisotropy
 #define MENU_TEXTUREMODE_NAME "gl_texturemode"
+#define MENU_TEXTUREMODE_NEAREST_NEAREST "GL_NEAREST_MIPMAP_NEAREST"
+#define MENU_TEXTUREMODE_NEAREST_LINEAR "GL_NEAREST_MIPMAP_LINEAR"
+#define MENU_TEXTUREMODE_LINEAR_NEAREST "GL_LINEAR_MIPMAP_NEAREST"
+#define MENU_TEXTUREMODE_LINEAR_LINEAR "GL_LINEAR_MIPMAP_LINEAR"
 #define MENU_TEXTURE_ANISOTROPY_NAME "gl_texture_anisotropy"
 #endif
 
@@ -2370,7 +2378,7 @@ static void M_Display_AdjustSliders (int dir)
 			Cvar_SetValue ("r_scale", 0.25f);
 			Cvar_SetValue ("r_softemu", 1);
 			Cvar_SetValue ("r_dither", 1.0f);
-			Cvar_Set (MENU_TEXTUREMODE_NAME, "GL_NEAREST_MIPMAP_NEAREST");
+			Cvar_Set (MENU_TEXTUREMODE_NAME, MENU_TEXTUREMODE_NEAREST_NEAREST);
 			Cvar_SetValue (MENU_TEXTURE_ANISOTROPY_NAME, 1);
 			Cvar_SetValue (MENU_FULLBRIGHTS_NAME, 1);
 			Cvar_SetValue (MENU_FXAA_NAME, 0);
@@ -2391,7 +2399,7 @@ static void M_Display_AdjustSliders (int dir)
 			Cvar_SetValue ("r_scale", 0.5f);
 			Cvar_SetValue ("r_softemu", 2);
 			Cvar_SetValue ("r_dither", 0.5f);
-			Cvar_Set (MENU_TEXTUREMODE_NAME, "GL_NEAREST_MIPMAP_NEAREST");
+			Cvar_Set (MENU_TEXTUREMODE_NAME, MENU_TEXTUREMODE_NEAREST_NEAREST);
 			Cvar_SetValue (MENU_TEXTURE_ANISOTROPY_NAME, 1);
 			Cvar_SetValue (MENU_FULLBRIGHTS_NAME, 1);
 			Cvar_SetValue (MENU_FXAA_NAME, 0);
@@ -2412,7 +2420,7 @@ static void M_Display_AdjustSliders (int dir)
 			Cvar_SetValue ("r_scale", 1.0f);
 			Cvar_SetValue ("r_softemu", 0);
 			Cvar_SetValue ("r_dither", 0);
-			Cvar_Set (MENU_TEXTUREMODE_NAME, "GL_NEAREST_MIPMAP_NEAREST");
+			Cvar_Set (MENU_TEXTUREMODE_NAME, MENU_TEXTUREMODE_NEAREST_NEAREST);
 			Cvar_SetValue (MENU_TEXTURE_ANISOTROPY_NAME, 1);
 			Cvar_SetValue (MENU_FULLBRIGHTS_NAME, 1);
 			Cvar_SetValue (MENU_FXAA_NAME, 0);
@@ -2431,7 +2439,7 @@ static void M_Display_AdjustSliders (int dir)
 			Cvar_SetValue ("r_scale", 1.0f);
 			Cvar_SetValue ("r_softemu", 0);
 			Cvar_SetValue ("r_dither", 0);
-			Cvar_Set (MENU_TEXTUREMODE_NAME, "GL_NEAREST_MIPMAP_LINEAR");
+			Cvar_Set (MENU_TEXTUREMODE_NAME, MENU_TEXTUREMODE_NEAREST_LINEAR);
 			Cvar_SetValue (MENU_TEXTURE_ANISOTROPY_NAME, 1);
 			Cvar_SetValue (MENU_FULLBRIGHTS_NAME, 1);
 			Cvar_SetValue (MENU_FXAA_NAME, 0);
@@ -2451,7 +2459,7 @@ static void M_Display_AdjustSliders (int dir)
 			Cvar_SetValue ("r_scale", 1.0f);
 			Cvar_SetValue ("r_softemu", 0);
 			Cvar_SetValue ("r_dither", 0);
-			Cvar_Set (MENU_TEXTUREMODE_NAME, "GL_LINEAR_MIPMAP_NEAREST");
+			Cvar_Set (MENU_TEXTUREMODE_NAME, MENU_TEXTUREMODE_LINEAR_NEAREST);
 			Cvar_SetValue (MENU_TEXTURE_ANISOTROPY_NAME, MENU_MAX_ANISOTROPY);
 			Cvar_SetValue (MENU_FULLBRIGHTS_NAME, 1);
 			Cvar_SetValue (MENU_FXAA_NAME, 1);
@@ -2471,7 +2479,7 @@ static void M_Display_AdjustSliders (int dir)
 			Cvar_SetValue ("r_scale", 1.0f);
 			Cvar_SetValue ("r_softemu", 0);
 			Cvar_SetValue ("r_dither", 0);
-			Cvar_Set (MENU_TEXTUREMODE_NAME, "GL_LINEAR_MIPMAP_LINEAR");
+			Cvar_Set (MENU_TEXTUREMODE_NAME, MENU_TEXTUREMODE_LINEAR_LINEAR);
 			Cvar_SetValue (MENU_TEXTURE_ANISOTROPY_NAME, MENU_MAX_ANISOTROPY);
 			Cvar_SetValue (MENU_FULLBRIGHTS_NAME, 1);
 			Cvar_SetValue (MENU_FXAA_NAME, 1);
