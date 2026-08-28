@@ -882,14 +882,23 @@ static float Nitro_GlowLightScale (int style, int key, float frequency)
 	return 0.84f + 0.11f * sin (phase) + 0.05f * sin (phase * 2.37f + 1.7f);
 }
 
-static void Nitro_AddEntityGlowLight (entity_t *entity, int key)
+static void Nitro_AddEntityGlowLight (entity_t *entity, int key,
+				      qboolean use_pimp_override)
 {
 	dlight_t	*light;
 	float		*settings;
 	float		radius, scale, zoffset, alpha;
 	int		flags, style;
 
-	flags = R_GetPimpFlags (entity, &settings);
+	if (use_pimp_override)
+	{
+		flags = R_GetPimpFlags (entity, &settings);
+	}
+	else
+	{
+		flags = entity->model->ex_flags;
+		settings = entity->model->glow_settings;
+	}
 	style = (int)settings[LIGHT_STYLE];
 	zoffset = 0.0f;
 	alpha = (settings[COLOR_A] != 0.0f) ? settings[COLOR_A] : 1.0f;
@@ -938,15 +947,35 @@ static void Nitro_AddEntityGlowLight (entity_t *entity, int key)
 	light->color[3] = alpha;
 }
 
+static qboolean Nitro_DlightSlotAvailable (int key)
+{
+	int	i;
+
+	for (i = 0; i < MAX_DLIGHTS; i++)
+	{
+		if (cl_dlights[i].key == key || cl_dlights[i].die < cl.time)
+			return true;
+	}
+	return false;
+}
+
 void R_PushDlights (void)
 {
 	entity_t	*entity;
-	int		i;
+	int		i, key;
 
 	for (i = 1, entity = cl_entities + 1; i < cl.num_entities; i++, entity++)
 	{
 		if (entity->model)
-			Nitro_AddEntityGlowLight (entity, i);
+			Nitro_AddEntityGlowLight (entity, i, true);
+	}
+	for (i = 0, entity = cl_static_entities; i < cl.num_statics; i++, entity++)
+	{
+		if (!entity->model)
+			continue;
+		key = MAX_EDICTS + i;
+		if (Nitro_DlightSlotAvailable (key))
+			Nitro_AddEntityGlowLight (entity, key, false);
 	}
 	WGPUWorld_PushDlights ();
 }
