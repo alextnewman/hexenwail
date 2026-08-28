@@ -854,6 +854,20 @@ function openPhoneOverlay() {
   if (ui.phoneOverlay) ui.phoneOverlay.setAttribute('aria-hidden', 'false');
 }
 
+function togglePhoneMenuButton() {
+  const menuOpen = document.body.dataset.touchMenu === 'true';
+  const overlayOpen = ui.phoneOverlay && ui.phoneOverlay.getAttribute('aria-hidden') !== 'true';
+  if (menuOpen || overlayOpen) {
+    if (menuOpen) {
+      engineKey(PHONE_CONTROL_KEYCODES.menu, true);
+      engineKey(PHONE_CONTROL_KEYCODES.menu, false);
+    }
+    closePhoneOverlay();
+    return;
+  }
+  openPhoneOverlay();
+}
+
 function closePhoneOverlay() {
   if (ui.phoneOverlay) ui.phoneOverlay.setAttribute('aria-hidden', 'true');
   tryCaptureInput();
@@ -1466,7 +1480,7 @@ function bindUi() {
   ui.fullscreenButton?.addEventListener('click', () => toggleFullscreenPlay());
   ui.perfCopyButton?.addEventListener('click', () => copyPerfReport());
   ui.canvas?.addEventListener('click', tryCaptureInput);
-  ui.phoneMenuButton?.addEventListener('click', openPhoneOverlay);
+  ui.phoneMenuButton?.addEventListener('click', togglePhoneMenuButton);
   ui.phoneResumeButton?.addEventListener('click', closePhoneOverlay);
   ui.phoneEscapeButton?.addEventListener('click', () => {
     engineKey(PHONE_CONTROL_KEYCODES.menu, true);

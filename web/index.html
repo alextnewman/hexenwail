@@ -268,7 +268,6 @@
     }
     .phone-menu-control.phone-button { display: none; }
     body[data-touch-menu="true"] .phone-game-control { display: none; }
-    body[data-touch-menu="true"] .phone-menu-control.phone-stick { display: block; }
     body[data-touch-menu="true"] .phone-menu-control.phone-button { display: grid; }
     .phone-stick {
       position: absolute;
@@ -337,6 +336,33 @@
     .phone-button.use {
       right: max(1rem, var(--safe-right));
       bottom: max(1rem, calc(var(--safe-bottom) + 0.5rem));
+    }
+    .phone-button.menu-forward,
+    .phone-button.menu-down,
+    .phone-button.menu-left,
+    .phone-button.menu-right,
+    .phone-button.menu-resume {
+      width: 3.2rem;
+      height: 3.2rem;
+      min-width: 3.2rem;
+      min-height: 3.2rem;
+      font-size: 1.1rem;
+    }
+    .phone-button.menu-forward {
+      left: max(1rem, calc(var(--safe-left) + 0.75rem));
+      bottom: max(10.4rem, calc(var(--safe-bottom) + 9.25rem));
+    }
+    .phone-button.menu-left {
+      left: max(1rem, calc(var(--safe-left) + 0.75rem));
+      bottom: max(6.2rem, calc(var(--safe-bottom) + 5.25rem));
+    }
+    .phone-button.menu-right {
+      left: max(6.2rem, calc(var(--safe-left) + 5.75rem));
+      bottom: max(6.2rem, calc(var(--safe-bottom) + 5.25rem));
+    }
+    .phone-button.menu-down {
+      left: max(3.6rem, calc(var(--safe-left) + 3.25rem));
+      bottom: max(1.8rem, calc(var(--safe-bottom) + 1.2rem));
     }
     .phone-button.back,
     .phone-button.menu-resume {
@@ -607,7 +633,10 @@
       <div id="phone-controls" class="phone-controls" aria-label="Touch controls">
         <div class="phone-look phone-game-control" data-phone-action="look" aria-label="Drag to look"></div>
         <div class="phone-stick phone-game-control" data-phone-action="stick" aria-label="Move forward, back, left, and right"></div>
-        <div class="phone-stick phone-menu-control" data-phone-action="stick" aria-label="Navigate menu up, down, left, and right"></div>
+        <button class="phone-button menu-forward phone-menu-control" type="button" data-phone-action="forward" aria-label="Move menu cursor up">▲</button>
+        <button class="phone-button menu-left phone-menu-control" type="button" data-phone-action="left" aria-label="Move menu cursor left">◀</button>
+        <button class="phone-button menu-right phone-menu-control" type="button" data-phone-action="right" aria-label="Move menu cursor right">▶</button>
+        <button class="phone-button menu-down phone-menu-control" type="button" data-phone-action="back" aria-label="Move menu cursor down">▼</button>
         <button class="phone-button attack phone-game-control" type="button" data-phone-action="attack" aria-label="Attack">Atk</button>
         <button class="phone-button jump phone-game-control" type="button" data-phone-action="jump" aria-label="Jump">Jump</button>
         <button class="phone-button back phone-game-control" type="button" data-phone-action="menu" aria-label="Open menu">Menu</button>

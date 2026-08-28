@@ -25,6 +25,7 @@ export const DEFAULT_PHONE_CONTROL_OPTIONS = Object.freeze({
 });
 
 const BUTTON_ACTIONS = new Set([
+  'forward', 'back', 'left', 'right',
   'attack', 'jump', 'use', 'menu', 'menuBack', 'menuSelect',
   'nextWeapon', 'prevWeapon',
 ]);
