@@ -66,6 +66,7 @@
 #include "quakedef.h"
 //#include "r_local.h"
 #if defined(WEBQUAKE)
+#include <emscripten/emscripten.h>
 #include "web_perf.h"
 #define SCR_PERF_BEGIN(stage)	WebPerf_BeginStage(stage)
 #define SCR_PERF_END(stage)	WebPerf_EndStage(stage)
@@ -1015,6 +1016,12 @@ int SCR_ModalMessage (const char *text)
 	if (cls.state == ca_dedicated)
 		return true;
 #endif	/* H2W */
+#if defined(WEBQUAKE)
+	S_ClearBuffer ();
+	return EM_ASM_INT({
+		return window.confirm(UTF8ToString($0)) ? 1 : 0;
+	}, text);
+#else
 	scr_notifystring = text;
 
 // draw a fresh screen
@@ -1035,6 +1042,7 @@ int SCR_ModalMessage (const char *text)
 	SCR_UpdateScreen ();
 
 	return key_lastpress == 'y';
+#endif
 }
 
 //=============================================================================

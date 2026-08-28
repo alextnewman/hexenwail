@@ -10,6 +10,10 @@ const shell = readFileSync(join(repoRoot, 'engine/web/shell.html'), 'utf8');
 const inputBackend = readFileSync(join(repoRoot, 'engine/h2shared/in_web.c'), 'utf8');
 const keys = readFileSync(join(repoRoot, 'engine/hexen2/keys.c'), 'utf8');
 const menu = readFileSync(join(repoRoot, 'engine/hexen2/menu.c'), 'utf8');
+const screens = [
+  readFileSync(join(repoRoot, 'engine/h2shared/screen.c'), 'utf8'),
+  readFileSync(join(repoRoot, 'engine/h2shared/gl_screen.c'), 'utf8'),
+];
 
 test('immersive layout is driven by its own attribute, not by phone mode', () => {
   assert.match(html, /body\[data-engine-state="running"\]\[data-immersive="true"\] \.topbar/);
@@ -149,4 +153,14 @@ test('touch controls switch safely between gameplay and menu layouts', () => {
   assert.match(inputBackend, /hexenwailtouchmode/);
   assert.match(inputBackend, /queueMicrotask/,
     'menu-mode callbacks must not re-enter WebAssembly from IN_Commands');
+});
+
+test('modal confirmations do not poll browser input synchronously', () => {
+  for (const screen of screens) {
+    const modal = screen.match(/int SCR_ModalMessage \(const char \*text\)\n\{([\s\S]*?)\n\}/)?.[1];
+    assert.ok(modal, 'SCR_ModalMessage is defined');
+    assert.match(modal, /#if defined\(WEBQUAKE\)[\s\S]*window\.confirm\(UTF8ToString\(\$0\)\)/);
+    assert.match(modal, /#else[\s\S]*Sys_SendKeyEvents \(\)/,
+      'the synchronous polling loop is restricted to native builds');
+  }
 });
