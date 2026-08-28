@@ -164,10 +164,9 @@ leaving fullscreen through the browser (desktop Esc, iPad system gesture) drops
 the immersive layout too, so the launcher chrome comes back (except in phone
 mode, below, where there is no room for it).
 
-The in-game **☰** button opens a small overlay. It can resume play, send Escape
-to the engine menu, **Show launcher** (leave fullscreen but keep playing), or
-**Sync & exit to launcher**. The last one first syncs the runtime filesystem to
-browser storage and then reloads the page to get a fresh WebAssembly runtime.
+The in-game **☰** button opens and closes the engine menu directly, just like
+the on-screen **Menu** control. The menu replaces the gameplay controls with
+its own navigation pad.
 
 **☰ hides while a controller is connected.** A gamepad already has a menu
 button — Start always reaches the engine menu — so leaving a launcher
@@ -296,7 +295,7 @@ every visible label describes what that control actually does:
 - **Atk**: primary attack (`K_GP_RTRIGGER`)
 - **Jump**: jump (`K_GP_A`)
 - **Use**: lift/use interaction (`K_GP_LTHUMB`, default `impulse 13`)
-- **Previous / Next**: previous/next weapon (`K_GP_LSHOULDER` / `K_GP_RSHOULDER`)
+- **◀ / ▶**: previous/next weapon (`K_GP_LSHOULDER` / `K_GP_RSHOULDER`)
 - **Menu**: open the engine menu (`K_GP_START`)
 - in-game overlay **Send Esc/Menu**: Escape
 

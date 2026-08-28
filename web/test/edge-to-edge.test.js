@@ -8,6 +8,7 @@ const html = readFileSync(join(repoRoot, 'web/index.html'), 'utf8');
 const app = readFileSync(join(repoRoot, 'web/app.js'), 'utf8');
 const vid = readFileSync(join(repoRoot, 'engine/h2shared/vid_soft_web.c'), 'utf8');
 const draw = readFileSync(join(repoRoot, 'engine/h2shared/draw.c'), 'utf8');
+const keys = readFileSync(join(repoRoot, 'engine/hexen2/keys.c'), 'utf8');
 
 test('immersive play spends no screen space on safe-area padding', () => {
   const immersiveBody = html.match(
@@ -29,6 +30,11 @@ test('a connected controller replaces the launcher hamburger', () => {
   assert.match(app, /addEventListener\('gamepaddisconnected', \(\) => \{\n\s*state\.gamepadConnected = false;/);
   // Keyboard/mouse activity must not be mistaken for a controller.
   assert.match(app, /state\.gamepadConnected = state\.gamepadConnected \|\| hasConnectedGamepad\(\);/);
+});
+
+test('the virtual left stick strafes instead of turning', () => {
+  assert.match(keys, /Key_SetBinding \(K_TOUCH_LEFT, "\+moveleft"\);/);
+  assert.match(keys, /Key_SetBinding \(K_TOUCH_RIGHT, "\+moveright"\);/);
 });
 
 test('the software renderer sizes its framebuffer from the live canvas aspect', () => {

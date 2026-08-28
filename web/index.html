@@ -324,18 +324,22 @@
     .phone-button.attack,
     .phone-button.menu-back {
       right: max(1rem, var(--safe-right));
-      bottom: max(5.6rem, calc(var(--safe-bottom) + 5rem));
+      bottom: max(6.25rem, calc(var(--safe-bottom) + 5.65rem));
       width: 5rem;
       height: 5rem;
     }
     .phone-button.jump,
     .phone-button.menu-select {
-      right: max(5.8rem, calc(var(--safe-right) + 4.8rem));
+      right: max(6.25rem, calc(var(--safe-right) + 5.65rem));
       bottom: max(2.4rem, calc(var(--safe-bottom) + 1.9rem));
+      width: 4rem;
+      height: 4rem;
     }
     .phone-button.use {
       right: max(1rem, var(--safe-right));
       bottom: max(1rem, calc(var(--safe-bottom) + 0.5rem));
+      width: 4rem;
+      height: 4rem;
     }
     .phone-button.menu-forward,
     .phone-button.menu-down,
@@ -366,22 +370,28 @@
     }
     .phone-button.back,
     .phone-button.menu-resume {
-      right: max(5.8rem, calc(var(--safe-right) + 4.8rem));
-      bottom: max(6.2rem, calc(var(--safe-bottom) + 5.6rem));
-      min-width: 3.2rem;
-      min-height: 3.2rem;
+      right: max(6.25rem, calc(var(--safe-right) + 5.65rem));
+      bottom: max(7.25rem, calc(var(--safe-bottom) + 6.65rem));
+      width: 4rem;
+      height: 4rem;
+      min-width: 4rem;
+      min-height: 4rem;
     }
     .phone-button.prev {
-      right: max(10.5rem, calc(var(--safe-right) + 9.5rem));
+      right: max(10.75rem, calc(var(--safe-right) + 10.15rem));
       bottom: max(1rem, calc(var(--safe-bottom) + 0.5rem));
-      min-width: 3.4rem;
-      min-height: 3.4rem;
+      width: 3rem;
+      height: 3rem;
+      min-width: 3rem;
+      min-height: 3rem;
     }
     .phone-button.next {
-      right: max(10.5rem, calc(var(--safe-right) + 9.5rem));
-      bottom: max(5rem, calc(var(--safe-bottom) + 4.5rem));
-      min-width: 3.4rem;
-      min-height: 3.4rem;
+      right: max(10.75rem, calc(var(--safe-right) + 10.15rem));
+      bottom: max(4.5rem, calc(var(--safe-bottom) + 4rem));
+      width: 3rem;
+      height: 3rem;
+      min-width: 3rem;
+      min-height: 3rem;
     }
     .phone-button.prev,
     .phone-button.next {
@@ -404,17 +414,17 @@
     body[data-handedness="left"] .phone-button.jump,
     body[data-handedness="left"] .phone-button.menu-select {
       right: auto;
-      left: max(5.8rem, calc(var(--safe-left) + 4.8rem));
+      left: max(6.25rem, calc(var(--safe-left) + 5.65rem));
     }
     body[data-handedness="left"] .phone-button.back,
     body[data-handedness="left"] .phone-button.menu-resume {
       right: auto;
-      left: max(9.6rem, calc(var(--safe-left) + 8.6rem));
+      left: max(6.25rem, calc(var(--safe-left) + 5.65rem));
     }
     body[data-handedness="left"] .phone-button.prev,
     body[data-handedness="left"] .phone-button.next {
       right: auto;
-      left: max(10.5rem, calc(var(--safe-left) + 9.5rem));
+      left: max(10.75rem, calc(var(--safe-left) + 10.15rem));
     }
     body[data-engine-state="running"][data-touch-controls="on"] .phone-controls {
       display: block;
@@ -641,8 +651,8 @@
         <button class="phone-button jump phone-game-control" type="button" data-phone-action="jump" aria-label="Jump">Jump</button>
         <button class="phone-button back phone-game-control" type="button" data-phone-action="menu" aria-label="Open menu">Menu</button>
         <button class="phone-button use phone-game-control" type="button" data-phone-action="use" aria-label="Use or interact">Use</button>
-        <button class="phone-button prev phone-game-control" type="button" data-phone-action="prevWeapon" aria-label="Previous weapon">Previous</button>
-        <button class="phone-button next phone-game-control" type="button" data-phone-action="nextWeapon" aria-label="Next weapon">Next</button>
+        <button class="phone-button prev phone-game-control" type="button" data-phone-action="prevWeapon" aria-label="Previous weapon">◀</button>
+        <button class="phone-button next phone-game-control" type="button" data-phone-action="nextWeapon" aria-label="Next weapon">▶</button>
         <button class="phone-button menu-back phone-menu-control" type="button" data-phone-action="menuBack" aria-label="Go back one menu">Back</button>
         <button class="phone-button menu-select phone-menu-control" type="button" data-phone-action="menuSelect" aria-label="Select menu item">Select</button>
         <button class="phone-button menu-resume phone-menu-control" type="button" data-phone-action="menu" aria-label="Close menu and resume game">Resume</button>

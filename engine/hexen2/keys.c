@@ -1105,8 +1105,8 @@ void Key_Init (void)
 	 * keyboard must never rotate them out of phase. */
 	Key_SetBinding (K_TOUCH_FORWARD, "+forward");
 	Key_SetBinding (K_TOUCH_BACK, "+back");
-	Key_SetBinding (K_TOUCH_LEFT, "+left");
-	Key_SetBinding (K_TOUCH_RIGHT, "+right");
+	Key_SetBinding (K_TOUCH_LEFT, "+moveleft");
+	Key_SetBinding (K_TOUCH_RIGHT, "+moveright");
 	Key_SetBinding (K_TOUCH_ATTACK, "+attack");
 	Key_SetBinding (K_TOUCH_JUMP, "+jump");
 	Key_SetBinding (K_TOUCH_USE, "impulse 23");		/* use artifact */
