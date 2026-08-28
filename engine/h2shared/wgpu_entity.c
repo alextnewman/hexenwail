@@ -602,7 +602,9 @@ static int WGPUEntity_AliasPose (const aliashdr_t *paliashdr, const newmdl_t *pm
 	time = cl.time + entity->syncbase;
 	if (pimp_flags & XF_TORCH_GLOW)
 		time += R_NitroGlowPhase (entity, pimp_flags) * fullinterval;
-	targettime = time - ((int)(time / fullinterval)) * fullinterval;
+	targettime = fmodf (time, fullinterval);
+	if (targettime < 0.0f)
+		targettime += fullinterval;
 	for (i = 0; i < numframes - 1; i++)
 	{
 		if (intervals[i] > targettime)

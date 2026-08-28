@@ -890,8 +890,9 @@ float R_NitroGlowPhase (const entity_t *entity, int flags)
 float R_NitroGlowLightScale (const entity_t *entity, int flags, int style,
 			    float frequency)
 {
-	float	phase, phase_floor, phase_offset, frac;
-	int	frame, frame_next, len, rate;
+	double	phase, phase_floor, frac;
+	float	phase_offset;
+	int	frame, frame_next, len, phase_frame, rate;
 
 	phase_offset = R_NitroGlowPhase (entity, flags);
 
@@ -907,10 +908,13 @@ float R_NitroGlowLightScale (const entity_t *entity, int flags, int style,
 			frame = 1;
 		}
 		len = cl_lightstyle[style].length - frame;
-		phase = (float)cl.time * 10.0f * rate + phase_offset * len;
-		phase_floor = floorf (phase);
+		phase = cl.time * 10.0 * rate + phase_offset * len;
+		phase_floor = floor (phase);
 		frac = phase - phase_floor;
-		frame += ((int)phase_floor % len + len) % len;
+		phase_frame = (int)fmod (phase_floor, (double)len);
+		if (phase_frame < 0)
+			phase_frame += len;
+		frame += phase_frame;
 		frame_next = frame + 1;
 		if (frame_next >= cl_lightstyle[style].length)
 			frame_next -= len;
@@ -921,8 +925,8 @@ float R_NitroGlowLightScale (const entity_t *entity, int flags, int style,
 			2.0f);
 	}
 
-	phase = (float)cl.time * frequency + phase_offset * (float)(M_PI * 2.0);
-	return 0.84f + 0.11f * sin (phase) + 0.05f * sin (phase * 2.37f + 1.7f);
+	phase = cl.time * frequency + phase_offset * (M_PI * 2.0);
+	return 0.84f + 0.11f * sin (phase) + 0.05f * sin (phase * 2.37 + 1.7);
 }
 
 static qboolean Nitro_GlowLightEnabled (int flags)
