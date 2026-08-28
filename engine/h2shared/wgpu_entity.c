@@ -577,7 +577,7 @@ interval table, exactly as the software renderer reads them.
 ================
 */
 static int WGPUEntity_AliasPose (const aliashdr_t *paliashdr, const newmdl_t *pmdl,
-				entity_t *entity)
+				entity_t *entity, int pimp_flags)
 {
 	const maliasframedesc_t	*pframedesc;
 	const maliasgroup_t	*group;
@@ -600,7 +600,11 @@ static int WGPUEntity_AliasPose (const aliashdr_t *paliashdr, const newmdl_t *pm
 		return pframedesc->frame;
 	fullinterval = intervals[numframes - 1];
 	time = cl.time + entity->syncbase;
-	targettime = time - ((int)(time / fullinterval)) * fullinterval;
+	if (pimp_flags & XF_TORCH_GLOW)
+		time += R_NitroGlowPhase (entity, pimp_flags) * fullinterval;
+	targettime = fmodf (time, fullinterval);
+	if (targettime < 0.0f)
+		targettime += fullinterval;
 	for (i = 0; i < numframes - 1; i++)
 	{
 		if (intervals[i] > targettime)
@@ -821,7 +825,7 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 	if (pimp_flags & (XF_TORCH_GLOW | XF_GLOW | XF_MISSILE_GLOW | EF_GLOW))
 		shade |= 1u << 16;
 
-	pose = WGPUEntity_AliasPose (paliashdr, pmdl, entity);
+	pose = WGPUEntity_AliasPose (paliashdr, pmdl, entity, pimp_flags);
 	poseverts = (const trivertx_t *)((const byte *)paliashdr + pose);
 	pstverts = (const stvert_t *)((const byte *)paliashdr + paliashdr->stverts);
 	ptri = (const mtriangle_t *)((const byte *)paliashdr + paliashdr->triangles);
@@ -1006,7 +1010,8 @@ static void WGPUEntity_DrawGlow (entity_t *entity)
 	style = (int)settings[LIGHT_STYLE];
 	if (style < 0 || style >= MAX_LIGHTSTYLES)
 		style = 0;
-	intensity *= CLAMP(0.0f, d_lightstylevalue[style] / 255.0f, 1.0f);
+	intensity *= CLAMP(0.0f,
+		R_NitroGlowLightScale (entity, flags, style, 3.0f), 1.0f);
 	if (!(flags & XF_TORCH_GLOW))
 		intensity *= CLAMP(0.0f, r_nitro_glow_intensity.value, 1.0f);
 	color = WGPUEntity_GlowColor (settings, intensity);

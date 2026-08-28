@@ -858,10 +858,43 @@ void R_SetVrect (vrect_t *pvrectin, vrect_t *pvrect, int lineadj)
 		pvrect->height = 1;
 }
 
-static float Nitro_GlowLightScale (int style, int key, float frequency)
+float R_NitroGlowPhase (const entity_t *entity, int flags)
 {
-	float	phase;
-	int	frame, rate;
+	unsigned int	phase_key;
+	int		i;
+
+	if (flags & XF_MISSILE_GLOW)
+	{
+		if (entity->syncbase != 0.0f)
+		{
+			float	phase = entity->syncbase - floorf (entity->syncbase);
+
+			return (phase < 0.0f) ? phase + 1.0f : phase;
+		}
+		phase_key = (unsigned int)((uintptr_t)entity >> 4) * 2654435761u;
+	}
+	else
+	{
+		static const unsigned int	primes[3] = {
+			73856093u, 19349663u, 83492791u
+		};
+
+		phase_key = 0;
+		for (i = 0; i < 3; i++)
+			phase_key ^= (unsigned int)(int)entity->origin[i] * primes[i];
+	}
+
+	return (float)(phase_key & 0xffffu) * (1.0f / 65536.0f);
+}
+
+float R_NitroGlowLightScale (const entity_t *entity, int flags, int style,
+			    float frequency)
+{
+	double	phase, phase_floor, frac;
+	float	phase_offset;
+	int	frame, frame_next, len, phase_frame, rate;
+
+	phase_offset = R_NitroGlowPhase (entity, flags);
 
 	if (style >= 0 && style < MAX_LIGHTSTYLES && cl_lightstyle[style].length)
 	{
@@ -874,15 +907,26 @@ static float Nitro_GlowLightScale (int style, int key, float frequency)
 			rate = cl_lightstyle[style].map[0] - '0';
 			frame = 1;
 		}
-		frame += (int)(cl.time * 10.0 * rate) %
-			 (cl_lightstyle[style].length - frame);
+		len = cl_lightstyle[style].length - frame;
+		phase = cl.time * 10.0 * rate + phase_offset * len;
+		phase_floor = floor (phase);
+		frac = phase - phase_floor;
+		phase_frame = (int)fmod (phase_floor, (double)len);
+		if (phase_frame < 0)
+			phase_frame += len;
+		frame += phase_frame;
+		frame_next = frame + 1;
+		if (frame_next >= cl_lightstyle[style].length)
+			frame_next -= len;
 		return CLAMP (0.0f,
-			(cl_lightstyle[style].map[frame] - 'a') * 22.0f / 255.0f,
+			((cl_lightstyle[style].map[frame] - 'a') * (1.0f - frac) +
+			 (cl_lightstyle[style].map[frame_next] - 'a') * frac) *
+			 22.0f / 255.0f,
 			2.0f);
 	}
 
-	phase = (float)cl.time * frequency + key * 0.6180339f;
-	return 0.84f + 0.11f * sin (phase) + 0.05f * sin (phase * 2.37f + 1.7f);
+	phase = cl.time * frequency + phase_offset * (M_PI * 2.0);
+	return 0.84f + 0.11f * sin (phase) + 0.05f * sin (phase * 2.37 + 1.7);
 }
 
 static qboolean Nitro_GlowLightEnabled (int flags)
@@ -921,12 +965,12 @@ static void Nitro_AddEntityGlowLight (entity_t *entity, int key,
 	{
 		radius = (settings[LIGHT_RADIUS] >= 1.0f) ?
 			 settings[LIGHT_RADIUS] : 200.0f;
-		scale = Nitro_GlowLightScale (style, key, 2.0f);
+		scale = R_NitroGlowLightScale (entity, flags, style, 2.0f);
 	}
 	else if (r_nitro_torch_dlight.integer && (flags & XF_TORCH_GLOW))
 	{
 		radius = 150.0f;
-		scale = Nitro_GlowLightScale (style, key, 7.0f);
+		scale = R_NitroGlowLightScale (entity, flags, style, 7.0f);
 		zoffset = 8.0f;
 		alpha = 0.7f;
 	}
@@ -934,14 +978,14 @@ static void Nitro_AddEntityGlowLight (entity_t *entity, int key,
 	{
 		radius = (settings[LIGHT_RADIUS] >= 1.0f) ?
 			 settings[LIGHT_RADIUS] : 120.0f;
-		scale = Nitro_GlowLightScale (style, key, 13.0f);
+		scale = R_NitroGlowLightScale (entity, flags, style, 13.0f);
 	}
 	else if (r_nitro_extra_dynamic_lights.integer && r_nitro_other_glows.integer &&
 		 (flags & (XF_GLOW | EF_GLOW)))
 	{
 		radius = (settings[LIGHT_RADIUS] >= 1.0f) ?
 			 settings[LIGHT_RADIUS] : 96.0f;
-		scale = Nitro_GlowLightScale (style, key, 3.0f);
+		scale = R_NitroGlowLightScale (entity, flags, style, 3.0f);
 	}
 	else
 	{
