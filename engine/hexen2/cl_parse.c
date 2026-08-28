@@ -258,12 +258,18 @@ static void CL_ParseServerInfo (void)
 	const char	*str;
 	int		i, j;
 	int		nummodels, numsounds, numfx, numitems;
+	int		wire_flags;
+	float		wire_glow[4];
+	qboolean	wire_model_effect[MAX_MODELS];
+	int		wire_model_flags[MAX_MODELS];
+	float		wire_model_glow[MAX_MODELS][4];
 	char	model_precache[MAX_MODELS][MAX_QPATH];
 	char	sound_precache[MAX_SOUNDS][MAX_QPATH];
 
 	// Initialize arrays to prevent crashes on bad data
 	memset(model_precache, 0, sizeof(model_precache));
 	memset(sound_precache, 0, sizeof(sound_precache));
+	memset(wire_model_effect, 0, sizeof(wire_model_effect));
 // rjr	edict_t		*ent;
 
 	Con_DPrintf ("Serverinfo packet received.\n");
@@ -537,17 +543,19 @@ static void CL_ParseServerInfo (void)
 				Con_Printf("Server sent too many model effects\n");
 				return;
 			}
+			wire_flags = (unsigned short)MSG_ReadShort();
+			wire_glow[0] = MSG_ReadFloat();
+			wire_glow[1] = MSG_ReadFloat();
+			wire_glow[2] = MSG_ReadFloat();
+			wire_glow[3] = MSG_ReadFloat();
 			for (j = 2; j < nummodels; j++)
 			{
 				if (!strcmp(cl.model_precache[j]->name, str))
 				{
-#if defined(GLQUAKE) || defined(WEBGPUQUAKE)
-					cl.model_precache[j]->ex_flags = MSG_ReadShort();
-					cl.model_precache[j]->glow_settings[COLOR_R] = MSG_ReadFloat();
-					cl.model_precache[j]->glow_settings[COLOR_G] = MSG_ReadFloat();
-					cl.model_precache[j]->glow_settings[COLOR_B] = MSG_ReadFloat();
-					cl.model_precache[j]->glow_settings[COLOR_A] = MSG_ReadFloat();
-#endif
+					wire_model_effect[j] = true;
+					wire_model_flags[j] = wire_flags;
+					memcpy(wire_model_glow[j], wire_glow, sizeof(wire_glow));
+					break;
 				}
 			}
 		}
@@ -604,6 +612,19 @@ static void CL_ParseServerInfo (void)
 	cl_entities[0].model = cl.worldmodel = cl.model_precache[1];
 
 	R_NewMap ();
+
+	for (i = 2; i < nummodels; i++)
+	{
+		if (!wire_model_effect[i])
+			continue;
+		cl.model_precache[i]->ex_flags =
+			(cl.model_precache[i]->ex_flags & ~0xffff) |
+			wire_model_flags[i];
+		cl.model_precache[i]->glow_settings[COLOR_R] = wire_model_glow[i][0];
+		cl.model_precache[i]->glow_settings[COLOR_G] = wire_model_glow[i][1];
+		cl.model_precache[i]->glow_settings[COLOR_B] = wire_model_glow[i][2];
+		cl.model_precache[i]->glow_settings[COLOR_A] = wire_model_glow[i][3];
+	}
 
 	if (!sv.active)
 		Host_LoadStrings();

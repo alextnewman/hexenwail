@@ -175,7 +175,7 @@ test('the WebGPU presenter stays a software scan-out path, distinct from Nitro',
   assert.doesNotMatch(nitroBranch, /\$\{COMMONDIR\}\/gl2_/,
     'WebGlideNitro must not compile any WebGlide source');
   const webglideBranch = cmake.match(/if\(WEB_RENDERER STREQUAL "webgl2"\)([\s\S]*?)\nelseif\(WEB_RENDERER STREQUAL "webgpu"\)/)?.[1];
-  const softwareBranch = cmake.match(/\nelse\(\)([\s\S]*?)\nendif\(\)\n\nset\(CLIENT_SOURCES/)?.[1];
+  const softwareBranch = cmake.match(/elseif\(WEB_RENDERER STREQUAL "webgpu"\)[\s\S]*?\nelse\(\)([\s\S]*?)\nendif\(\)\n\nset\(CLIENT_SOURCES/)?.[1];
   assert.match(webglideBranch, /\$\{COMMONDIR\}\/model\.c/);
   assert.match(softwareBranch, /\$\{COMMONDIR\}\/model\.c/);
   assert.match(wasmAction, /wasm-build\.sh webgpu engine\/build-webgpu/);

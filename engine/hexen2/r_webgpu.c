@@ -882,6 +882,15 @@ static float Nitro_GlowLightScale (int style, int key, float frequency)
 	return 0.84f + 0.11f * sin (phase) + 0.05f * sin (phase * 2.37f + 1.7f);
 }
 
+static qboolean Nitro_GlowLightEnabled (int flags)
+{
+	return (flags & EF_ILLUMINATE) ||
+	       (r_nitro_torch_dlight.integer && (flags & XF_TORCH_GLOW)) ||
+	       (r_nitro_missile_glows.integer && (flags & XF_MISSILE_GLOW)) ||
+	       (r_nitro_extra_dynamic_lights.integer && r_nitro_other_glows.integer &&
+		(flags & (XF_GLOW | EF_GLOW)));
+}
+
 static void Nitro_AddEntityGlowLight (entity_t *entity, int key,
 				      qboolean use_pimp_override)
 {
@@ -899,6 +908,8 @@ static void Nitro_AddEntityGlowLight (entity_t *entity, int key,
 		flags = entity->model->ex_flags;
 		settings = entity->model->glow_settings;
 	}
+	if (!Nitro_GlowLightEnabled (flags))
+		return;
 	style = (int)settings[LIGHT_STYLE];
 	zoffset = 0.0f;
 	alpha = (settings[COLOR_A] != 0.0f) ? settings[COLOR_A] : 1.0f;
@@ -947,36 +958,100 @@ static void Nitro_AddEntityGlowLight (entity_t *entity, int key,
 	light->color[3] = alpha;
 }
 
-static qboolean Nitro_DlightSlotAvailable (int key)
+typedef struct
 {
-	int	i;
+	entity_t	*entity;
+	float		distance;
+	int		index;
+} nitro_static_light_t;
+
+static void Nitro_ClearStaticGlowLights (void)
+{
+	int	i, key;
 
 	for (i = 0; i < MAX_DLIGHTS; i++)
 	{
-		if (cl_dlights[i].key == key || cl_dlights[i].die < cl.time)
-			return true;
+		key = cl_dlights[i].key;
+		if (key >= MAX_EDICTS && key < MAX_EDICTS + MAX_STATIC_ENTITIES)
+		{
+			cl_dlights[i].key = 0;
+			cl_dlights[i].radius = 0.0f;
+			cl_dlights[i].die = cl.time - 1.0;
+		}
 	}
-	return false;
+}
+
+static void Nitro_AddStaticGlowLights (void)
+{
+	nitro_static_light_t	candidates[MAX_DLIGHTS];
+	entity_t		*entity;
+	vec3_t			offset;
+	float			distance;
+	int			capacity, count, farthest;
+	int			i, j;
+
+	capacity = 0;
+	for (i = 0; i < MAX_DLIGHTS; i++)
+	{
+		if (cl_dlights[i].die < cl.time)
+			capacity++;
+	}
+	if (!capacity)
+		return;
+
+	count = 0;
+	for (i = 0, entity = cl_static_entities; i < cl.num_statics; i++, entity++)
+	{
+		if (!entity->model || !Nitro_GlowLightEnabled (entity->model->ex_flags))
+			continue;
+
+		VectorSubtract (entity->origin, r_refdef.vieworg, offset);
+		distance = DotProduct (offset, offset);
+		if (count < capacity)
+		{
+			candidates[count].entity = entity;
+			candidates[count].distance = distance;
+			candidates[count].index = i;
+			count++;
+			continue;
+		}
+
+		farthest = 0;
+		for (j = 1; j < count; j++)
+		{
+			if (candidates[j].distance > candidates[farthest].distance ||
+			    (candidates[j].distance == candidates[farthest].distance &&
+			     candidates[j].index > candidates[farthest].index))
+				farthest = j;
+		}
+		if (distance > candidates[farthest].distance ||
+		    (distance == candidates[farthest].distance &&
+		     i > candidates[farthest].index))
+			continue;
+		candidates[farthest].entity = entity;
+		candidates[farthest].distance = distance;
+		candidates[farthest].index = i;
+	}
+
+	for (i = 0; i < count; i++)
+	{
+		Nitro_AddEntityGlowLight (candidates[i].entity,
+					 MAX_EDICTS + candidates[i].index, false);
+	}
 }
 
 void R_PushDlights (void)
 {
 	entity_t	*entity;
-	int		i, key;
+	int		i;
 
+	Nitro_ClearStaticGlowLights ();
 	for (i = 1, entity = cl_entities + 1; i < cl.num_entities; i++, entity++)
 	{
 		if (entity->model)
 			Nitro_AddEntityGlowLight (entity, i, true);
 	}
-	for (i = 0, entity = cl_static_entities; i < cl.num_statics; i++, entity++)
-	{
-		if (!entity->model)
-			continue;
-		key = MAX_EDICTS + i;
-		if (Nitro_DlightSlotAvailable (key))
-			Nitro_AddEntityGlowLight (entity, key, false);
-	}
+	Nitro_AddStaticGlowLights ();
 	WGPUWorld_PushDlights ();
 }
 

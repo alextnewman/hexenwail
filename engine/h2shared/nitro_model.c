@@ -454,7 +454,7 @@ static void Mod_SetAliasModelExtraFlags (qmodel_t *mod)
 		mod->glow_settings[COLOR_A] = 0.5f;
 		mod->glow_settings[LIGHT_STYLE] = 6;
 	}
-	else if (!q_strncasecmp (mod->name, "models/shard",12) && strlen(mod->name) == 12)
+	else if (!q_strcasecmp (mod->name, "models/shard.mdl"))
 	{
 		mod->ex_flags |= XF_MISSILE_GLOW;
 		mod->glow_settings[COLOR_R] = 1.0f;
@@ -2322,8 +2322,13 @@ static void Mod_LoadAliasModelNew (qmodel_t *mod, void *buffer)
 	maliasskindesc_t	*pskindesc;
 	int			skinsize;
 	int			start, end, total;
+	int			live_flags;
+	qboolean		save_defaults;
 
-	Mod_SetAliasModelExtraFlags (mod);
+	live_flags = mod->flags;
+	save_defaults = !mod->orig_state_saved;
+	if (save_defaults)
+		Mod_SetAliasModelExtraFlags (mod);
 
 	start = Hunk_LowMark ();
 
@@ -2515,7 +2520,10 @@ static void Mod_LoadAliasModelNew (qmodel_t *mod, void *buffer)
 	}
 
 	mod->type = mod_alias;
-	Mod_SaveAliasModelDefaults (mod);
+	if (save_defaults)
+		Mod_SaveAliasModelDefaults (mod);
+	else
+		mod->flags = live_flags;
 
 // FIXME: do this right
 //	mod->mins[0] = mod->mins[1] = mod->mins[2] = -16;
@@ -2562,8 +2570,13 @@ static void Mod_LoadAliasModel (qmodel_t *mod, void *buffer)
 	maliasskindesc_t	*pskindesc;
 	int			skinsize;
 	int			start, end, total;
+	int			live_flags;
+	qboolean		save_defaults;
 
-	Mod_SetAliasModelExtraFlags (mod);
+	live_flags = mod->flags;
+	save_defaults = !mod->orig_state_saved;
+	if (save_defaults)
+		Mod_SetAliasModelExtraFlags (mod);
 
 #if defined(H2W)
 /*	// rjr FIXME
@@ -2784,7 +2797,10 @@ static void Mod_LoadAliasModel (qmodel_t *mod, void *buffer)
 	}
 
 	mod->type = mod_alias;
-	Mod_SaveAliasModelDefaults (mod);
+	if (save_defaults)
+		Mod_SaveAliasModelDefaults (mod);
+	else
+		mod->flags = live_flags;
 
 // FIXME: do this right
 //	mod->mins[0] = mod->mins[1] = mod->mins[2] = -16;
