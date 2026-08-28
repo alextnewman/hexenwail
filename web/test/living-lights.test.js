@@ -102,3 +102,19 @@ test('Nitro receives game-authored model effects without dropping spatial metada
   assert.match(qc, /glow_settings\[LIGHT_RADIUS\] = max_health/);
   assert.match(qc, /glow_settings\[LIGHT_STYLE\] = atoi/);
 });
+
+test('local map startup preserves the current map PimpModel state', () => {
+  const reset = server.indexOf('Mod_RestoreAliasModelDefaults ();', server.indexOf('void SV_SpawnServer'));
+  const clear = server.indexOf('R_ClearPimpOverrides ();', reset);
+  const spawn = server.indexOf('ED_LoadFromFile (sv.worldmodel->entities)', clear);
+
+  assert.ok(reset >= 0 && clear > reset && spawn > clear,
+    'previous-map state is cleared before current-map QC spawn functions');
+  const newMap = nitro.match(/void R_NewMap \(void\)[\s\S]*?\n}\n\nstatic void WGPU_AnimateLight/)?.[0];
+  assert.ok(newMap, 'Nitro R_NewMap is defined');
+  assert.match(
+    newMap,
+    /if \(!sv\.active\)\s*\{\s*Mod_RestoreAliasModelDefaults\(\);\s*R_ClearPimpOverrides\(\);/,
+    'remote clients reset locally, while a listen server keeps current-map QC state',
+  );
+});

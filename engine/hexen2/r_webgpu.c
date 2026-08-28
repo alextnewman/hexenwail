@@ -742,8 +742,11 @@ void R_NewMap (void)
 
 	memset(&r_worldentity, 0, sizeof(r_worldentity));
 	r_worldentity.model = cl.worldmodel;
-	Mod_RestoreAliasModelDefaults();
-	R_ClearPimpOverrides();
+	if (!sv.active)
+	{
+		Mod_RestoreAliasModelDefaults();
+		R_ClearPimpOverrides();
+	}
 	R_ClearParticles();
 
 	wgpu_viewleaf = NULL;

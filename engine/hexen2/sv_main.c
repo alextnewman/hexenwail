@@ -2296,6 +2296,14 @@ void SV_SpawnServer (const char *server, const char *startspot)
 // set up the new server
 //
 	//memset (&sv, 0, sizeof(sv));
+#if !defined(SERVERONLY)
+	/* Roll back the previous map before the new map's spawn functions can
+	 * apply PimpModel metadata.  R_NewMap runs after ED_LoadFromFile on a
+	 * listen server, which is too late to distinguish old state from the
+	 * current map's authored state. */
+	Mod_RestoreAliasModelDefaults ();
+	R_ClearPimpOverrides ();
+#endif
 	Host_ClearMemory ();
 
 	q_strlcpy (sv.name, server, sizeof(sv.name));

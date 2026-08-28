@@ -344,10 +344,11 @@ void R_NewMap (void)
 		cl.worldmodel->leafs[i].efrags = NULL;
 
 	r_viewleaf = NULL;
-	/* Roll back any misc_modelpimp mutations from the previous map before
-	 * clearing the per-entity overrides (matches r_webgl2.c:R_NewMap). */
-	Mod_RestoreAliasModelDefaults ();
-	R_ClearPimpOverrides ();
+	if (!sv.active)
+	{
+		Mod_RestoreAliasModelDefaults ();
+		R_ClearPimpOverrides ();
+	}
 	R_ClearParticles ();
 
 	r_cnumsurfs = r_maxsurfs.integer;
@@ -1372,4 +1373,3 @@ void R_RenderView (void)
 
 	R_RenderView_ ();
 }
-
