@@ -2924,6 +2924,11 @@ static int M_Rendering_VisualRow (int i)
 	return row;
 }
 
+static int M_Rendering_DrawY (int i)
+{
+	return 92 + 8 * M_Rendering_VisualRow(i);
+}
+
 static void M_Menu_Rendering_f (void)
 {
 	Key_SetDest (key_menu);
@@ -3072,148 +3077,148 @@ static void M_Rendering_Draw (void)
 
 	if (!M_Rendering_IsSkip(REND_RENDERSCALE))
 	{
-		M_Print (76, 92 + 8*REND_RENDERSCALE, rend_labels[REND_RENDERSCALE]);
+		M_Print (76, M_Rendering_DrawY(REND_RENDERSCALE), rend_labels[REND_RENDERSCALE]);
 		if (r_scale.value >= 1.0f)
-			M_PrintWhite (220, 92 + 8*REND_RENDERSCALE, "Native");
+			M_PrintWhite (220, M_Rendering_DrawY(REND_RENDERSCALE), "Native");
 		else
-			M_PrintWhite (220, 92 + 8*REND_RENDERSCALE, va("%d%%", (int)(r_scale.value * 100)));
+			M_PrintWhite (220, M_Rendering_DrawY(REND_RENDERSCALE), va("%d%%", (int)(r_scale.value * 100)));
 	}
 
 	if (!M_Rendering_IsSkip(REND_SOFTEMU))
 	{
-		M_Print (76, 92 + 8*REND_SOFTEMU, rend_labels[REND_SOFTEMU]);
+		M_Print (76, M_Rendering_DrawY(REND_SOFTEMU), rend_labels[REND_SOFTEMU]);
 		if ((int)r_softemu.value == 1)
-			M_PrintWhite (220, 92 + 8*REND_SOFTEMU, "Dithered");
+			M_PrintWhite (220, M_Rendering_DrawY(REND_SOFTEMU), "Dithered");
 		else if ((int)r_softemu.value == 2)
-			M_PrintWhite (220, 92 + 8*REND_SOFTEMU, "Banded");
+			M_PrintWhite (220, M_Rendering_DrawY(REND_SOFTEMU), "Banded");
 		else
-			M_PrintWhite (220, 92 + 8*REND_SOFTEMU, "Off");
+			M_PrintWhite (220, M_Rendering_DrawY(REND_SOFTEMU), "Off");
 	}
 
 	if (!M_Rendering_IsSkip(REND_DITHER))
 	{
-		M_Print (76, 92 + 8*REND_DITHER, rend_labels[REND_DITHER]);
+		M_Print (76, M_Rendering_DrawY(REND_DITHER), rend_labels[REND_DITHER]);
 		r = r_dither.value / 2.0;
-		M_DrawSliderValue (220, 92 + 8*REND_DITHER, r, "%.0f%%", r_dither.value * 50);
+		M_DrawSliderValue (220, M_Rendering_DrawY(REND_DITHER), r, "%.0f%%", r_dither.value * 50);
 	}
 
 	if (!M_Rendering_IsSkip(REND_TEXFILTER))
 	{
-		M_Print (76, 92 + 8*REND_TEXFILTER, rend_labels[REND_TEXFILTER]);
-		M_PrintWhite (220, 92 + 8*REND_TEXFILTER,
+		M_Print (76, M_Rendering_DrawY(REND_TEXFILTER), rend_labels[REND_TEXFILTER]);
+		M_PrintWhite (220, M_Rendering_DrawY(REND_TEXFILTER),
 			VID_MenuGetTexFilter () ? "Smooth" : "Classic");
 	}
 
 	if (!M_Rendering_IsSkip(REND_ANISOTROPY))
 	{
-		M_Print (76, 92 + 8*REND_ANISOTROPY, rend_labels[REND_ANISOTROPY]);
+		M_Print (76, M_Rendering_DrawY(REND_ANISOTROPY), rend_labels[REND_ANISOTROPY]);
 		aniso = VID_MenuGetAnisotropy (&available);
 		if (available)
-			M_PrintWhite (220, 92 + 8*REND_ANISOTROPY, va("%dx", aniso));
+			M_PrintWhite (220, M_Rendering_DrawY(REND_ANISOTROPY), va("%dx", aniso));
 		else
-			M_PrintWhite (220, 92 + 8*REND_ANISOTROPY, "N/A");
+			M_PrintWhite (220, M_Rendering_DrawY(REND_ANISOTROPY), "N/A");
 	}
 
 	if (!M_Rendering_IsSkip(REND_LMBICUBIC))
 	{
-		M_Print (76, 92 + 8*REND_LMBICUBIC, rend_labels[REND_LMBICUBIC]);
-		M_DrawCheckbox (220, 92 + 8*REND_LMBICUBIC, r_lightmap_bicubic.integer);
+		M_Print (76, M_Rendering_DrawY(REND_LMBICUBIC), rend_labels[REND_LMBICUBIC]);
+		M_DrawCheckbox (220, M_Rendering_DrawY(REND_LMBICUBIC), r_lightmap_bicubic.integer);
 	}
 
 	if (!M_Rendering_IsSkip(REND_PARTICLES))
 	{
-		M_Print (76, 92 + 8*REND_PARTICLES, rend_labels[REND_PARTICLES]);
-		M_PrintWhite (220, 92 + 8*REND_PARTICLES, MENU_PARTICLES.integer ? "Round" : "Square");
+		M_Print (76, M_Rendering_DrawY(REND_PARTICLES), rend_labels[REND_PARTICLES]);
+		M_PrintWhite (220, M_Rendering_DrawY(REND_PARTICLES), MENU_PARTICLES.integer ? "Round" : "Square");
 	}
 
 	if (!M_Rendering_IsSkip(REND_FULLBRIGHTS))
 	{
-		M_Print (76, 92 + 8*REND_FULLBRIGHTS, rend_labels[REND_FULLBRIGHTS]);
-		M_DrawCheckbox (220, 92 + 8*REND_FULLBRIGHTS, MENU_FULLBRIGHTS.integer);
+		M_Print (76, M_Rendering_DrawY(REND_FULLBRIGHTS), rend_labels[REND_FULLBRIGHTS]);
+		M_DrawCheckbox (220, M_Rendering_DrawY(REND_FULLBRIGHTS), MENU_FULLBRIGHTS.integer);
 	}
 
 	if (!M_Rendering_IsSkip(REND_DYNLIGHT))
 	{
-		M_Print (76, 92 + 8*REND_DYNLIGHT, rend_labels[REND_DYNLIGHT]);
-		M_DrawCheckbox (220, 92 + 8*REND_DYNLIGHT, r_dynamic.integer);
+		M_Print (76, M_Rendering_DrawY(REND_DYNLIGHT), rend_labels[REND_DYNLIGHT]);
+		M_DrawCheckbox (220, M_Rendering_DrawY(REND_DYNLIGHT), r_dynamic.integer);
 	}
 
 	if (!M_Rendering_IsSkip(REND_WATERCOLOR))
 	{
-		M_Print (76, 92 + 8*REND_WATERCOLOR, rend_labels[REND_WATERCOLOR]);
+		M_Print (76, M_Rendering_DrawY(REND_WATERCOLOR), rend_labels[REND_WATERCOLOR]);
 		switch ((int)Cvar_VariableValue("r_watercolor"))
 		{
-		case 1:  M_PrintWhite (220, 92 + 8*REND_WATERCOLOR, "Blue"); break;
-		case 2:  M_PrintWhite (220, 92 + 8*REND_WATERCOLOR, "Green"); break;
-		case 3:  M_PrintWhite (220, 92 + 8*REND_WATERCOLOR, "Clear"); break;
-		default: M_PrintWhite (220, 92 + 8*REND_WATERCOLOR, "Classic"); break;
+		case 1:  M_PrintWhite (220, M_Rendering_DrawY(REND_WATERCOLOR), "Blue"); break;
+		case 2:  M_PrintWhite (220, M_Rendering_DrawY(REND_WATERCOLOR), "Green"); break;
+		case 3:  M_PrintWhite (220, M_Rendering_DrawY(REND_WATERCOLOR), "Clear"); break;
+		default: M_PrintWhite (220, M_Rendering_DrawY(REND_WATERCOLOR), "Classic"); break;
 		}
 	}
 
 	if (!M_Rendering_IsSkip(REND_WATERALPHA))
 	{
-		M_Print (76, 92 + 8*REND_WATERALPHA, rend_labels[REND_WATERALPHA]);
+		M_Print (76, M_Rendering_DrawY(REND_WATERALPHA), rend_labels[REND_WATERALPHA]);
 		r = r_wateralpha.value;
-		M_DrawSliderValue (220, 92 + 8*REND_WATERALPHA, r, "%.0f%%", r * 100);
+		M_DrawSliderValue (220, M_Rendering_DrawY(REND_WATERALPHA), r, "%.0f%%", r * 100);
 	}
 
 	if (!M_Rendering_IsSkip(REND_WATERWARP))
 	{
-		M_Print (76, 92 + 8*REND_WATERWARP, rend_labels[REND_WATERWARP]);
-		M_DrawCheckbox (220, 92 + 8*REND_WATERWARP, r_waterwarp.integer);
+		M_Print (76, M_Rendering_DrawY(REND_WATERWARP), rend_labels[REND_WATERWARP]);
+		M_DrawCheckbox (220, M_Rendering_DrawY(REND_WATERWARP), r_waterwarp.integer);
 	}
 
 	if (!M_Rendering_IsSkip(REND_GLOWS))
 	{
-		M_Print (76, 92 + 8*REND_GLOWS, rend_labels[REND_GLOWS]);
+		M_Print (76, M_Rendering_DrawY(REND_GLOWS), rend_labels[REND_GLOWS]);
 		if (!MENU_GLOWS.integer)
-			M_PrintWhite (220, 92 + 8*REND_GLOWS, "Off");
+			M_PrintWhite (220, M_Rendering_DrawY(REND_GLOWS), "Off");
 		else if (!MENU_MISSILE_GLOWS.integer)
-			M_PrintWhite (220, 92 + 8*REND_GLOWS, "Torch Only");
+			M_PrintWhite (220, M_Rendering_DrawY(REND_GLOWS), "Torch Only");
 		else if (MENU_GLOW_INTENSITY.value < 0.9f)
-			M_PrintWhite (220, 92 + 8*REND_GLOWS, "Reduced");
+			M_PrintWhite (220, M_Rendering_DrawY(REND_GLOWS), "Reduced");
 		else
-			M_PrintWhite (220, 92 + 8*REND_GLOWS, "All");
+			M_PrintWhite (220, M_Rendering_DrawY(REND_GLOWS), "All");
 	}
 
 	if (!M_Rendering_IsSkip(REND_FLASHINTENSITY))
 	{
-		M_Print (76, 92 + 8*REND_FLASHINTENSITY, rend_labels[REND_FLASHINTENSITY]);
+		M_Print (76, M_Rendering_DrawY(REND_FLASHINTENSITY), rend_labels[REND_FLASHINTENSITY]);
 		if (MENU_FLASHINTENSITY.value <= 0)
-			M_PrintWhite (220, 92 + 8*REND_FLASHINTENSITY, "Off");
+			M_PrintWhite (220, M_Rendering_DrawY(REND_FLASHINTENSITY), "Off");
 		else
-			M_DrawSliderValue (220, 92 + 8*REND_FLASHINTENSITY, MENU_FLASHINTENSITY.value / 2.0f, "%.2f", MENU_FLASHINTENSITY.value);
+			M_DrawSliderValue (220, M_Rendering_DrawY(REND_FLASHINTENSITY), MENU_FLASHINTENSITY.value / 2.0f, "%.2f", MENU_FLASHINTENSITY.value);
 	}
 
 	if (!M_Rendering_IsSkip(REND_FXAA))
 	{
-		M_Print (76, 92 + 8*REND_FXAA, rend_labels[REND_FXAA]);
-		M_DrawCheckbox (220, 92 + 8*REND_FXAA, MENU_FXAA.integer);
+		M_Print (76, M_Rendering_DrawY(REND_FXAA), rend_labels[REND_FXAA]);
+		M_DrawCheckbox (220, M_Rendering_DrawY(REND_FXAA), MENU_FXAA.integer);
 	}
 
 	if (!M_Rendering_IsSkip(REND_MOTIONBLUR))
 	{
 		float mb = Cvar_VariableValue("r_motionblur");
-		M_Print (76, 92 + 8*REND_MOTIONBLUR, rend_labels[REND_MOTIONBLUR]);
+		M_Print (76, M_Rendering_DrawY(REND_MOTIONBLUR), rend_labels[REND_MOTIONBLUR]);
 		if (mb <= 0)
-			M_PrintWhite (220, 92 + 8*REND_MOTIONBLUR, "Off");
+			M_PrintWhite (220, M_Rendering_DrawY(REND_MOTIONBLUR), "Off");
 		else
-			M_DrawSliderValue (220, 92 + 8*REND_MOTIONBLUR, mb, "%.0f%%", mb * 100);
+			M_DrawSliderValue (220, M_Rendering_DrawY(REND_MOTIONBLUR), mb, "%.0f%%", mb * 100);
 	}
 
 	if (!M_Rendering_IsSkip(REND_HDR))
 	{
-		M_Print (76, 92 + 8*REND_HDR, rend_labels[REND_HDR]);
-		M_DrawCheckbox (220, 92 + 8*REND_HDR, r_hdr.integer);
+		M_Print (76, M_Rendering_DrawY(REND_HDR), rend_labels[REND_HDR]);
+		M_DrawCheckbox (220, M_Rendering_DrawY(REND_HDR), r_hdr.integer);
 	}
 
 	if (!M_Rendering_IsSkip(REND_HDR_EXPOSURE))
 	{
-		M_Print (76, 92 + 8*REND_HDR_EXPOSURE, rend_labels[REND_HDR_EXPOSURE]);
+		M_Print (76, M_Rendering_DrawY(REND_HDR_EXPOSURE), rend_labels[REND_HDR_EXPOSURE]);
 		if (!r_hdr.integer)
-			M_PrintWhite (220, 92 + 8*REND_HDR_EXPOSURE, "(HDR off)");
+			M_PrintWhite (220, M_Rendering_DrawY(REND_HDR_EXPOSURE), "(HDR off)");
 		else
-			M_DrawSliderValue (220, 92 + 8*REND_HDR_EXPOSURE,
+			M_DrawSliderValue (220, M_Rendering_DrawY(REND_HDR_EXPOSURE),
 				(r_hdr_exposure.value - 0.1f) / 3.9f,
 				"%.2f", r_hdr_exposure.value);
 	}
@@ -3225,10 +3230,10 @@ static void M_Rendering_Draw (void)
 			rendering_cursor = h;
 	}
 	if (!M_Rendering_IsSkip(rendering_cursor))
-		M_DrawCharacter (64, 92 + M_Rendering_VisualRow(rendering_cursor)*8, 12+((int)(realtime*4)&1));
+		M_DrawCharacter (64, M_Rendering_DrawY(rendering_cursor), 12+((int)(realtime*4)&1));
 
 	/* search prompt below the menu (no row uses Y == REND_ITEMS+1) */
-	M_Filter_Draw (76, 92 + 8*(REND_ITEMS + 1));
+	M_Filter_Draw (76, M_Rendering_DrawY(REND_ITEMS) + 8);
 }
 
 static void M_Rendering_Key (int k)
