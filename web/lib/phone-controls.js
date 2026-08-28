@@ -1,18 +1,19 @@
 export const PHONE_CONTROL_KEYCODES = Object.freeze({
-  /* Movement stays on the normal keyboard bindings in game. The web input
-   * bridge translates these to menu navigation while a menu owns input. */
-  forward: 119, // W
-  back: 115, // S
-  left: 97, // A
-  right: 100, // D
-  attack: 250, // K_GP_RTRIGGER
-  jump: 243, // K_GP_A
-  use: 245, // K_GP_X (default "use artifact" binding)
-  menu: 254, // K_GP_START
-  menuBack: 244, // K_GP_B
-  menuSelect: 243, // K_GP_A
-  nextWeapon: 248, // K_GP_RSHOULDER
-  prevWeapon: 247, // K_GP_LSHOULDER
+  /* Touch controls are a dedicated reserved control surface that never shares
+   * the normal gamepad/keyboard binding namespace. The engine treats them as
+   * a fixed virtual controller, so rebinding a real device cannot change them. */
+  forward: 272, // K_TOUCH_FORWARD
+  back: 273, // K_TOUCH_BACK
+  left: 274, // K_TOUCH_LEFT
+  right: 275, // K_TOUCH_RIGHT
+  attack: 276, // K_TOUCH_ATTACK
+  jump: 277, // K_TOUCH_JUMP
+  use: 278, // K_TOUCH_USE
+  menu: 279, // K_TOUCH_MENU
+  menuBack: 280, // K_TOUCH_MENU_BACK
+  menuSelect: 281, // K_TOUCH_MENU_SELECT
+  nextWeapon: 282, // K_TOUCH_NEXT_WEAPON
+  prevWeapon: 283, // K_TOUCH_PREV_WEAPON
 });
 
 export const DEFAULT_PHONE_CONTROL_OPTIONS = Object.freeze({

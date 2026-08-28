@@ -126,6 +126,24 @@
 #define	K_GP_DPAD_RIGHT		271
 
 //
+// touch / virtual controller surface: fixed, reserved input keys for the
+// phone overlay, never user-rebindable and never part of the normal gamepad
+// button namespace.
+//
+#define	K_TOUCH_FORWARD		272
+#define	K_TOUCH_BACK		273
+#define	K_TOUCH_LEFT		274
+#define	K_TOUCH_RIGHT		275
+#define	K_TOUCH_ATTACK		276
+#define	K_TOUCH_JUMP		277
+#define	K_TOUCH_USE		278
+#define	K_TOUCH_MENU		279
+#define	K_TOUCH_MENU_BACK		280
+#define	K_TOUCH_MENU_SELECT		281
+#define	K_TOUCH_NEXT_WEAPON		282
+#define	K_TOUCH_PREV_WEAPON		283
+
+//
 // mouse buttons generate virtual keys
 //
 #define	K_MOUSE1		200
@@ -192,7 +210,7 @@
 
 typedef int keydest_t;
 
-#define	MAX_KEYS		272	/* K_GP_DPAD_RIGHT + 1 */
+#define	MAX_KEYS		284	/* K_TOUCH_PREV_WEAPON + 1 */
 
 extern	char	*keybindings[MAX_KEYS];
 extern	char	*doublebindings[MAX_KEYS];
