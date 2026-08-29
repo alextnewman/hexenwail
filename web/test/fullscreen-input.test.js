@@ -169,7 +169,8 @@ test('touch controls switch safely between gameplay and menu layouts', () => {
 
 test('modal confirmations do not poll browser input synchronously', () => {
   const modal = functionBody(screen, 'int SCR_ModalMessage (const char *text)');
-  assert.match(modal, /#if defined\(WEBQUAKE\)[\s\S]*window\.confirm\(UTF8ToString\(\$0\)\)/);
+  assert.match(modal,
+    /#if defined\(WEBQUAKE\)[\s\S]*?window\.confirm\(UTF8ToString\(\$0\)\)[\s\S]*?#else/);
   assert.match(modal, /#else[\s\S]*Sys_SendKeyEvents \(\)/,
     'the synchronous polling loop is restricted to native builds');
 });
