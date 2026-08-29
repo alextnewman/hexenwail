@@ -25,7 +25,7 @@ function functionBody(source, signature) {
     if (source[i] === '}') depth -= 1;
     if (depth === 0) return source.slice(open + 1, i);
   }
-  assert.fail(`${signature} has a complete body`);
+  assert.fail(`${signature} body is unterminated`);
 }
 
 test('immersive layout is driven by its own attribute, not by phone mode', () => {
