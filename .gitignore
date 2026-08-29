@@ -20,6 +20,3 @@ engine/build-*/
 *.db
 .beads-credential-key
 /image4.png
-
-# Beads / Dolt files (added by bd init)
-.beads/proxieddb/

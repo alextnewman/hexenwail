@@ -1036,6 +1036,85 @@ static void WGPUEntity_DrawGlow (entity_t *entity)
 	wgpu_frame_polys += 2;
 }
 
+static unsigned int WGPUEntity_ProjectileFamily (int flags, const float *settings)
+{
+	if (flags & (EF_FIREBALL | EF_ROCKET))
+		return NITROPARTICLE_FIRE;
+	if (flags & EF_ICE)
+		return NITROPARTICLE_ICE;
+	if (flags & (EF_ACIDBALL | EF_SPIT | EF_SCARAB))
+		return NITROPARTICLE_POISON;
+	if (flags & (EF_SPELL | EF_VORP_MISSILE | EF_SET_STAFF |
+		     EF_MAGICMISSILE | EF_BONESHARD))
+		return NITROPARTICLE_NECRO;
+	if (settings[COLOR_B] > settings[COLOR_R] * 1.25f)
+		return NITROPARTICLE_ICE;
+	if (settings[COLOR_G] > settings[COLOR_R] * 1.25f)
+		return NITROPARTICLE_POISON;
+	return NITROPARTICLE_FIRE;
+}
+
+static void WGPUEntity_DrawProjectileRibbon (entity_t *entity)
+{
+	static const int triangles[6] = {0, 1, 2, 0, 2, 3};
+	float		*settings;
+	wgpumodel_vertex_t *out;
+	vec3_t		motion, tail, midpoint, sight, side, point[4];
+	float		length, width, intensity;
+	unsigned int	color, family;
+	int		flags, i, texture;
+	byte		white = 15;
+
+	if (!r_nitro_projectileribbons.integer)
+		return;
+	flags = R_GetPimpFlags (entity, &settings);
+	if (!(flags & XF_MISSILE_GLOW))
+		return;
+
+	VectorSubtract (entity->origin, entity->msg_origins[1], motion);
+	length = VectorNormalizeFast (motion);
+	if (length < 2.0f || length > 256.0f)
+		return;
+	length = CLAMP (10.0f, length * 1.5f, 64.0f);
+	VectorMA (entity->origin, -length, motion, tail);
+	VectorAdd (entity->origin, tail, midpoint);
+	VectorScale (midpoint, 0.5f, midpoint);
+	VectorSubtract (r_origin, midpoint, sight);
+	CrossProduct (motion, sight, side);
+	if (VectorNormalizeFast (side) < 0.01f)
+		VectorCopy (vright, side);
+
+	width = (settings[ORB_RADIUS] > 1.0f) ?
+		CLAMP (3.0f, settings[ORB_RADIUS] * 0.28f, 10.0f) : 5.0f;
+	VectorMA (tail, width * 0.18f, side, point[0]);
+	VectorMA (tail, -width * 0.18f, side, point[1]);
+	VectorMA (entity->origin, -width, side, point[2]);
+	VectorMA (entity->origin, width, side, point[3]);
+
+	intensity = CLAMP (0.25f, r_nitro_glow_intensity.value, 1.0f);
+	color = WGPUEntity_GlowColor (settings, intensity);
+	family = WGPUEntity_ProjectileFamily (R_GetEntityModelFlags (entity), settings);
+	texture = WGPUEntity_LoadSkin ("__nitro_ribbon", 1, 1, &white, 0, 1u);
+	if (texture <= 0)
+		return;
+
+	WGPUEntity_BeginBatch (texture, NITROMODEL_RIBBON);
+	out = WGPUEntity_Vertices (6);
+	for (i = 0; i < 6; i++)
+	{
+		int corner = triangles[i];
+
+		VectorCopy (point[corner], out->position);
+		out->texcoord[0] = (corner >= 2) ? 1.0f : 0.0f;
+		out->texcoord[1] = (corner == 1 || corner == 2) ? 1.0f : 0.0f;
+		out->light = (float)family;
+		out->shade = color;
+		out->lightcolor = 0xff404040u;
+		out++;
+	}
+	wgpu_frame_polys += 2;
+}
+
 /*
 =============================================================================
 
@@ -1306,6 +1385,7 @@ void WGPUEntity_DrawEntitiesOnList (qboolean translucent)
 			continue;
 		if (WGPUEntity_IsTranslucent (entity) != translucent)
 			continue;
+		WGPUEntity_DrawProjectileRibbon (entity);
 		WGPUEntity_DrawEntity (entity, 0);
 		WGPUEntity_DrawGlow (entity);
 	}

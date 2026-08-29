@@ -983,8 +983,12 @@ static void CL_RelinkEntities (void)
 		}
 		else if (mflags & EF_MAGICMISSILE)
 		{
+#if defined(WEBGPUQUAKE)
+			R_RocketTrail (oldorg, ent->origin, rt_magicmissile);
+#else
 			if ((rand() & 3) < 1)
 				R_RocketTrail (oldorg, ent->origin, rt_magicmissile);
+#endif
 			// extra dynamic lights
 			if (CL_EXTRA_DYNAMIC_LIGHTS.integer)
 			{
@@ -1202,4 +1206,3 @@ void CL_Init (void)
 	Cmd_AddCommand ("viewpos", CL_Viewpos_f);
 	Cmd_AddCommand ("r_pos", CL_Viewpos_f);
 }
-

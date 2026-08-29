@@ -115,7 +115,7 @@ cvar_t r_nitro_dither = {"r_nitro_dither", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_resolve = {"r_nitro_resolve", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_persistence = {"r_nitro_persistence", "0.06", CVAR_ARCHIVE};
 cvar_t r_nitro_fogbands = {"r_nitro_fogbands", "8", CVAR_ARCHIVE};
-cvar_t r_nitro_haze = {"r_nitro_haze", "0", CVAR_ARCHIVE};
+cvar_t r_nitro_haze = {"r_nitro_haze", "0.18", CVAR_ARCHIVE};
 cvar_t r_nitro_paletteshifts = {"r_nitro_paletteshifts", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_liquidmotion = {"r_nitro_liquidmotion", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_liquidstipple = {"r_nitro_liquidstipple", "1", CVAR_ARCHIVE};
@@ -123,6 +123,8 @@ cvar_t r_nitro_liquidrefract = {"r_nitro_liquidrefract", "0.12", CVAR_ARCHIVE};
 cvar_t r_nitro_liquidglow = {"r_nitro_liquidglow", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_spelleffects = {"r_nitro_spelleffects", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_glowhaze = {"r_nitro_glowhaze", "0.35", CVAR_ARCHIVE};
+cvar_t r_nitro_projectileribbons = {"r_nitro_projectileribbons", "1", CVAR_ARCHIVE};
+cvar_t r_nitro_shadowmotion = {"r_nitro_shadowmotion", "0.12", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol = {"r_nitro_lightvol", "1", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol_cell = {"r_nitro_lightvol_cell", "64", CVAR_ARCHIVE};
 cvar_t r_nitro_lightvol_budget = {"r_nitro_lightvol_budget", "32", CVAR_ARCHIVE};
@@ -560,6 +562,7 @@ static void WGPU_SetupScene (wgpuscene_t *scene)
 	scene->liquid_glow = CLAMP (0.0f, r_nitro_liquidglow.value, 1.0f);
 	scene->particle_up[3] = CLAMP (0.0f, r_nitro_spelleffects.value, 1.0f);
 	scene->glow_haze = CLAMP (0.0f, r_nitro_glowhaze.value, 1.0f);
+	scene->shadow_motion = CLAMP (0.0f, r_nitro_shadowmotion.value, 1.0f);
 }
 
 /*
@@ -634,6 +637,8 @@ static void Web_RegisterRendererCvars (void)
 	Cvar_RegisterVariable(&r_nitro_liquidglow);
 	Cvar_RegisterVariable(&r_nitro_spelleffects);
 	Cvar_RegisterVariable(&r_nitro_glowhaze);
+	Cvar_RegisterVariable(&r_nitro_projectileribbons);
+	Cvar_RegisterVariable(&r_nitro_shadowmotion);
 }
 
 void WebGPU_Init (void)

@@ -64,6 +64,7 @@ const HexenwailNitroLibrary = {
     MODEL_VIEWMODEL: 4,
     MODEL_GLOW: 8,
     MODEL_SHADOW: 16,
+    MODEL_RIBBON: 32,
 
     /* The view weapon is drawn into the near 30% of the depth range so it
      * cannot poke through the wall the player is standing against.  WebGPU
@@ -133,7 +134,7 @@ fn paletteQuantize(rgb : vec3f) -> vec3f {
   return textureLoad(paletteTexture, vec2i(i32(index), 0), 0).rgb;
 }
 
-fn atmosphereFog(distance : f32, position : vec3f) -> f32 {
+fn atmosphereFog(distance : f32, position : vec3f, receiverLuma : f32) -> f32 {
   var fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
       distance * distance), 0.0, 1.0);
   if (frame.fogBands >= 2.0) {
@@ -141,12 +142,17 @@ fn atmosphereFog(distance : f32, position : vec3f) -> f32 {
     fog = floor(fog * steps + 0.5) / steps;
   }
   if (frame.haze > 0.0) {
-    let field = 0.5 + (sin(position.x * 0.021 + frame.time * 0.11) +
-        sin(position.y * 0.017 - frame.time * 0.07) +
-        sin(position.z * 0.025)) * (1.0 / 6.0);
-    let pocket = smoothstep(0.58, 0.82, field) *
-        smoothstep(48.0, 512.0, distance);
-    fog = max(fog, pocket * frame.haze * 0.45);
+    /* Broad, floor-settled banks span a room instead of resolving into
+     * independent world-space dots.  Darkness keeps haze out of readable
+     * highlights and walls naturally terminate each bank. */
+    let roomWave = sin((position.x + position.y * 0.63) * 0.0031 +
+        sin(position.z * 0.0047) * 0.7 + frame.time * 0.025);
+    let floorBank = smoothstep(-0.35, 0.72,
+        roomWave - sin(position.z * 0.0081) * 0.22);
+    let distanceFade = smoothstep(80.0, 640.0, distance);
+    let darkness = 1.0 - smoothstep(0.16, 0.52, receiverLuma);
+    let bank = floorBank * distanceFade * (0.35 + darkness * 0.65);
+    fog = max(fog, bank * frame.haze * 0.32);
   }
   return fog;
 }
@@ -253,7 +259,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     let history = textureLoad(historyTexture, historyTexel, 0).rgb;
     rgb = paletteQuantize(mix(rgb, history, frame.liquidRefract * finalScale));
   }
-  let fog = atmosphereFog(input.fogDistance, input.worldPosition);
+  let fog = atmosphereFog(input.fogDistance, input.worldPosition,
+      dot(rgb, vec3f(0.2126, 0.7152, 0.0722)));
   var alpha = entity.alpha;
   if (turbulent && alpha < 0.999 && frame.liquidStipple > 0.0) {
     let bayer = array<f32, 16>(
@@ -410,7 +417,7 @@ fn paletteQuantize(rgb : vec3f) -> vec3f {
   return textureLoad(paletteTexture, vec2i(i32(index), 0), 0).rgb;
 }
 
-fn atmosphereFog(distance : f32, position : vec3f) -> f32 {
+fn atmosphereFog(distance : f32, position : vec3f, receiverLuma : f32) -> f32 {
   var fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
       distance * distance), 0.0, 1.0);
   if (frame.fogBands >= 2.0) {
@@ -418,12 +425,14 @@ fn atmosphereFog(distance : f32, position : vec3f) -> f32 {
     fog = floor(fog * steps + 0.5) / steps;
   }
   if (frame.haze > 0.0) {
-    let field = 0.5 + (sin(position.x * 0.021 + frame.time * 0.11) +
-        sin(position.y * 0.017 - frame.time * 0.07) +
-        sin(position.z * 0.025)) * (1.0 / 6.0);
-    let pocket = smoothstep(0.58, 0.82, field) *
-        smoothstep(48.0, 512.0, distance);
-    fog = max(fog, pocket * frame.haze * 0.45);
+    let roomWave = sin((position.x + position.y * 0.63) * 0.0031 +
+        sin(position.z * 0.0047) * 0.7 + frame.time * 0.025);
+    let floorBank = smoothstep(-0.35, 0.72,
+        roomWave - sin(position.z * 0.0081) * 0.22);
+    let distanceFade = smoothstep(80.0, 640.0, distance);
+    let darkness = 1.0 - smoothstep(0.16, 0.52, receiverLuma);
+    let bank = floorBank * distanceFade * (0.35 + darkness * 0.65);
+    fog = max(fog, bank * frame.haze * 0.32);
   }
   return fog;
 }
@@ -480,7 +489,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   if (receivesLight && length(input.lightColor - vec3f(1.0)) > 0.01) {
     rgb = paletteQuantize(rgb * input.lightColor);
   }
-  let fog = atmosphereFog(input.fogDistance, input.worldPosition);
+  let fog = atmosphereFog(input.fogDistance, input.worldPosition,
+      dot(rgb, vec3f(0.2126, 0.7152, 0.0722)));
   return vec4f(paletteQuantize(mix(rgb, frame.fogColor, fog)), input.alpha);
 }`,
 
@@ -503,6 +513,7 @@ struct VertexOutput {
   @location(0) uv : vec2f,
   @location(1) color : vec4f,
   @location(2) fogDistance : f32,
+  @location(3) @interpolate(flat) style : u32,
 }
 
 fn buildEffectVertex(position : vec3f, uv : vec2f,
@@ -512,6 +523,7 @@ fn buildEffectVertex(position : vec3f, uv : vec2f,
   output.uv = uv;
   output.color = color;
   output.fogDistance = abs(output.position.w);
+  output.style = 0u;
   return output;
 }
 
@@ -519,8 +531,11 @@ fn buildEffectVertex(position : vec3f, uv : vec2f,
 fn vertexMain(@location(0) position : vec3f,
               @location(1) uv : vec2f,
               /* Location 2 is model light; effects carry packed RGBA at 3. */
+              @location(2) effectStyle : f32,
               @location(3) color : vec4f) -> VertexOutput {
-  return buildEffectVertex(position, uv, color);
+  var output = buildEffectVertex(position, uv, color);
+  output.style = u32(effectStyle);
+  return output;
 }
 
 @vertex
@@ -548,6 +563,33 @@ fn glowMain(input : VertexOutput) -> @location(0) vec4f {
   let fog = exp2(-frame.fogDensity * frame.fogDensity *
       input.fogDistance * input.fogDistance);
   return vec4f(input.color.rgb * falloff * fog, input.color.a * falloff);
+}
+
+@fragment
+fn ribbonMain(input : VertexOutput) -> @location(0) vec4f {
+  let across = abs(input.uv.y * 2.0 - 1.0);
+  let along = clamp(input.uv.x, 0.0, 1.0);
+  var mask = (1.0 - smoothstep(0.15, 1.0, across)) *
+      smoothstep(0.0, 0.34, along);
+  if (input.style == 1u) {
+    mask *= 0.72 + 0.28 * sin(along * 17.0 - frame.time * 13.0);
+  } else if (input.style == 2u) {
+    mask *= 1.0 - smoothstep(0.18, 0.72, across);
+  } else if (input.style == 3u) {
+    let stipple = (i32(input.position.x) + i32(input.position.y) +
+        i32(floor(frame.time * 9.0))) & 3;
+    mask *= select(0.35, 1.0, stipple == 0);
+  } else {
+    let broken = sin(along * 28.0 - frame.time * 8.0);
+    mask *= select(0.24, 1.0, broken > -0.15);
+  }
+  let fog = clamp(1.0 - exp2(-frame.fogDensity * frame.fogDensity *
+      input.fogDistance * input.fogDistance), 0.0, 1.0);
+  /* Emissive missiles pierce their immediate bank rather than receiving
+   * ordinary surface fog; their authored colour reads as a cut through it. */
+  let atmosphere = 1.0 - fog * 0.55;
+  return vec4f(input.color.rgb * atmosphere,
+      input.color.a * mask * atmosphere * 0.72);
 }
 
 @fragment
@@ -653,7 +695,7 @@ struct ScanParams {
   persistence : f32,
   paletteShifts : f32,
   glowHaze : f32,
-  pad2 : f32,
+  shadowMotion : f32,
 }
 
 @group(0) @binding(0) var sceneTexture : texture_2d<f32>;
@@ -747,6 +789,13 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
                    smoothstep(0.08, 0.32, historyChroma) *
                    (1.0 - smoothstep(0.65, 0.95, luma));
   rgb = mix(rgb, max(rgb, history * 0.94), scan.persistence * lightTrail);
+
+  if (scan.shadowMotion > 0.0) {
+    let shadow = 1.0 - smoothstep(0.055, 0.22, luma);
+    let historyDelta = abs(historyLuma - luma);
+    let crawl = f32((texel.x + texel.y + i32(historyDelta * 255.0)) & 3) / 3.0;
+    rgb *= 1.0 - shadow * historyDelta * crawl * scan.shadowMotion;
+  }
 
   rgb = mix(rgb, scan.tint.rgb, scan.tint.a);
   if (scan.paletteShifts != 0.0 && scan.tint.a > 0.0) {
@@ -1276,6 +1325,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         });
       const modelGlowPipeline =
         effectPipeline('WebGlideNitro glows', 'glowMain', ADD_BLEND);
+      const modelRibbonPipeline =
+        effectPipeline('WebGlideNitro projectile ribbons', 'ribbonMain', ADD_BLEND);
       const modelShadowMaskPipeline =
         effectPipeline('WebGlideNitro shadow receiver mask', 'shadowMain',
           ALPHA_BLEND, true, 'greater-equal', 'shadowBack', 0);
@@ -1451,7 +1502,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         particlePipeline, scanoutPipeline,
         uiPipeline,
         modelOpaquePipeline, modelAlphaPipeline, modelAddPipeline,
-        modelGlowPipeline, modelShadowMaskPipeline, modelShadowPipeline,
+        modelGlowPipeline, modelRibbonPipeline,
+        modelShadowMaskPipeline, modelShadowPipeline,
         frameUniform, scanoutUniform, uiUniform, particleUniform,
         paletteTexture, paletteLutTexture, colormapTexture, tintTexture,
         lightmapSampler, sceneSampler,
@@ -1876,7 +1928,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
    *   [50] palette-domain contents and flash shifts
    *   [51] liquid material motion   [52] liquid stipple
    *   [53] retained-frame liquid refraction  [54] palette-domain liquid glow
-   *   [55] palette-domain luminous haze
+   *   [55] palette-domain luminous haze  [56] near-black motion
    *
    * data (see wgpuscenedata_t in wgpu_nitro.h) is fourteen ints:
    *   [0]  world index arena     [1]  index count
@@ -1898,7 +1950,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     const state = Nitro.checkDevice();
     if (!state?.encoder) return;
 
-    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 56);
+    const floats = HEAPF32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 57);
     const integers = HEAP32.subarray(paramsPointer >> 2, (paramsPointer >> 2) + 29);
     const data = HEAP32.subarray(dataPointer >> 2, (dataPointer >> 2) + 14);
     const indexPointer = data[0], indexCount = data[1];
@@ -1943,6 +1995,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     scan[8] = state.historyValid ? floats[49] : 0.0;
     scan[9] = floats[50];
     scan[10] = floats[55];
+    scan[11] = floats[56];
     state.device.queue.writeBuffer(state.scanoutUniform, 0, scan);
 
     /* Every entity's transform, alpha and flat light level in one upload;
@@ -2062,12 +2115,14 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
         const count = batches[i * 4 + 2];
         const flags = batches[i * 4 + 3];
         const blends = (flags & (Nitro.MODEL_BLEND_ALPHA | Nitro.MODEL_BLEND_ADD |
-          Nitro.MODEL_GLOW | Nitro.MODEL_SHADOW)) !== 0;
+          Nitro.MODEL_GLOW | Nitro.MODEL_SHADOW | Nitro.MODEL_RIBBON)) !== 0;
         if (!entry || count <= 0) continue;
         if ((blendFilter === 'opaque' && blends) ||
             (blendFilter === 'blend' && !blends)) continue;
         const shadow = (flags & Nitro.MODEL_SHADOW) !== 0;
-        const pipeline = (flags & Nitro.MODEL_GLOW)
+        const pipeline = (flags & Nitro.MODEL_RIBBON)
+          ? state.modelRibbonPipeline
+          : (flags & Nitro.MODEL_GLOW)
           ? state.modelGlowPipeline
           : shadow ? state.modelShadowMaskPipeline
           : (flags & Nitro.MODEL_BLEND_ADD)
