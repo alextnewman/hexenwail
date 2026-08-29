@@ -530,7 +530,8 @@ fn buildEffectVertex(position : vec3f, uv : vec2f,
 @vertex
 fn vertexMain(@location(0) position : vec3f,
               @location(1) uv : vec2f,
-              /* Location 2 is model light; effects carry packed RGBA at 3. */
+              /* Effects reuse the model layout: location 2 carries a ribbon
+               * family here, while location 3 remains packed RGBA. */
               @location(2) effectStyle : f32,
               @location(3) color : vec4f) -> VertexOutput {
   var output = buildEffectVertex(position, uv, color);

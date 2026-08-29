@@ -1077,8 +1077,7 @@ static void WGPUEntity_DrawProjectileRibbon (entity_t *entity)
 		return;
 	length = CLAMP (10.0f, length * 1.5f, 64.0f);
 	VectorMA (entity->origin, -length, motion, tail);
-	VectorAdd (entity->origin, tail, midpoint);
-	VectorScale (midpoint, 0.5f, midpoint);
+	VectorMA (entity->origin, -length * 0.5f, motion, midpoint);
 	VectorSubtract (r_origin, midpoint, sight);
 	CrossProduct (motion, sight, side);
 	if (VectorNormalizeFast (side) < 0.01f)
