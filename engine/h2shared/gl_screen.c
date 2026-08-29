@@ -71,9 +71,6 @@
 #if !defined(SERVERONLY) && !defined(H2W)
 #include "cl_csqc.h"
 #endif
-#if defined(WEBQUAKE)
-#include <emscripten/emscripten.h>
-#endif
 #include <time.h>
 #ifdef PLATFORM_WINDOWS
 #include "winquake.h"
@@ -1172,12 +1169,6 @@ int SCR_ModalMessage (const char *text)
 	if (cls.state == ca_dedicated)
 		return true;
 #endif	/* H2W */
-#if defined(WEBQUAKE)
-	S_ClearBuffer ();
-	return EM_ASM_INT({
-		return window.confirm(UTF8ToString($0)) ? 1 : 0;
-	}, text);
-#else
 	scr_notifystring = text;
 
 // draw a fresh screen
@@ -1198,7 +1189,6 @@ int SCR_ModalMessage (const char *text)
 	SCR_UpdateScreen ();
 
 	return key_lastpress == 'y';
-#endif
 }
 
 //=============================================================================
