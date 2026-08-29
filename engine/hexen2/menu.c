@@ -2330,11 +2330,20 @@ static int M_Display_DetectPreset (void)
 	int lmb = r_lightmap_bicubic.integer;
 
 #if defined(WEBGPUQUAKE)
-	if (fabsf(r_nitro_haze.value - 0.18f) < 0.001f &&
-	    fabsf(r_nitro_persistence.value - 0.06f) < 0.001f &&
-	    fabsf(r_nitro_glowhaze.value - 0.35f) < 0.001f &&
-	    fabsf(r_nitro_shadowmotion.value - 0.12f) < 0.001f &&
-	    r_nitro_projectileribbons.integer && r_nitro_spelleffects.integer)
+	if (fabsf(Cvar_VariableValue("r_nitro_haze") - 0.18f) < 0.001f &&
+	    Cvar_VariableValue("r_nitro_fogbands") == 8 &&
+	    fabsf(Cvar_VariableValue("r_nitro_persistence") - 0.06f) < 0.001f &&
+	    fabsf(Cvar_VariableValue("r_nitro_glowhaze") - 0.35f) < 0.001f &&
+	    fabsf(Cvar_VariableValue("r_nitro_shadowmotion") - 0.12f) < 0.001f &&
+	    Cvar_VariableValue("r_nitro_projectileribbons") != 0 &&
+	    Cvar_VariableValue("r_nitro_spelleffects") != 0 &&
+	    Cvar_VariableValue("r_nitro_dither") != 0 &&
+	    Cvar_VariableValue("r_nitro_resolve") != 0 &&
+	    Cvar_VariableValue("r_nitro_paletteshifts") != 0 &&
+	    Cvar_VariableValue("r_nitro_liquidmotion") != 0 &&
+	    Cvar_VariableValue("r_nitro_liquidstipple") != 0 &&
+	    fabsf(Cvar_VariableValue("r_nitro_liquidrefract") - 0.12f) < 0.001f &&
+	    Cvar_VariableValue("r_nitro_liquidglow") != 0)
 		return 7;	/* Moody */
 #endif
 	if (sc <= 0.25f && se == 1 && !lmb)

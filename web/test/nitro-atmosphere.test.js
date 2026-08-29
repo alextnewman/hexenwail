@@ -21,15 +21,16 @@ test('Nitro atmosphere controls are archived and independently optional', () => 
     assert.match(renderer, new RegExp(`${name} = \\{"${name}".*CVAR_ARCHIVE`));
     assert.match(renderer, new RegExp(`Cvar_RegisterVariable\\(&${name}\\)`));
   }
-  assert.match(renderer, /r_nitro_haze = \{"r_nitro_haze", "0"/);
+  assert.match(renderer, /r_nitro_haze = \{"r_nitro_haze", "0\.18"/);
 });
 
-test('fog is depth-banded and optional haze is world-space localized', () => {
+test('fog is depth-banded and haze forms broad room-coherent banks', () => {
   assert.match(backend, /if \(frame\.fogBands >= 2\.0\)/);
   assert.match(backend, /fog = floor\(fog \* steps \+ 0\.5\) \/ steps/);
   assert.match(backend, /if \(frame\.haze > 0\.0\)/);
-  assert.match(backend, /sin\(position\.x \* 0\.021 \+ frame\.time \* 0\.11\)/);
-  assert.match(backend, /fog = max\(fog, pocket \* frame\.haze \* 0\.45\)/);
+  assert.match(backend, /let roomWave = sin\(\(position\.x \+ position\.y \* 0\.63\) \* 0\.0031/);
+  assert.match(backend, /let darkness = 1\.0 - smoothstep\(0\.16, 0\.52, receiverLuma\)/);
+  assert.match(backend, /fog = max\(fog, bank \* frame\.haze \* 0\.32\)/);
 });
 
 test('atmosphere and full-screen shifts return to the authored palette', () => {
@@ -47,10 +48,11 @@ test('contents shifts are current before scene parameters are captured', () => {
   assert.ok(contents >= 0 && contents < setup);
 });
 
-test('scene parameter offsets include atmosphere without changing scan uniform size', () => {
+test('scene parameter offsets include atmosphere and near-black motion', () => {
   assert.match(backend, /frame\[18\] = floats\[45\]/);
   assert.match(backend, /frame\[19\] = floats\[46\]/);
   assert.match(backend, /scan\[9\] = floats\[50\]/);
+  assert.match(backend, /scan\[11\] = floats\[56\]/);
   assert.match(backend, /const scan = new Float32Array\(12\)/);
 });
 
