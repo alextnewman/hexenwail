@@ -486,6 +486,8 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     if (packedIndex == 0u) {
       discard;
     }
+    /* Hexen II special-trans texels pack ColorIndex in the high nibble
+     * and ColorPercent alpha in the low nibble. */
     let colorIndex = array<u32, 16>(
       0u, 31u, 47u, 63u, 79u, 95u, 111u, 127u,
       143u, 159u, 175u, 191u, 199u, 207u, 223u, 231u);
