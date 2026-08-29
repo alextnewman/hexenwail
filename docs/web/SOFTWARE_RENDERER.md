@@ -25,14 +25,9 @@ The rasteriser cost scales with the *software* resolution, which we choose;
 the presenter cost scales with the *panel* resolution, which we do not, but
 it is one textured triangle, so it is free in practice.
 
-The WebGlide GPU renderer remains in-tree and buildable
-(`-DWEB_RENDERER=webgl2`, see [`WEBGLIDE.md`](WEBGLIDE.md)). It is an abortive
-experiment that is kept compiling rather than an actively pursued renderer, and
-its frame cost is not a baseline for anything. A third configuration,
-WebGlideNitro
-(`-DWEB_RENDERER=webgpu`, see [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md)), is a
-native WebGPU renderer that draws the complete playable scene and is now the
-primary renderer.
+WebGlideNitro (`-DWEB_RENDERER=webgpu`, see
+[`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md)) is a native WebGPU renderer that
+draws the complete playable scene and is the primary renderer.
 `WEB_RENDERER` defaults to `webgpu`; select this parked path explicitly with
 `-DWEB_RENDERER=software`.
 
@@ -43,10 +38,9 @@ primary renderer.
 | `engine/h2shared/d_*.c`, `r_*.c`, `engine/hexen2/r_{main,misc,alias}.c` | The restored rasteriser. Verbatim uHexen2 apart from one documented fix (see [Deviations](#deviations-from-upstream)). |
 | `engine/h2shared/vid_soft_web.c` | VID backend: owns the framebuffer, z-buffer and surface cache; the resolution ladder; aspect/letterbox policy; palette upload; `Web_ResizeCanvas`; the video menu. |
 | `engine/h2shared/web_canvas.h` | Backend-agnostic presenter interface. |
-| `engine/h2shared/web_canvas_gl2.c` | Shipping WebGL2 presenter backend. |
-| `engine/h2shared/web_canvas_wgpu.c`, `engine/web/webgpu_present.js` | Opt-in WebGPU presenter preview; the launcher owns asynchronous device acquisition. |
+| `engine/h2shared/web_canvas_wgpu.c`, `engine/web/webgpu_present.js` | WebGPU presenter; the launcher owns asynchronous device acquisition. |
 | `engine/h2shared/draw_soft_web.c` | Extended 2D API (alpha pics/fills, glyph batching, UI canvases, intermission art) implemented on the 8bpp framebuffer. |
-| `engine/hexen2/r_soft_web.c` | Renderer-policy cvars and the per-entity PimpModel override table, mirroring `r_webgl2.c`. |
+| `engine/hexen2/r_soft_web.c` | Renderer-policy cvars and the per-entity PimpModel override table. |
 | `engine/h2shared/soft_web.h` | The symbols shared client code expects from a web renderer; pulled in by `quakeinc.h`. |
 
 ## Data flow
@@ -61,7 +55,7 @@ primary renderer.
         v
   WebCanvas_Present()
         |
-        |  glTexSubImage2D  -> R8UI texture   (W*H bytes/frame)
+        |          queue.writeTexture -> R8Uint texture   (W*H bytes/frame)
         |  palette shifts   -> 256x1 RGBA8 LUT (1 KB, only when it changes)
         v
   fragment shader: idx = texelFetch(indexed); rgb = texelFetch(palette, idx)
@@ -78,17 +72,15 @@ primary renderer.
   frame when you take damage or pick up an item. Under an RGBA readback that
   would mean re-expanding the whole framebuffer on the CPU. Here it is a 1 KB
   LUT upload.
-* **No vertex work.** The fullscreen triangle is generated from
-  `gl_VertexID`; there is no VBO, no attribute fetch, no index buffer.
-* **Exact index lookup.** The index texture is `R8UI` sampled with
-  `usampler2D` + `texelFetch`, so there is no filtering of *indices* — which
+* **No vertex work.** The fullscreen triangle is generated in the vertex
+  shader; there is no vertex or index buffer.
+* **Exact index lookup.** The index texture is `r8uint` accessed with
+  `textureLoad`, so there is no filtering of *indices* — which
   would blend unrelated palette entries and produce garbage colours.
-* **Context attributes are tuned for a blit:** alpha, depth, stencil and
-  antialias off, `preserveDrawingBuffer` off,
-  `renderViaOffscreenBackBuffer` off, high-performance power preference.
+* **The pipeline is tuned for a blit:** no depth, stencil, blending or
+  multisampling.
 * **Single upload when possible.** If `rowbytes == width` the whole
-  framebuffer goes up in one `glTexSubImage2D` with
-  `GL_UNPACK_ALIGNMENT 1`.
+  framebuffer goes up in one `queue.writeTexture`.
 
 ### Filtering
 
@@ -104,13 +96,9 @@ on indices.
 * **PBO ring upload.** Emscripten's GL binding copies the JS-side heap view
   anyway, so a PBO ring adds complexity without removing the copy. Revisit
   only if profiling shows upload stalls.
-The **WebGPU presenter preview** is now implemented behind
-`WEB_PRESENTER=webgpu` (or `./scripts/wasm-build.sh webgpu
-engine/build-webgpu`). It leaves the rasteriser and VID layer unchanged,
-uploads the R8Uint framebuffer and palette through `queue.writeTexture`, and
-uses the same nearest/sharp-bilinear policy in WGSL. It is optional while the
-path is qualified on the target and does not replace the shipping WebGL2
-presenter.
+The WebGPU presenter leaves the rasteriser and VID layer unchanged, uploads the
+R8Uint framebuffer and palette through `queue.writeTexture`, and uses the same
+nearest/sharp-bilinear policy in WGSL.
 
 This presenter is not WebGlideNitro. It proves the asynchronous device handoff,
 indexed texture and scan-out pieces without weakening Nitro's requirement to be
@@ -279,8 +267,8 @@ screen at scale 1:
 `gl_screen.c` does — so the console, plaques and menus that follow are not
 drawn inside the status bar canvas.
 
-`draw_webgl2.c` places the canvases identically (`Draw_Quad` translates by
-the canvas origin), so the two renderers agree on 2D coordinates.
+Nitro's 2D path places the canvases identically, so the two renderers agree on
+2D coordinates.
 
 ## Renderer-owned server messages
 
@@ -295,8 +283,8 @@ being parsed at the wrong offset.
 
 The restored rasteriser is verbatim uHexen2 with one exception:
 `R_NewMap()` in `engine/hexen2/r_main.c` now calls
-`Mod_RestoreAliasModelDefaults()` and `R_ClearPimpOverrides()`, matching
-`r_webgl2.c`. Without it, hexenwail's per-entity PimpModel overrides bleed
+`Mod_RestoreAliasModelDefaults()` and `R_ClearPimpOverrides()`. Without it,
+hexenwail's per-entity PimpModel overrides bleed
 across map changes.
 
 ## Building and validating
@@ -305,16 +293,13 @@ across map changes.
 emcmake cmake -S engine -B build-soft -DWEB_RENDERER=software
 emmake  make  -C build-soft -j"$(nproc)"
 
-emcmake cmake -S engine -B build-gl -DWEB_RENDERER=webgl2    # WebGlide
-emmake  make  -C build-gl -j"$(nproc)"
-
 emcmake cmake -S engine -B build-nitro -DWEB_RENDERER=webgpu  # WebGlideNitro
 emmake  make  -C build-nitro -j"$(nproc)"
 
 npm test                                                     # PWA shell tests
 ```
 
-All three configurations must build. CI pins emsdk `4.0.23`; older emsdk
+Both configurations must build. CI pins emsdk `4.0.23`; older emsdk
 releases reject `-sSTACK_SIZE`.
 
 ## Known gaps

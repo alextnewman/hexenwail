@@ -1,20 +1,14 @@
 /*
  * r_webgpu.c -- WebGlideNitro: the web port's native WebGPU renderer.
  *
- * This is the WEBGPUQUAKE counterpart of r_webgl2.c.  It shares that file's
- * shape -- the same renderer-policy cvars, the same frustum, the same
+ * This WEBGPUQUAKE renderer exposes the renderer-policy cvars, frustum and
  * GLQuake axis convention -- because the shared client is written against
  * that surface, and for no other reason.  Everything below the frame setup
  * is native WebGPU: there is no GL context, no GL header, and no call in
  * this build that a GL driver would recognise.
  *
- * WebGlide is a reference for *scene preparation* only, and an optional one.
- * What is borrowed is the answer to "which surfaces are in this frame, and
- * what does the atlas look like" -- questions about Hexen II, not about an
- * API.  WebGlide is an abortive experiment: its frame cost is explicitly not
- * a baseline, gate or optimisation criterion here, and Nitro's own numbers
- * come from captures taken on the target iPad.  The output specification is
- * the software rasteriser.
+ * Nitro's own numbers come from captures taken on the target iPad. The output
+ * specification is the software rasteriser.
  *
  * What this renderer does not yet draw is stated out loud in the console at
  * every map load; see WGPUWorld_ReportGaps() in wgpu_world.c and
@@ -43,8 +37,7 @@
 #include "wgpu_nitro.h"
 #include "web_perf.h"
 
-/* What the scene buffer is allowed to cost before the ladder shrinks it,
- * the same two-ceiling policy WebGlide uses (gl2_glide.c). */
+/* What the scene buffer is allowed to cost before the ladder shrinks it. */
 #define NITRO_MAX_SCENE_PIXELS	(2560 * 1440)
 
 refdef_t r_refdef;
@@ -105,8 +98,8 @@ cvar_t r_motionblur = {"r_motionblur", "0", CVAR_ARCHIVE};
 cvar_t r_scale = {"r_scale", "1", CVAR_ARCHIVE};
 cvar_t r_softemu = {"r_softemu", "0", CVAR_ARCHIVE};
 
-/* Nitro's own knobs.  The scene buffer is decoupled from the canvas for the
- * same reason WebGlide decouples it: the panel is far denser than the
+/* Nitro's own knobs. The scene buffer is decoupled from the canvas because
+ * the panel is far denser than the
  * rasteriser's native idea of a pixel, and the scan-out pass is the cheapest
  * place to resolve that. */
 cvar_t r_nitro_scenescale = {"r_nitro_scenescale", "1", CVAR_ARCHIVE};
@@ -217,9 +210,7 @@ int R_GetPimpFlags (entity_t *e, float **gsettings_out)
 
 	matrices
 
-	Column major, in the order a WGSL mat4x4f wants them.  Identical to
-	WebGlide's helpers except where WebGPU's clip space differs, which is
-	called out where it happens.
+	Column major, in the order a WGSL mat4x4f wants them.
 
 =============================================================================
 */
@@ -253,8 +244,8 @@ void WGPU_MatrixMultiply (wgpumatrix_t *out, const wgpumatrix_t *a, const wgpuma
 ================
 WGPU_MatrixFrustum
 
-An infinite far plane, as WebGlide uses, for the same reason: Hexen II's
-maps are large and there is nothing to gain from a finite one.
+An infinite far plane because Hexen II's maps are large and there is nothing
+to gain from a finite one.
 
 The one number that differs from the GL version is m[14].  WebGPU's clip
 space runs z from 0 at the near plane to 1 at the far one, not -1 to 1, so
@@ -523,7 +514,7 @@ static void WGPU_SetupScene (wgpuscene_t *scene)
 	scene_w = q_max((int)(scene->dest_width * scale + 0.5f), 1);
 	scene_h = q_max((int)(scene->dest_height * scale + 0.5f), 1);
 
-	/* Scale the request rather than crop it, exactly as WebGlide does. */
+	/* Scale the request rather than crop it. */
 	pixels = (double)scene_w * (double)scene_h;
 	if (pixels > NITRO_MAX_SCENE_PIXELS)
 	{

@@ -8,8 +8,8 @@
  * texture, expands it through a 256-entry palette lookup on the GPU, and
  * scales it to the canvas.  See docs/web/SOFTWARE_RENDERER.md.
  *
- * Backends live behind this interface so a second one (WebGPU) can be added
- * without touching the engine.  Exactly one backend is linked at a time.
+ * The WebGPU backend lives behind this interface so presentation remains
+ * separate from software rasterization.
  *
  * Copyright (C) 2026  Hexenwail contributors
  *
@@ -37,7 +37,7 @@
 void WebCanvas_Init (void);
 void WebCanvas_Shutdown (void);
 
-/* Human readable backend id, e.g. "webgl2".  Valid after WebCanvas_Init. */
+/* Human readable backend id.  Valid after WebCanvas_Init. */
 const char *WebCanvas_BackendName (void);
 
 /* Declare the size of the palettized source framebuffer.  Reallocates the

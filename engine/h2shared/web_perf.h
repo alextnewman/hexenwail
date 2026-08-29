@@ -37,8 +37,8 @@ typedef enum
 /* Per-frame counters.  Not every field is meaningful in every renderer. */
 typedef struct
 {
-	int	drawcalls;	/* GPU draw calls (WebGlide) */
-	int	tris;		/* triangles submitted (WebGlide) */
+	int	drawcalls;	/* GPU draw calls */
+	int	tris;		/* triangles submitted */
 	int	uploads;	/* texture/buffer uploads issued */
 	int	uploadkb;	/* kilobytes those uploads carried */
 } webperf_counters_t;

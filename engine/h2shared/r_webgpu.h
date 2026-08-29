@@ -1,8 +1,8 @@
 /*
  * r_webgpu.h -- what the shared client sees of the WebGlideNitro renderer.
  *
- * The mirror image of r_webgl2.h for WEBGPUQUAKE builds, minus every GL
- * declaration: this renderer has no GL context and includes no GL headers.
+ * Renderer declarations for WEBGPUQUAKE builds. This renderer has no
+ * translated graphics context or headers.
  * quakeinc.h pulls it in, so it must declare exactly the globals, cvars and
  * entry points the renderer-agnostic client code references.
  *

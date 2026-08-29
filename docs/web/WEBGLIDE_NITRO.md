@@ -1,9 +1,7 @@
 # WebGlideNitro — WebGPU renderer design
 
-**Status: primary renderer; correctness completion is under way.** Nitro is no longer gated
-on WebGlide in any way, and WebGlide is
-explicitly *not* its performance baseline (see "How Nitro is measured").
-The renderer now exists as a real build configuration
+**Status: primary renderer; correctness completion is under way.** The renderer
+exists as a real build configuration
 (`-DWEB_RENDERER=webgpu`, macro `WEBGPUQUAKE`, bundle `hexenwail-nitro`) that
 draws the world, its brush entities, alias models, sprites, particles and the
 view weapon as batched engine polygons through native WebGPU. Palette-quantized
@@ -12,41 +10,30 @@ fog, liquid warp and alpha, fullbright skin pixels, authored glows, projected
 model shadows and spell-family particle treatments are implemented. See "Where
 it stops" below.
 
-The WebGPU *presenter* preview remains a separate thing: it is part of the
-software-renderer configuration (`-DWEB_PRESENTER=webgpu`, macro
-`WEBGPU_PRESENT`, bundle `hexenwail-webgpu`) and is **not** Nitro. The two
-never share a build.
+The WebGPU presenter remains separate: it belongs to the software-renderer
+configuration (`-DWEB_RENDERER=software`, macro `WEBGPU_PRESENT`, bundle
+`hexenwail`) and is not Nitro. The two never share a build.
 
 This document exists so the idea stops being re-derived from scratch in every
 session. It is not a third rendering plan. The settled decisions in
 [`ARCHITECTURE.md`](ARCHITECTURE.md) still hold: Nitro is primary, the software
-renderer is parked as a reference, WebGlide stays in-tree and buildable, and an
-Ironwail-class modern renderer is a non-goal.
+renderer is parked as a reference, and an Ironwail-class modern renderer is a
+non-goal.
 
 ## Vision
 
-WebGlide is an **abortive experiment**: a WebGL2 attempt at what Raven would
-have shipped for Glide in 1997, kept in-tree and buildable but not finished,
-not supported, and not something Nitro waits for. **Nitro** is what a console
-developer would do with that same brief once correctness is behind them and the
-only thing left is showing off: the off-the-wall tricks that come from owning
-the whole machine and knowing exactly what it will do every frame.
+Nitro is what a console developer would do once correctness is behind them and
+the only thing left is showing off: the off-the-wall tricks that come from
+owning the whole machine and knowing exactly what it will do every frame.
 
 The web platform is a fixed console here (see the "browser as a console"
 framing in [`ARCHITECTURE.md`](ARCHITECTURE.md)), so the same style of trick
 applies: spend fixed per-frame budgets, amortise work across frames, exploit
 the fact that the scene buffer, the palette and the colormap are all ours.
 
-Nitro is a **separate, native WebGPU renderer**, not a WebGL-to-WebGPU
-translation layer and not a cvar mode inside the WebGL2 backend. WebGPU has its
-own device, resources, immutable pipelines, bind groups and command submission
-model; hiding those behind GL-shaped calls would keep the costs and constraints
-we are trying to remove.
-
-It may share renderer-neutral scene preparation with WebGlide where that makes
-ownership clearer, but backend objects never cross that boundary. Nitro is the
-primary renderer, the software renderer remains the correctness reference and
-WebGlide remains buildable.
+Nitro is a native WebGPU renderer with its own device, resources, immutable
+pipelines, bind groups and command submission model. Nitro is the primary
+renderer; the software renderer remains the correctness reference.
 
 ### The visual north star
 
@@ -79,33 +66,16 @@ pixels and hard lighting transitions that define it.
 
 ## How Nitro is measured
 
-There is no WebGlide gate. The owner's instruction is on the record and
-explicit:
-
-> I don't care about WebGlide performance. We already know that the software
-> renderer has great perf. WebGlide is an abortive experiment. Just make a
-> native renderer and disregard WebGlide perf.
-
-So:
-
-* **WebGlide is not a performance baseline, a gate, or an optimisation
-  criterion.** Nitro is never required to beat it, match it, or be compared
-  with it, and no Nitro work waits on WebGlide being finished. WebGlide stays
-  in-tree and buildable, but as an abortive experiment.
 * **Nitro's performance is measured directly on the target iPad, against
   Nitro's own captures.** Take a raw capture ([`PERF_CAPTURE.md`](PERF_CAPTURE.md))
   on the device, write the numbers down, change one thing, capture again. A
   Nitro capture before the change is the only baseline a Nitro change is judged
   against. Do not guess, and do not substitute another renderer's numbers for a
   measurement you have not taken.
-* **The correctness bar is Hexen II's own software renderer** — the same
-  specification WebGlide answers to (`engine/h2shared/r_surf.c`, `d_*.c`), not
-  WebGlide's output. WebGlide remains available as an *optional* visual and
-  behavioural reference: it can be a convenient second opinion on what a frame
-  should contain, and where it and the software renderer disagree, the software
-  renderer wins.
+* **The correctness bar is Hexen II's own software renderer**
+  (`engine/h2shared/r_surf.c`, `d_*.c`).
 * Nitro's own remaining correctness work is listed in "Where it stops"
-  and in delivery step 5; that list, not WebGlide, is what "finished" means.
+  and in delivery step 5; that list is what "finished" means.
 
 The WebGPU presenter came first because it changes only how the
 already-rendered software framebuffer reaches the canvas. It was the
@@ -113,10 +83,7 @@ feasibility exercise for device acquisition, loss handling, indexed textures and
 WGSL scan-out. Nitro reuses the launcher device handoff that exercise
 established, and nothing else from it.
 
-## Structural notes carried over from WebGL2
-
-These are design observations, not a scoreboard: nothing here says Nitro must
-be faster than WebGlide, and none of it is measured against WebGlide.
+## Structural notes
 
 A static world vertex buffer, load-time asset processing, cached bindings and
 non-overlapping per-frame streaming ranges are sound however they are spelled.
@@ -136,7 +103,7 @@ boundaries an OpenGL-era API forces:
   directly by the GPU.
 
 Whether removing any of them actually helps is a question for a Nitro capture
-on the iPad, not for a comparison with WebGlide.
+on the iPad.
 
 Indexed palette and colormap filtering, retained history for T-buffer effects,
 and independently sized animated diffuse textures do not become simpler merely
@@ -189,7 +156,7 @@ bundle `hexenwail-nitro`. `./scripts/wasm-build.sh nitro engine/build-nitro`
 as `nitro`.
 
 It is a native WebGPU path, not a translation layer. There is no GL call, no
-GL-shaped state machine and no shared code with `gl2_*`. The device comes from
+translated graphics state machine. The device comes from
 the launcher probe (`Module.hexenwailWebGPU`), so the engine never requests a
 second adapter for a canvas that already has one.
 
@@ -255,7 +222,7 @@ than merely raising a model's flat ambient term. Their engine-authored RGB
 colour is luminance-normalised into that sample as well, so the wall, actor and
 view weapon receive the same flickering hue.
 
-Nitro materializes living model light in the established dynamic-light pool. Torches, luminous mana and potion pickups, authored illuminate effects and glowing missiles emit their model-authored colour and light style into that pool. Both ordinary client entities and static map entities participate; static emitters use a disjoint stable key range, and the nearest eligible sources claim only the slots left after gameplay lights, so they cannot evict active effects or permanently starve later map emitters. Authored styles remain authoritative, but Nitro interpolates their samples for model glows and phases stationary emitters by position so a row of identical torches retains the authored sequence without switching in lockstep; torch model animation uses the same phase. Assets without a style receive a restrained, deterministic source-specific rhythm rather than frame-rate-dependent random noise. QC-supplied glow colour, alpha, offset, orb radius, light radius and style remain intact through the PimpModel path. Those lights therefore share Nitro's world, actor and view-weapon lighting path. This is Nitro-owned behavior; it does not change the parked software reference or WebGlide.
+Nitro materializes living model light in the established dynamic-light pool. Torches, luminous mana and potion pickups, authored illuminate effects and glowing missiles emit their model-authored colour and light style into that pool. Both ordinary client entities and static map entities participate; static emitters use a disjoint stable key range, and the nearest eligible sources claim only the slots left after gameplay lights, so they cannot evict active effects or permanently starve later map emitters. Authored styles remain authoritative, but Nitro interpolates their samples for model glows and phases stationary emitters by position so a row of identical torches retains the authored sequence without switching in lockstep; torch model animation uses the same phase. Assets without a style receive a restrained, deterministic source-specific rhythm rather than frame-rate-dependent random noise. QC-supplied glow colour, alpha, offset, orb radius, light radius and style remain intact through the PimpModel path. Those lights therefore share Nitro's world, actor and view-weapon lighting path. This is Nitro-owned behavior; it does not change the parked software reference.
 
 Interpolation is BSP-aware: a probe contributes only when it shares the
 receiver's convex leaf or the segment between them remains outside solid map
@@ -434,7 +401,7 @@ The first renderer milestone was static world plus lightmap array,
 Glide-style scan-out and complete batched UI; the second is everything that
 moves in a map. The bar for both is the software renderer's output, and
 GPU-driven visibility or model transforms come after content correctness, not
-after a comparison with WebGlide.
+after comparison with the software reference.
 
 Progress: steps 1–4 and most of step 5 are delivered by what "As built"
 describes — device acquisition and resize via the launcher handoff, offscreen
@@ -493,7 +460,7 @@ always a Nitro-before/Nitro-after capture on the target iPad.
 Unordered, unscheduled, and deliberately biased towards things that are cheap
 on one WASM thread and that stay inside the palette/colormap look. Each is a
 trade, so each needs a number: capture Nitro on the iPad before and after, and
-judge it against *that*. WebGlide's frame cost is not an input to any of them.
+judge it against *that*.
 
 * **Adaptive scene scale.** `r_nitro_scenescale` is already a fraction of the
   view. Drive it from measured frame time instead of a fixed cvar, with
@@ -525,15 +492,10 @@ judge it against *that*. WebGlide's frame cost is not an input to any of them.
   lighting language; PBR and generic feature-checklist rendering do not define
   the destination.
 * Not a replacement for the software renderer, and not a reason to weaken it.
-* Not a WebGlide successor, competitor or benchmark target. WebGlide is an
-  abortive experiment that stays buildable; Nitro neither waits for it nor is
-  scored against it.
 
 ## Related documents
 
 * [`ARCHITECTURE.md`](ARCHITECTURE.md) — layering, the macro contract, non-goals.
-* [`WEBGLIDE.md`](WEBGLIDE.md) — the abortive WebGL2 experiment, kept buildable
-  and usable as an optional visual reference. Not a performance baseline.
 * [`PERF_CAPTURE.md`](PERF_CAPTURE.md) — the instrument used to measure Nitro
   on the target iPad, against Nitro's own earlier captures.
 * [`SOFTWARE_RENDERER.md`](SOFTWARE_RENDERER.md) — the parked renderer, and the

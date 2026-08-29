@@ -80,11 +80,7 @@
 #include "q_sound.h"
 #include "client.h"
 
-#if defined(WEBGL2QUAKE)
-#include "model.h"
-#include "particle.h"
-#include "r_webgl2.h"
-#elif defined(WEBGPUQUAKE)
+#if defined(WEBGPUQUAKE)
 /* WebGlideNitro: the native WebGPU renderer.
  * See docs/web/WEBGLIDE_NITRO.md */
 #include "model.h"

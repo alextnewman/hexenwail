@@ -571,13 +571,11 @@
         </section>
         <section class="card">
           <h2>Renderer</h2>
-          <p><strong>WebGlideNitro</strong> is the primary renderer. It is a native WebGPU path that builds its own batched scene geometry and preserves Hexen II's indexed palette and colormap semantics. The classic 8bpp <strong>Software renderer</strong> is parked as a correctness reference, and <strong>WebGlide</strong> remains an abortive WebGL2 experiment kept buildable. <strong>WebGPU presenter preview</strong> keeps the software rasterizer and changes only its final indexed-framebuffer scan-out.</p>
+          <p><strong>WebGlideNitro</strong> is the primary renderer. It is a native WebGPU path that builds its own batched scene geometry and preserves Hexen II's indexed palette and colormap semantics. The classic 8bpp <strong>Software renderer</strong> remains available as a correctness reference and presents its indexed framebuffer through WebGPU.</p>
           <label class="setting">Rendering pipeline
             <select id="renderer-setting">
               <option value="nitro">WebGlideNitro (default)</option>
-              <option value="software">Software (parked reference)</option>
-              <option value="webglide">WebGlide (experimental GPU)</option>
-              <option value="webgpu">Software + WebGPU presenter (preview)</option>
+              <option value="software">Software + WebGPU presentation</option>
             </select>
           </label>
           <small id="renderer-message" class="muted">The engine bundle is chosen once at launcher load. Changing this reloads the launcher; changes made during play take effect on the next launch.</small>

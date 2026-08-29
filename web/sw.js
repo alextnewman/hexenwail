@@ -14,15 +14,15 @@ const CORE_ASSETS = [
   './hexenwail-nitro.js',
   './hexenwail-nitro.wasm',
 ];
-// Parked renderer bundles are deliberately NOT in
+// The software renderer bundle is deliberately NOT in
 // CORE_ASSETS. Two reasons:
 //   * install cost: precaching megabytes of .js + .wasm on every fresh
 //     install would slow the first paint for users who never select them;
 //   * install robustness: cache.addAll() is atomic, so a single 404 on
-//     one missing parked bundle from a local build would abort
+//     a missing software bundle from a local build would abort
 //     the whole SW install and leave the launcher without an offline
 //     shell.
-// Instead, the bundle is runtime-cached on first use: the fetch handler
+// Instead, it is runtime-cached on first use: the fetch handler
 // treats requests for these URLs the same way it treats CORE_ASSETS
 // (cache-first, populate on network success), which is enough for an
 // installed PWA that has once launched one to keep working offline
@@ -32,14 +32,6 @@ const OPTIONAL_ASSETS = [
   './hexenwail.wasm',
   './hexenwail.data',
   './hexenwail.worker.js',
-  './hexenwail-webglide.js',
-  './hexenwail-webglide.wasm',
-  './hexenwail-webglide.data',
-  './hexenwail-webglide.worker.js',
-  './hexenwail-webgpu.js',
-  './hexenwail-webgpu.wasm',
-  './hexenwail-webgpu.data',
-  './hexenwail-webgpu.worker.js',
   './hexenwail-nitro.data',
   './hexenwail-nitro.worker.js',
 ];

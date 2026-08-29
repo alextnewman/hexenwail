@@ -20,8 +20,6 @@ test('manifest uses relative project-pages-safe paths', () => {
 test('service worker precaches repo-managed launcher assets', () => {
   const matches = [...swText.matchAll(/'\.\/([^']+)'/g)].map((match) => match[1]);
   const repoManaged = matches.filter((asset) => !asset.startsWith('hexenwail.')
-    && !asset.startsWith('hexenwail-webglide.')
-    && !asset.startsWith('hexenwail-webgpu.')
     && !asset.startsWith('hexenwail-nitro.'));
   for (const asset of repoManaged) {
     const relativePath = asset === '' ? 'index.html' : asset;
@@ -32,27 +30,19 @@ test('service worker precaches repo-managed launcher assets', () => {
   assert.ok(matches.includes('lib/phone-controls.js'));
 });
 
-test('service worker precaches Nitro and runtime-caches parked renderers', () => {
+test('service worker precaches Nitro and runtime-caches software', () => {
   const coreBlock = swText.match(/const CORE_ASSETS = \[([\s\S]*?)\];/)?.[1];
   assert.ok(coreBlock, 'CORE_ASSETS array is defined');
-  assert.doesNotMatch(coreBlock, /hexenwail-webglide/,
-    'CORE_ASSETS must not precache the experimental WebGlide bundle');
-  assert.doesNotMatch(coreBlock, /hexenwail-webgpu/,
-    'CORE_ASSETS must not precache the WebGPU presenter preview');
   assert.match(coreBlock, /hexenwail-nitro\.js/);
   assert.match(coreBlock, /hexenwail-nitro\.wasm/);
   const optionalBlock = swText.match(/const OPTIONAL_ASSETS = \[([\s\S]*?)\];/)?.[1];
   assert.ok(optionalBlock, 'OPTIONAL_ASSETS array is defined');
-  assert.match(optionalBlock, /'\.\/hexenwail-webglide\.js'/);
-  assert.match(optionalBlock, /'\.\/hexenwail-webglide\.wasm'/);
-  assert.match(optionalBlock, /'\.\/hexenwail-webgpu\.js'/);
-  assert.match(optionalBlock, /'\.\/hexenwail-webgpu\.wasm'/);
   assert.match(optionalBlock, /'\.\/hexenwail\.js'/);
   assert.match(optionalBlock, /'\.\/hexenwail\.wasm'/);
   assert.doesNotMatch(optionalBlock, /'\.\/hexenwail-nitro\.js'/);
   // Runtime-cached on first use, so both core and optional URLs feed the
   // same cache-first fetch path; anything else would break offline play
-  // after a single WebGlide session.
+  // after a single software-renderer session.
   assert.match(swText, /if \(!CORE_ASSET_URLS\.includes\(request\.url\) && !OPTIONAL_ASSET_URLS\.includes\(request\.url\)\)/);
 });
 

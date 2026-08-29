@@ -49,7 +49,7 @@ Changes from upstream uHexen2 v1.5.10
 * Options reorganized into submenus
 * Render scale, FOV slider, FPS cap
 * Music defaults to All Codecs
-* WASM/WebGL2 experimental build support
+* Emscripten/WebGPU build support
 
 For the full changelog, see: git log
 

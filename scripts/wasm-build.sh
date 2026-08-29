@@ -6,9 +6,8 @@
 # workflow, so the two never drift apart.
 #
 # Usage: wasm-build.sh [renderer] [build-dir]
-#   renderer   nitro (default) | software | webgl2 | webgpu
-#              webgpu is the software rasterizer with its WebGPU presenter;
-#              nitro is WebGlideNitro, the native WebGPU renderer.
+#   renderer   nitro (default) | software
+#              software uses the WebGPU presenter; nitro is WebGlideNitro.
 #   build-dir  defaults to engine/build
 #
 # Requires: emcmake/emmake on PATH (i.e. `source "$EMSDK/emsdk_env.sh"` first).
@@ -25,19 +24,17 @@ elif [ "$renderer" = "nitro" ]; then
 else
 	build_dir="engine/build"
 fi
-presenter="webgl2"
-
 case "$renderer" in
-webgpu)
-	# The software rasterizer scanned out through a WebGPU presenter.
-	renderer="software"
-	presenter="webgpu"
-	;;
 nitro)
 	# WebGlideNitro: a native WebGPU renderer, no software framebuffer.
 	renderer="webgpu"
 	;;
 esac
+
+if [ "$renderer" != "software" ] && [ "$renderer" != "webgpu" ]; then
+	echo "Unknown renderer '$renderer' (expected 'nitro' or 'software')" >&2
+	exit 2
+fi
 
 mkdir -p "$build_dir"
 cd "$build_dir"
@@ -45,7 +42,6 @@ cd "$build_dir"
 emcmake cmake \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DWEB_RENDERER="$renderer" \
-	-DWEB_PRESENTER="$presenter" \
 	"$repo_root/engine"
 
 emmake make -j"$(nproc)"

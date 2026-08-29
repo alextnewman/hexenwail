@@ -1,8 +1,8 @@
 # Raw web performance capture
 
-**Status:** shipping, off by default. Shared by every renderer: the software
-renderer, WebGlide and WebGlideNitro. The `renderer` field in the report says
-which one produced the rows (`software`, `webglide` or `webglidenitro`).
+**Status:** shipping, off by default. Shared by both renderers: software and
+WebGlideNitro. The `renderer` field says which produced the rows (`software` or
+`webglidenitro`).
 
 ## Purpose
 
@@ -11,7 +11,7 @@ captures a bounded window of raw frame measurements that can be copied from
 the launcher and supplied directly to an analysis agent.
 
 The capture deliberately draws nothing in-game. The former overlay generated
-hundreds of WebGlide UI draws while measuring the renderer and made its own
+hundreds of UI draws while measuring the renderer and made its own
 results misleading.
 
 ## Using it
@@ -27,12 +27,10 @@ the in-game menu, then **Copy latest report**. The text includes:
 The latest engine report is retained in session storage so it survives an exit
 back to the launcher.
 
-Compare a capture with **another capture from the same renderer**. The three
+Compare a capture with **another capture from the same renderer**. The two
 renderers draw different work in different ways, so cross-renderer numbers are
-not a scoreboard, and WebGlide's numbers in particular are not a baseline for
-anything: it is an abortive experiment (see [`WEBGLIDE.md`](WEBGLIDE.md)).
-WebGlideNitro is judged on the target iPad against its own earlier captures —
-change one thing, capture again.
+not a scoreboard. WebGlideNitro is judged on the target iPad against its own
+earlier captures — change one thing, capture again.
 
 ## Columns
 
@@ -45,7 +43,7 @@ change one thing, capture again.
 | `ui_ms` | HUD, menus and console. |
 | `present_ms` | `VID_Update`, including software framebuffer upload. |
 | `engine_other_ms` | Host CPU time outside those three measured stages. |
-| `draws`, `tris` | GPU submissions, counted by WebGlide and WebGlideNitro. Under Nitro one `draws` is one `drawIndexed` for world and brush-entity surfaces or one `draw` for a model batch, so it is directly the batch count the design aims to keep low. |
+| `draws`, `tris` | GPU submissions counted by WebGlideNitro. One `draws` is one `drawIndexed` for world and brush-entity surfaces or one `draw` for a model batch, so it is directly the batch count the design aims to keep low. |
 | `uploads`, `upload_kb` | Software presenter uploads; under WebGlideNitro, load-time GPU uploads plus the per-frame index, entity and model arenas. |
 
 Intervals of one second or more are treated as loading/background stalls and

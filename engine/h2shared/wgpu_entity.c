@@ -21,8 +21,7 @@
  * The maths -- pose selection, skin groups, the scale types and origins,
  * EF_ROTATE's bob and spin, EF_FACE_VIEW, the sprite orientations, the
  * lighting clamps -- are facts about Hexen II, and are reproduced from the
- * software renderer (r_alias.c, r_main.c, d_sprite.c) with WebGlide's
- * gl2_alias.c as a cross-check.  No GL call is translated here.
+ * software renderer (r_alias.c, r_main.c, d_sprite.c).
  *
  * Copyright (C) 1996-1997  Id Software, Inc.
  * Copyright (C) 1997-1998  Raven Software Corp.

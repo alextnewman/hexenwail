@@ -1,12 +1,9 @@
 /*
  * soft_web.h -- shared declarations for the web software-renderer build.
  *
- * The web port can be built with either the classic 8bpp software
- * rasterizer (default) or the experimental WebGL2 renderer. Shared client
- * code (menu.c, sbar.c, console.c, ...) is written against a handful of
- * symbols that the WebGL2 build publishes through r_webgl2.h. This header
- * is the software-renderer counterpart: it is pulled in from quakeinc.h
- * when WEBQUAKE is defined without WEBGL2QUAKE.
+ * Shared client code (menu.c, sbar.c, console.c, ...) is written against a
+ * handful of renderer symbols. This header supplies them for the classic
+ * 8bpp software rasterizer and is pulled in from quakeinc.h for WEBSOFT.
  *
  * See docs/web/SOFTWARE_RENDERER.md for the design.
  *
@@ -47,7 +44,7 @@ extern int	draw_canvas_x, draw_canvas_y;
 extern byte		*playerTranslation;
 extern const int	color_offsets[MAX_PLAYER_CLASS];
 
-/* Renderer-policy cvars shared with the WebGL2 build (r_soft_web.c). */
+/* Renderer-policy cvars used by shared client code (r_soft_web.c). */
 extern cvar_t	gl_missile_glows;
 extern cvar_t	gl_torch_dlight;
 extern cvar_t	gl_flashintensity;
@@ -78,7 +75,7 @@ void GL_PostProcess_ResetWaterwarpPreview (void);
 void GL_PostProcess_RequestWaterwarpPreview (float duration);
 
 /* svc_fog handler. The software renderer has no fog, so this only drains
- * the message payload; r_webgl2.h declares the WebGL2 counterpart. */
+ * the message payload. */
 void Fog_ParseServerMessage (void);
 
 /* Implemented by draw_soft_web.c; called once from Draw_Init(). */

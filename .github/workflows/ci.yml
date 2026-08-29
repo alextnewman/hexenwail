@@ -34,12 +34,12 @@ jobs:
         run: |
           shellcheck scripts/mkrelease.sh flatpak/hexenwail.sh \
             scripts/wasm-build.sh scripts/wasm-assemble-artifact.sh \
-            scripts/wasm-validate-artifact.sh scripts/webgl-smoke-test.sh
+            scripts/wasm-validate-artifact.sh
 
   # Dedicated PWA/WebAssembly validation, required on every pull request.
   # Runs the lightweight Node PWA tests, builds the *full* WebAssembly
-  # client in both renderer configurations (software — the shipping
-  # default — and webgl2, which is retained and must not silently rot),
+  # client in both renderer configurations (WebGlideNitro and software
+  # rendering with WebGPU presentation),
   # using the same Emscripten setup as the Pages deployment (via the
   # shared .github/actions/wasm-build composite action + scripts/wasm-*.sh),
   # then validates the assembled static artifact — without deploying it.
