@@ -1445,7 +1445,6 @@ function bindUi() {
     deviceActive: () => gyroGameplayActive() && isTouchControlsVisible(),
     gamepadActive: () => gyroGameplayActive() && state.gamepadConnected,
   }, { sensitivity: state.preferences.gyroSensitivity });
-  state.gyroAim.setEnabled(state.preferences.gyroAim);
   addEventListener('hexenwailtouchmode', (event) => {
     const menu = Boolean(event.detail?.menu);
     if ((document.body.dataset.touchMenu === 'true') !== menu) {

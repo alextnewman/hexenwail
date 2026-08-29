@@ -159,7 +159,7 @@ export class GyroAim {
     }
     for (const gamepad of gamepads) {
       const velocity = gamepad?.pose?.angularVelocity;
-      if (velocity && velocity.length >= 2) return velocity;
+      if (velocity && velocity.length >= 3) return velocity;
     }
     return null;
   }
@@ -170,6 +170,8 @@ export class GyroAim {
 
     const velocity = this.isGamepadActive() ? this.gamepadAngularVelocity() : null;
     if (velocity) {
+      /* Unlike DeviceMotionEvent, a gamepad snapshot has no sample interval.
+       * Prime the timestamp and integrate from the next animation frame. */
       const elapsed = this.lastGamepadTimestamp === null ? 0 : (timestamp - this.lastGamepadTimestamp) / 1000;
       this.lastGamepadTimestamp = timestamp;
       const deltaSeconds = clampDeltaSeconds(elapsed, this.options.maxDeltaSeconds);
