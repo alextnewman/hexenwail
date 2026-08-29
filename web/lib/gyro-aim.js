@@ -44,7 +44,8 @@ export class GyroAim {
     }
 
     const MotionEvent = this.environment.DeviceMotionEvent;
-    if (MotionEvent && typeof MotionEvent.requestPermission !== 'function') {
+    if (this.permission === 'granted'
+        || (MotionEvent && typeof MotionEvent.requestPermission !== 'function')) {
       this.permission = 'granted';
       this.attachMotion();
     }
