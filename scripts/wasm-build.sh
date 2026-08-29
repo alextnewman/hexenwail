@@ -29,12 +29,13 @@ nitro)
 	# WebGlideNitro: a native WebGPU renderer, no software framebuffer.
 	renderer="webgpu"
 	;;
-esac
-
-if [ "$renderer" != "software" ] && [ "$renderer" != "webgpu" ]; then
+software)
+	;;
+*)
 	echo "Unknown renderer '$renderer' (expected 'nitro' or 'software')" >&2
 	exit 2
-fi
+	;;
+esac
 
 mkdir -p "$build_dir"
 cd "$build_dir"

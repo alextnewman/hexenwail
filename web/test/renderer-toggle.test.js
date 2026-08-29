@@ -272,6 +272,7 @@ test('WebGlideNitro implements the authored visual effects', () => {
 test('the nitro build is reachable from the scripts, CI and the offline shell', () => {
   assert.match(buildScript, /nitro\)/);
   assert.match(buildScript, /renderer="webgpu"/);
+  assert.match(buildScript, /Unknown renderer.*expected 'nitro' or 'software'/);
   assert.match(assembleScript, /hexenwail-nitro\.js/);
   assert.match(assembleScript, /hexenwail-nitro\.wasm/);
   assert.match(validateScript, /require "hexenwail-nitro\.js"/);
