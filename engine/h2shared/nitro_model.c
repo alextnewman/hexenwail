@@ -2355,7 +2355,7 @@ static void Mod_LoadAliasModelNew (qmodel_t *mod, void *buffer)
 
 //	mod->cache.data = pheader;
 	mod->flags = LittleLong (pinmodel->flags);
-	if (!q_strcasecmp (mod->name, "models/ball.mdl"))
+	if (mod->flags & EF_MAGICMISSILE)
 		mod->flags |= EF_SPECIAL_TRANS;
 
 //
@@ -2633,7 +2633,7 @@ static void Mod_LoadAliasModel (qmodel_t *mod, void *buffer)
 
 //	mod->cache.data = pheader;
 	mod->flags = LittleLong (pinmodel->flags);
-	if (!q_strcasecmp (mod->name, "models/ball.mdl"))
+	if (mod->flags & EF_MAGICMISSILE)
 		mod->flags |= EF_SPECIAL_TRANS;
 
 //

@@ -3196,7 +3196,7 @@ static void Mod_LoadAliasModelNew (qmodel_t *mod, void *buffer)
 	pheader = (aliashdr_t *) Hunk_AllocName (size, loadname);
 
 	mod->flags = LittleLong (pinmodel->flags);
-	if (!q_strcasecmp (mod->name, "models/ball.mdl"))
+	if (mod->flags & EF_MAGICMISSILE)
 		mod->flags |= EF_SPECIAL_TRANS;
 	Mod_SetExtraFlags (mod);	/* Ironwail r_nolerp_list */
 
@@ -3395,7 +3395,7 @@ static void Mod_LoadAliasModel (qmodel_t *mod, void *buffer)
 	pheader = (aliashdr_t *) Hunk_AllocName (size, loadname);
 
 	mod->flags = LittleLong (pinmodel->flags);
-	if (!q_strcasecmp (mod->name, "models/ball.mdl"))
+	if (mod->flags & EF_MAGICMISSILE)
 		mod->flags |= EF_SPECIAL_TRANS;
 	Mod_SetExtraFlags (mod);	/* Ironwail r_nolerp_list */
 

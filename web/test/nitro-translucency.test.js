@@ -41,17 +41,18 @@ test('Nitro preserves authored DRF translucency independently of liquid alpha', 
   );
 });
 
-test('the magic missile restores its packed colour and alpha semantics', () => {
+test('magic missile models restore their packed colour and alpha semantics', () => {
   for (const [name, loader] of [
     ['software', softwareModel],
     ['WebGlide', webglModel],
     ['Nitro', nitroModel],
   ]) {
     assert.equal(
-      (loader.match(/q_strcasecmp \(mod->name, "models\/ball\.mdl"\)[\s\S]{0,80}EF_SPECIAL_TRANS/g) ?? []).length,
+      (loader.match(/mod->flags & EF_MAGICMISSILE[\s\S]{0,80}EF_SPECIAL_TRANS/g) ?? []).length,
       2,
-      `${name} marks both alias formats as special translucent`,
+      `${name} marks both magic-missile alias formats as special translucent`,
     );
+    assert.doesNotMatch(loader, /q_strcasecmp \(mod->name, "models\/ball\.mdl"\)/);
   }
   assert.match(header, /#define NITROTEX_SPECIAL_TRANS\s+64u/);
   assert.match(entities, /model->flags & EF_SPECIAL_TRANS[\s\S]{0,80}NITROTEX_SPECIAL_TRANS/);
