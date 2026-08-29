@@ -73,6 +73,8 @@ extern cvar_t	r_nitro_liquidrefract;	/* retained-frame refraction strength */
 extern cvar_t	r_nitro_liquidglow;	/* palette-domain lava/portal luminosity */
 extern cvar_t	r_nitro_spelleffects;	/* spell-family particle silhouettes */
 extern cvar_t	r_nitro_glowhaze;	/* palette-domain luminous haze */
+extern cvar_t	r_nitro_projectileribbons; /* velocity-shaped missile silhouettes */
+extern cvar_t	r_nitro_shadowmotion;	/* restrained near-black scan-out motion */
 extern cvar_t	r_nitro_lightvol;	/* shared coarse world/entity irradiance */
 extern cvar_t	r_nitro_lightvol_cell;	/* map-space cell size */
 extern cvar_t	r_nitro_lightvol_budget; /* cells resolved per frame */
@@ -218,6 +220,7 @@ typedef struct
 #define NITROMODEL_VIEWMODEL	4u	/* compressed depth range */
 #define NITROMODEL_GLOW		8u	/* authored additive billboard */
 #define NITROMODEL_SHADOW	16u	/* cheap projected alias shadow */
+#define NITROMODEL_RIBBON	32u	/* velocity-aligned projectile wake */
 
 /* DRF_TRANSLUCENT selects the software renderer's tinttab2.lmp half blend.
  * It is an authored entity property, not a liquid-alpha control. */
@@ -286,9 +289,10 @@ typedef struct
 	float	liquid_refract;
 	float	liquid_glow;
 	float	glow_haze;
+	float	shadow_motion;
 } wgpuscene_t;
-_Static_assert (sizeof(wgpuscene_t) == 56 * sizeof(float),
-		"wgpuscene_t must remain a packed 56-word JavaScript contract");
+_Static_assert (sizeof(wgpuscene_t) == 57 * sizeof(float),
+		"wgpuscene_t must remain a packed 57-word JavaScript contract");
 _Static_assert (offsetof(wgpuscene_t, liquid_motion) == 51 * sizeof(float),
 		"wgpuscene_t liquid controls must match JavaScript offsets");
 

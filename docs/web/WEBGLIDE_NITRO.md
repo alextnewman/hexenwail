@@ -337,7 +337,7 @@ one of these operations.
 | Cvar | Default | Meaning |
 | --- | --- | --- |
 | `r_nitro_fogbands` | `8` | Number of authored-fog depth steps; values below 2 restore smooth fog. |
-| `r_nitro_haze` | `0` | Strength of localized palette haze; disabled pending target-device aesthetic validation. |
+| `r_nitro_haze` | `0.18` | Strength of broad, distance-biased haze banks. Banks favor dark surfaces and span rooms rather than resolving into tiled pockets; `0` disables them. |
 | `r_nitro_paletteshifts` | `1` | Palette-snap contents, damage, powerup and lightning/white-flash shifts; `0` restores continuous RGB scan-out tinting. |
 
 Liquids carry a two-bit material identity alongside the existing turbulence
@@ -365,8 +365,12 @@ stipple or glow off restores the corresponding compatibility treatment.
 | `r_nitro_liquidrefract` | `0.12` | Previous-frame refraction strength, clamped to 0.25; `0` disables it. |
 | `r_nitro_liquidglow` | `1` | Palette-domain lava and portal luminosity; `0` restores ordinary lightmap shading. |
 | `r_nitro_glowhaze` | `0.35` | Restrained palette-domain diffusion around bright chromatic liquids, glows and magic; `0` disables it. |
+| `r_nitro_projectileribbons` | `1` | Short velocity-aligned, family-shaped wakes behind glowing missiles; `0` retains authored cores, lights and particle trails alone. |
+| `r_nitro_shadowmotion` | `0.12` | Restrained history-reactive movement in near-black ordered shading; `0` disables it. |
 
-Particles retain their authored palette indices and remain one GPU-pulled instance batch. Nitro classifies existing particle types into fire, ice, poison and necromancy families: fire breathes as a soft ember, ice becomes a narrow sprite ribbon, poison uses a moving stipple and necromancy alternates a hard core with a pulsing ring. `r_nitro_spelleffects 0` restores the original square particles without changing their simulation, count or colours.
+Particles retain their authored palette indices and remain one GPU-pulled instance batch. Nitro classifies existing particle types into fire, ice, poison and necromancy families: fire breathes as a soft ember, ice becomes a narrow sprite ribbon, poison uses a moving stipple and necromancy alternates a hard core with a pulsing ring. Glowing projectiles additionally retain their authored sprite or model as a bright core while a short velocity-aligned wake supplies direction: ember modulation for fire, a narrow crystalline center for ice, moving stipple for poison and a broken pulse for necromancy. The wake uses the model-authored glow colour, cuts partly through local fog, and feeds the existing colour-selective history and glow-haze resolve. Nitro emits the formerly sparse magic-missile particle trail every update so the wake and simulated particles remain continuous. `r_nitro_spelleffects 0` restores the original square particles without changing their simulation, count or colours; `r_nitro_projectileribbons 0` independently removes the geometric wake.
+
+The Display menu's default **Moody** preset is the cohesive shipping profile for these domains. It selects the restrained haze, scan-out, liquid, glow and projectile values above as one authored look; changing any constituent control reports the display preset as **User**, so the individual cvars remain diagnostic controls rather than competing defaults.
 
 ### Where it stops
 

@@ -2319,7 +2319,8 @@ static void M_Menu_Display_f (void)
 }
 
 /* Detect the active display preset by matching key cvars.
- * Returns 0=User, 1=Crunchy, 2=Retro, 3=Faithful, 4=Clean, 5=Modern, 6=Ultra. */
+ * Returns 0=User, 1=Crunchy, 2=Retro, 3=Faithful, 4=Clean, 5=Modern,
+ * 6=Ultra, 7=Moody (Nitro only). */
 static int M_Display_DetectPreset (void)
 {
 	int se = (int)r_softemu.value;
@@ -2328,6 +2329,23 @@ static int M_Display_DetectPreset (void)
 	float mb = Cvar_VariableValue("r_motionblur");
 	int lmb = r_lightmap_bicubic.integer;
 
+#if defined(WEBGPUQUAKE)
+	if (fabsf(Cvar_VariableValue("r_nitro_haze") - 0.18f) < 0.001f &&
+	    Cvar_VariableValue("r_nitro_fogbands") == 8 &&
+	    fabsf(Cvar_VariableValue("r_nitro_persistence") - 0.06f) < 0.001f &&
+	    fabsf(Cvar_VariableValue("r_nitro_glowhaze") - 0.35f) < 0.001f &&
+	    fabsf(Cvar_VariableValue("r_nitro_shadowmotion") - 0.12f) < 0.001f &&
+	    Cvar_VariableValue("r_nitro_projectileribbons") != 0 &&
+	    Cvar_VariableValue("r_nitro_spelleffects") != 0 &&
+	    Cvar_VariableValue("r_nitro_dither") != 0 &&
+	    Cvar_VariableValue("r_nitro_resolve") != 0 &&
+	    Cvar_VariableValue("r_nitro_paletteshifts") != 0 &&
+	    Cvar_VariableValue("r_nitro_liquidmotion") != 0 &&
+	    Cvar_VariableValue("r_nitro_liquidstipple") != 0 &&
+	    fabsf(Cvar_VariableValue("r_nitro_liquidrefract") - 0.12f) < 0.001f &&
+	    Cvar_VariableValue("r_nitro_liquidglow") != 0)
+		return 7;	/* Moody */
+#endif
 	if (sc <= 0.25f && se == 1 && !lmb)
 		return 1;	/* Crunchy */
 	if (sc <= 0.5f && se == 2 && !lmb)
@@ -2354,18 +2372,30 @@ static void M_Display_AdjustSliders (int dir)
 	case DISP_PRESET:
 	{
 		/* Cycle through presets (skip "User" — that's auto-detected).
-		 * 1=Crunchy, 2=Retro, 3=Faithful, 4=Clean, 5=Modern, 6=Ultra.
+		 * 1=Crunchy, 2=Retro, 3=Faithful, 4=Clean, 5=Modern, 6=Ultra,
+		 * 7=Moody under Nitro.
 		 * Snap to the actual cvar state before stepping so the cycle
 		 * starts from where we really are, not a stale static.  When
 		 * detection returns 0 (User) keep the last known preset. */
 
-		static int preset = 5;
+		static int preset =
+#if defined(WEBGPUQUAKE)
+			7;
+#else
+			5;
+#endif
+		int maxpreset =
+#if defined(WEBGPUQUAKE)
+			7;
+#else
+			6;
+#endif
 		int detected = M_Display_DetectPreset();
 		if (detected != 0)
 			preset = detected;
 		preset += dir;
-		if (preset < 1) preset = 6;
-		if (preset > 6) preset = 1;
+		if (preset < 1) preset = maxpreset;
+		if (preset > maxpreset) preset = 1;
 
 #define PRESET_COMMON \
 	Cvar_SetValue (MENU_FLASHBLEND_NAME, 0); \
@@ -2494,6 +2524,30 @@ static void M_Display_AdjustSliders (int dir)
 			Cvar_SetValue (MENU_TORCH_DLIGHT_NAME, 1);
 			PRESET_COMMON
 		}
+#if defined(WEBGPUQUAKE)
+		else if (preset == 7)	/* Moody — Nitro's cohesive shipping look */
+		{
+			Cvar_SetValue ("r_nitro_haze", 0.18f);
+			Cvar_SetValue ("r_nitro_fogbands", 8);
+			Cvar_SetValue ("r_nitro_persistence", 0.06f);
+			Cvar_SetValue ("r_nitro_glowhaze", 0.35f);
+			Cvar_SetValue ("r_nitro_projectileribbons", 1);
+			Cvar_SetValue ("r_nitro_spelleffects", 1);
+			Cvar_SetValue ("r_nitro_shadowmotion", 0.12f);
+			Cvar_SetValue ("r_nitro_dither", 1);
+			Cvar_SetValue ("r_nitro_resolve", 1);
+			Cvar_SetValue ("r_nitro_paletteshifts", 1);
+			Cvar_SetValue ("r_nitro_liquidmotion", 1);
+			Cvar_SetValue ("r_nitro_liquidstipple", 1);
+			Cvar_SetValue ("r_nitro_liquidrefract", 0.12f);
+			Cvar_SetValue ("r_nitro_liquidglow", 1);
+			Cvar_SetValue (MENU_GLOWS_NAME, 1);
+			Cvar_SetValue (MENU_MISSILE_GLOWS_NAME, 1);
+			Cvar_SetValue (MENU_OTHER_GLOWS_NAME, 1);
+			Cvar_SetValue (MENU_GLOW_INTENSITY_NAME, 1);
+			PRESET_COMMON
+		}
+#endif
 #undef PRESET_COMMON
 		Con_Printf ("Preset applied. Reload map for full effect.\n");
 		break;
@@ -2589,7 +2643,8 @@ static void M_Display_Draw (void)
 	if (!M_Display_IsSkip(DISP_PRESET))
 	{
 		static const char *preset_names[] = {
-			"User", "Crunchy", "Retro", "Faithful", "Clean", "Modern", "Ultra"
+			"User", "Crunchy", "Retro", "Faithful", "Clean", "Modern", "Ultra",
+			"Moody"
 		};
 		M_Print (76, 92 + 8*DISP_PRESET, disp_labels[DISP_PRESET]);
 		M_PrintWhite (220, 92 + 8*DISP_PRESET, preset_names[M_Display_DetectPreset()]);
