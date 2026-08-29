@@ -3,6 +3,7 @@ const LOOK_UNITS_PER_DEGREE = 1 / 0.022;
 
 export const DEFAULT_GYRO_AIM_OPTIONS = Object.freeze({
   sensitivity: 1,
+  invertY: false,
   deadZoneDegrees: 0.75,
   maxDeltaSeconds: 0.05,
 });
@@ -57,6 +58,10 @@ export class GyroAim {
     this.options.sensitivity = Number.isFinite(parsed) && parsed > 0
       ? parsed
       : DEFAULT_GYRO_AIM_OPTIONS.sensitivity;
+  }
+
+  setInvertY(value) {
+    this.options.invertY = Boolean(value);
   }
 
   async requestPermission() {
@@ -123,7 +128,7 @@ export class GyroAim {
     const pitch = applyDeadZone(pitchDegreesPerSecond, deadZone);
     if (!yaw && !pitch) return;
     const scale = LOOK_UNITS_PER_DEGREE * this.options.sensitivity * deltaSeconds;
-    this.bridge.look(yaw * scale, pitch * scale);
+    this.bridge.look(yaw * scale, pitch * scale * (this.options.invertY ? -1 : 1));
   }
 
   handleDeviceMotion(event) {

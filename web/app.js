@@ -58,6 +58,7 @@ const state = {
     lookSensitivity: 1,
     gyroAim: false,
     gyroSensitivity: 1,
+    gyroInvertY: false,
     perfCapture: false,
     phoneHintSeen: false,
     /* Which WebAssembly bundle to load at launcher startup:
@@ -705,6 +706,7 @@ function loadPreferences() {
     state.preferences.gyroAim = Boolean(saved.gyroAim);
     const gyroSensitivity = Number(saved.gyroSensitivity);
     if (Number.isFinite(gyroSensitivity) && gyroSensitivity >= 0.25 && gyroSensitivity <= 2) state.preferences.gyroSensitivity = gyroSensitivity;
+    state.preferences.gyroInvertY = Boolean(saved.gyroInvertY);
     state.preferences.perfCapture = typeof saved.perfCapture === 'boolean'
       ? saved.perfCapture
       : Number(saved.perfOverlay) > 0;
@@ -750,6 +752,7 @@ function applyPreferences() {
   if (ui.lookSensitivitySetting) ui.lookSensitivitySetting.value = String(state.preferences.lookSensitivity);
   if (ui.gyroAimSetting) ui.gyroAimSetting.value = state.preferences.gyroAim ? 'on' : 'off';
   if (ui.gyroSensitivitySetting) ui.gyroSensitivitySetting.value = String(state.preferences.gyroSensitivity);
+  if (ui.gyroInvertYSetting) ui.gyroInvertYSetting.checked = state.preferences.gyroInvertY;
   if (ui.perfSetting) ui.perfSetting.value = state.preferences.perfCapture ? '1' : '0';
   if (ui.rendererSetting) ui.rendererSetting.value = state.preferences.renderer;
   if (ui.phoneHint && state.preferences.phoneHintSeen) {
@@ -760,6 +763,7 @@ function applyPreferences() {
   }
   state.phoneControls?.setLookSensitivity(state.preferences.lookSensitivity);
   state.gyroAim?.setSensitivity(state.preferences.gyroSensitivity);
+  state.gyroAim?.setInvertY(state.preferences.gyroInvertY);
   state.gyroAim?.setEnabled(state.preferences.gyroAim);
 }
 
@@ -789,6 +793,11 @@ function engineKey(key, down) {
 function engineLook(dx, dy) {
   if (!state.runtimeReady || state.runtimeExited) return;
   callEngine('Web_TouchLook', null, [['number', dx], ['number', dy]]);
+}
+
+function engineGyroLook(dx, dy) {
+  if (!state.runtimeReady || state.runtimeExited) return;
+  callEngine('Web_GyroLook', null, [['number', dx], ['number', dy]]);
 }
 
 function releasePhoneInputs() {
@@ -1416,6 +1425,7 @@ function bindUi() {
     lookSensitivitySetting: document.getElementById('look-sensitivity-setting'),
     gyroAimSetting: document.getElementById('gyro-aim-setting'),
     gyroSensitivitySetting: document.getElementById('gyro-sensitivity-setting'),
+    gyroInvertYSetting: document.getElementById('gyro-invert-y-setting'),
     gyroMessage: document.getElementById('gyro-message'),
     perfSetting: document.getElementById('perf-setting'),
     perfMessage: document.getElementById('perf-message'),
@@ -1441,7 +1451,7 @@ function bindUi() {
   }, { lookSensitivity: state.preferences.lookSensitivity });
   state.phoneControls.attach();
   state.gyroAim = new GyroAim({
-    look: engineLook,
+    look: engineGyroLook,
     deviceActive: () => gyroGameplayActive() && isTouchControlsVisible(),
     gamepadActive: () => gyroGameplayActive() && state.gamepadConnected,
   }, { sensitivity: state.preferences.gyroSensitivity });
@@ -1535,6 +1545,11 @@ function bindUi() {
   });
   ui.gyroSensitivitySetting?.addEventListener('input', () => {
     state.preferences.gyroSensitivity = Number(ui.gyroSensitivitySetting.value);
+    savePreferences();
+    applyPreferences();
+  });
+  ui.gyroInvertYSetting?.addEventListener('change', () => {
+    state.preferences.gyroInvertY = ui.gyroInvertYSetting.checked;
     savePreferences();
     applyPreferences();
   });

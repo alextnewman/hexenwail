@@ -89,3 +89,19 @@ test('inactive input sources do not move the view', () => {
 
   assert.deepEqual(looks, []);
 });
+
+test('gyro Y inversion is independent and leaves yaw unchanged', () => {
+  const looks = [];
+  const env = environment();
+  const gyro = new GyroAim({ look: (...values) => looks.push(values) },
+    { deadZoneDegrees: 0, invertY: true }, env);
+  gyro.setEnabled(true);
+  env.listeners.get('devicemotion')({
+    rotationRate: { beta: 10, gamma: 20 },
+    interval: 20,
+    timeStamp: 100,
+  });
+
+  assert.ok(looks[0][0] > 0);
+  assert.ok(looks[0][1] < 0);
+});
