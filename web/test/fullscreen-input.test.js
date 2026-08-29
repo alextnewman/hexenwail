@@ -173,7 +173,8 @@ test('Nitro and software modal confirmations do not poll browser input synchrono
     'all web renderer configurations compile the shared screen implementation');
   const modal = functionBody(screen, 'int SCR_ModalMessage (const char *text)');
   assert.match(modal,
-    /#if defined\(WEBQUAKE\)[\s\S]*?window\.confirm\(UTF8ToString\(\$0\)\)[\s\S]*?#else/);
+    /#if defined\(WEBQUAKE\)[\s\S]*?window\.confirm\(UTF8ToString\(\$0\)\)[\s\S]*?#else/,
+    'web builds must use the browser confirmation API');
   assert.match(modal, /#else[\s\S]*Sys_SendKeyEvents \(\)/,
     'the synchronous polling loop is restricted to native builds');
 });
