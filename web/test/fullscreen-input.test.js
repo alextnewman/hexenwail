@@ -11,6 +11,7 @@ const inputBackend = readFileSync(join(repoRoot, 'engine/h2shared/in_web.c'), 'u
 const keys = readFileSync(join(repoRoot, 'engine/hexen2/keys.c'), 'utf8');
 const menu = readFileSync(join(repoRoot, 'engine/hexen2/menu.c'), 'utf8');
 const screen = readFileSync(join(repoRoot, 'engine/h2shared/screen.c'), 'utf8');
+const cmake = readFileSync(join(repoRoot, 'engine/CMakeLists.txt'), 'utf8');
 
 function functionBody(source, signature) {
   const start = source.indexOf(signature);
@@ -167,7 +168,9 @@ test('touch controls switch safely between gameplay and menu layouts', () => {
     'menu-mode callbacks must not re-enter WebAssembly from IN_Commands');
 });
 
-test('modal confirmations do not poll browser input synchronously', () => {
+test('Nitro and software modal confirmations do not poll browser input synchronously', () => {
+  assert.match(cmake, /set\(RENDERER_SOURCES[\s\S]*\$\{COMMONDIR\}\/screen\.c[\s\S]*\)/,
+    'all web renderer configurations compile the shared screen implementation');
   const modal = functionBody(screen, 'int SCR_ModalMessage (const char *text)');
   assert.match(modal,
     /#if defined\(WEBQUAKE\)[\s\S]*?window\.confirm\(UTF8ToString\(\$0\)\)[\s\S]*?#else/);
