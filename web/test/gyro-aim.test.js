@@ -102,6 +102,6 @@ test('gyro Y inversion is independent and leaves yaw unchanged', () => {
     timeStamp: 100,
   });
 
-  assert.ok(looks[0][0] > 0);
-  assert.ok(looks[0][1] < 0);
+  assert.ok(Math.abs(looks[0][0] - (20 * 0.02 / 0.022)) < 1e-9);
+  assert.ok(Math.abs(looks[0][1] - (-10 * 0.02 / 0.022)) < 1e-9);
 });

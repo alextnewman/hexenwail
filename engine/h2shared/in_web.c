@@ -793,8 +793,8 @@ void IN_Move (usercmd_t *cmd)
 {
 	double dx = look_x * sensitivity.value;
 	double dy = look_y * sensitivity.value;
-	double gyro_dx = gyro_look_x * sensitivity.value;
-	double gyro_dy = gyro_look_y * sensitivity.value;
+	double gyro_dx = gyro_look_x;
+	double gyro_dy = gyro_look_y;
 	look_x = look_y = 0;
 	gyro_look_x = gyro_look_y = 0;
 	if (cl.v.cameramode)
