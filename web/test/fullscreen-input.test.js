@@ -12,6 +12,21 @@ const keys = readFileSync(join(repoRoot, 'engine/hexen2/keys.c'), 'utf8');
 const menu = readFileSync(join(repoRoot, 'engine/hexen2/menu.c'), 'utf8');
 const screen = readFileSync(join(repoRoot, 'engine/h2shared/screen.c'), 'utf8');
 
+function functionBody(source, signature) {
+  const start = source.indexOf(signature);
+  assert.ok(start >= 0, `${signature} is present`);
+  const open = source.indexOf('{', start + signature.length);
+  assert.ok(open >= 0, `${signature} has a body`);
+
+  let depth = 1;
+  for (let i = open + 1; i < source.length; i += 1) {
+    if (source[i] === '{') depth += 1;
+    if (source[i] === '}') depth -= 1;
+    if (depth === 0) return source.slice(open + 1, i);
+  }
+  assert.fail(`${signature} has a complete body`);
+}
+
 test('immersive layout is driven by its own attribute, not by phone mode', () => {
   assert.match(html, /body\[data-engine-state="running"\]\[data-immersive="true"\] \.topbar/);
   assert.match(html, /body\[data-engine-state="running"\]\[data-immersive="true"\] \.viewport/);
@@ -153,8 +168,7 @@ test('touch controls switch safely between gameplay and menu layouts', () => {
 });
 
 test('modal confirmations do not poll browser input synchronously', () => {
-  const modal = screen.match(/int SCR_ModalMessage \(const char \*text\)([\s\S]*?)\/\/={20,}/)?.[1];
-  assert.ok(modal, 'SCR_ModalMessage is defined');
+  const modal = functionBody(screen, 'int SCR_ModalMessage (const char *text)');
   assert.match(modal, /#if defined\(WEBQUAKE\)[\s\S]*window\.confirm\(UTF8ToString\(\$0\)\)/);
   assert.match(modal, /#else[\s\S]*Sys_SendKeyEvents \(\)/,
     'the synchronous polling loop is restricted to native builds');
