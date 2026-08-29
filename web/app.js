@@ -4,6 +4,7 @@ import {
   createSaveBundle, getPakCompatibilityWarnings, isSavePath, planSaveImport, sha256, validateSaveBundle,
 } from './lib/save-bundle.js';
 import { PhoneControls, PHONE_CONTROL_KEYCODES } from './lib/phone-controls.js';
+import { GyroAim } from './lib/gyro-aim.js';
 import { probeWebGPU } from './lib/webgpu-probe.js';
 
 const BASE_DIR = '/persistent';
@@ -50,10 +51,14 @@ const state = {
   serviceWorkerRegistration: null,
   runtimeLogEntries: [],
   phoneControls: null,
+  gyroAim: null,
   preferences: {
     touchControls: 'auto',
     handedness: 'right',
     lookSensitivity: 1,
+    gyroAim: false,
+    gyroSensitivity: 1,
+    gyroInvertY: false,
     perfCapture: false,
     phoneHintSeen: false,
     /* Which WebAssembly bundle to load at launcher startup:
@@ -698,6 +703,10 @@ function loadPreferences() {
     if (['right', 'left'].includes(saved.handedness)) state.preferences.handedness = saved.handedness;
     const sensitivity = Number(saved.lookSensitivity);
     if (Number.isFinite(sensitivity) && sensitivity >= 0.5 && sensitivity <= 2) state.preferences.lookSensitivity = sensitivity;
+    state.preferences.gyroAim = Boolean(saved.gyroAim);
+    const gyroSensitivity = Number(saved.gyroSensitivity);
+    if (Number.isFinite(gyroSensitivity) && gyroSensitivity >= 0.25 && gyroSensitivity <= 2) state.preferences.gyroSensitivity = gyroSensitivity;
+    state.preferences.gyroInvertY = Boolean(saved.gyroInvertY);
     state.preferences.perfCapture = typeof saved.perfCapture === 'boolean'
       ? saved.perfCapture
       : Number(saved.perfOverlay) > 0;
@@ -741,6 +750,9 @@ function applyPreferences() {
   if (ui.touchControlsSetting) ui.touchControlsSetting.value = state.preferences.touchControls;
   if (ui.handednessSetting) ui.handednessSetting.value = state.preferences.handedness;
   if (ui.lookSensitivitySetting) ui.lookSensitivitySetting.value = String(state.preferences.lookSensitivity);
+  if (ui.gyroAimSetting) ui.gyroAimSetting.value = state.preferences.gyroAim ? 'on' : 'off';
+  if (ui.gyroSensitivitySetting) ui.gyroSensitivitySetting.value = String(state.preferences.gyroSensitivity);
+  if (ui.gyroInvertYSetting) ui.gyroInvertYSetting.checked = state.preferences.gyroInvertY;
   if (ui.perfSetting) ui.perfSetting.value = state.preferences.perfCapture ? '1' : '0';
   if (ui.rendererSetting) ui.rendererSetting.value = state.preferences.renderer;
   if (ui.phoneHint && state.preferences.phoneHintSeen) {
@@ -750,6 +762,9 @@ function applyPreferences() {
     callEngine('Web_TouchControlsVisible', null, [['number', isTouchControlsVisible() ? 1 : 0]]);
   }
   state.phoneControls?.setLookSensitivity(state.preferences.lookSensitivity);
+  state.gyroAim?.setSensitivity(state.preferences.gyroSensitivity);
+  state.gyroAim?.setInvertY(state.preferences.gyroInvertY);
+  state.gyroAim?.setEnabled(state.preferences.gyroAim);
 }
 
 function callEngine(name, returnType, args = []) {
@@ -780,8 +795,37 @@ function engineLook(dx, dy) {
   callEngine('Web_TouchLook', null, [['number', dx], ['number', dy]]);
 }
 
+function engineGyroLook(dx, dy) {
+  if (!state.runtimeReady || state.runtimeExited) return;
+  callEngine('Web_GyroLook', null, [['number', dx], ['number', dy]]);
+}
+
 function releasePhoneInputs() {
   state.phoneControls?.releaseAll();
+}
+
+function gyroGameplayActive() {
+  return state.engineStarted
+    && !state.runtimeExited
+    && document.visibilityState !== 'hidden'
+    && document.body.dataset.touchMenu !== 'true';
+}
+
+function setGyroMessage(message) {
+  if (ui.gyroMessage) ui.gyroMessage.textContent = message;
+}
+
+function requestGyroPermission() {
+  if (!state.preferences.gyroAim) return;
+  state.gyroAim?.requestPermission().then((permission) => {
+    if (permission === 'denied') {
+      setGyroMessage('Device motion permission was denied. A controller gyro can still work if the browser exposes it.');
+    } else if (permission === 'unavailable') {
+      setGyroMessage('This browser does not expose device motion. A controller gyro can still work if exposed through the Gamepad API.');
+    } else if (permission === 'granted') {
+      setGyroMessage('Gyro aim is ready for touch play and browser-exposed controller motion.');
+    }
+  });
 }
 
 function suppressBrowserZoom(event) {
@@ -936,6 +980,7 @@ async function startEngineFromUserAction() {
   state.preferences.phoneHintSeen = true;
   savePreferences();
   applyPreferences();
+  requestGyroPermission();
   /* Started from a click, so this is a valid user gesture: take fullscreen
    * now, while the activation is still fresh, and let the layout settle
    * before the first frame is drawn. */
@@ -1378,6 +1423,10 @@ function bindUi() {
     touchControlsSetting: document.getElementById('touch-controls-setting'),
     handednessSetting: document.getElementById('handedness-setting'),
     lookSensitivitySetting: document.getElementById('look-sensitivity-setting'),
+    gyroAimSetting: document.getElementById('gyro-aim-setting'),
+    gyroSensitivitySetting: document.getElementById('gyro-sensitivity-setting'),
+    gyroInvertYSetting: document.getElementById('gyro-invert-y-setting'),
+    gyroMessage: document.getElementById('gyro-message'),
     perfSetting: document.getElementById('perf-setting'),
     perfMessage: document.getElementById('perf-message'),
     perfOutput: document.getElementById('perf-output'),
@@ -1401,6 +1450,11 @@ function bindUi() {
     look: engineLook,
   }, { lookSensitivity: state.preferences.lookSensitivity });
   state.phoneControls.attach();
+  state.gyroAim = new GyroAim({
+    look: engineGyroLook,
+    deviceActive: () => gyroGameplayActive() && isTouchControlsVisible(),
+    gamepadActive: () => gyroGameplayActive() && state.gamepadConnected,
+  }, { sensitivity: state.preferences.gyroSensitivity });
   addEventListener('hexenwailtouchmode', (event) => {
     const menu = Boolean(event.detail?.menu);
     if ((document.body.dataset.touchMenu === 'true') !== menu) {
@@ -1476,6 +1530,26 @@ function bindUi() {
   });
   ui.lookSensitivitySetting?.addEventListener('input', () => {
     state.preferences.lookSensitivity = Number(ui.lookSensitivitySetting.value);
+    savePreferences();
+    applyPreferences();
+  });
+  ui.gyroAimSetting?.addEventListener('change', () => {
+    state.preferences.gyroAim = ui.gyroAimSetting.value === 'on';
+    savePreferences();
+    applyPreferences();
+    if (state.preferences.gyroAim) {
+      requestGyroPermission();
+    } else {
+      setGyroMessage('Gyro aim is off.');
+    }
+  });
+  ui.gyroSensitivitySetting?.addEventListener('input', () => {
+    state.preferences.gyroSensitivity = Number(ui.gyroSensitivitySetting.value);
+    savePreferences();
+    applyPreferences();
+  });
+  ui.gyroInvertYSetting?.addEventListener('change', () => {
+    state.preferences.gyroInvertY = ui.gyroInvertYSetting.checked;
     savePreferences();
     applyPreferences();
   });

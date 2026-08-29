@@ -34,7 +34,7 @@ int menu_mouse_x, menu_mouse_y;
  * keys.c can share its gamepad binding logic. */
 qboolean joy_altmodifier_pressed = false;
 
-static double look_x, look_y;
+static double look_x, look_y, gyro_look_x, gyro_look_y;
 static qboolean mouse_active;
 static qboolean touch_controls_override;
 static int cursor_hidden = -1;	/* tri-state: -1 = unknown, 0 = shown, 1 = hidden */
@@ -201,6 +201,12 @@ EMSCRIPTEN_KEEPALIVE void Web_TouchLook (double dx, double dy)
 {
 	look_x += dx;
 	look_y += dy;
+}
+
+EMSCRIPTEN_KEEPALIVE void Web_GyroLook (double dx, double dy)
+{
+	gyro_look_x += dx;
+	gyro_look_y += dy;
 }
 
 EMSCRIPTEN_KEEPALIVE void Web_TouchControlsVisible (int visible)
@@ -773,7 +779,7 @@ void IN_SendKeyEvents (void) {}
  * forget would leave a key stuck down for any caller that does not. */
 void IN_ClearStates (void)
 {
-	look_x = look_y = 0;
+	look_x = look_y = gyro_look_x = gyro_look_y = 0;
 	memset(touch_key_down, 0, sizeof(touch_key_down));
 	Web_GPReleaseAll();
 }
@@ -787,7 +793,10 @@ void IN_Move (usercmd_t *cmd)
 {
 	double dx = look_x * sensitivity.value;
 	double dy = look_y * sensitivity.value;
+	double gyro_dx = gyro_look_x;
+	double gyro_dy = gyro_look_y;
 	look_x = look_y = 0;
+	gyro_look_x = gyro_look_y = 0;
 	if (cl.v.cameramode)
 		return;
 	if ((in_strafe.state & 1) || (lookstrafe.integer && (in_mlook.state & 1)))
@@ -802,6 +811,17 @@ void IN_Move (usercmd_t *cmd)
 	}
 	else
 		cmd->forwardmove -= m_forward.value * dy;
+
+	/* Gyro pitch owns its inversion independently. In particular, the
+	 * controller menu's joy_invert and the mouse's signed m_pitch must not
+	 * silently reverse a motion sensor. */
+	if (gyro_dx != 0 || gyro_dy != 0)
+	{
+		cl.viewangles[YAW] -= m_yaw.value * gyro_dx;
+		cl.viewangles[PITCH] += fabs(m_pitch.value) * gyro_dy;
+		cl.viewangles[PITCH] = q_max(-70, q_min(80, cl.viewangles[PITCH]));
+		V_StopPitchDrift();
+	}
 
 	Web_GPMove(cmd);
 }

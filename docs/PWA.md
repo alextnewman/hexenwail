@@ -272,6 +272,19 @@ device.
 Preferences are stored in local browser storage, separate from imported game
 assets and saves.
 
+Gyro aim is an opt-in launcher preference. During touch play it integrates the
+device's rotation rate into the same relative-look bridge as the right-side
+look region. iOS asks for motion access from the setting or launch gesture;
+denial leaves every other control unchanged. The separate gyro sensitivity
+and **Invert gyro Y** setting apply only to motion aim. Controller
+**Invert Pitch** continues to affect only its right stick, and mouse inversion
+likewise does not leak into gyro pitch.
+
+Compatible physical controller gyros are also sampled when the browser exposes
+an angular velocity through the gamepad object. The standard Gamepad API does
+not require motion sensors, and Safari may expose the controller buttons and
+sticks without its gyro, so this path is strictly capability-detected.
+
 The touch overlay uses action labels rather than controller-face letters, so
 every visible label describes what that control actually does:
 
