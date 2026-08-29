@@ -10,6 +10,23 @@ const shell = readFileSync(join(repoRoot, 'engine/web/shell.html'), 'utf8');
 const inputBackend = readFileSync(join(repoRoot, 'engine/h2shared/in_web.c'), 'utf8');
 const keys = readFileSync(join(repoRoot, 'engine/hexen2/keys.c'), 'utf8');
 const menu = readFileSync(join(repoRoot, 'engine/hexen2/menu.c'), 'utf8');
+const screen = readFileSync(join(repoRoot, 'engine/h2shared/screen.c'), 'utf8');
+const cmake = readFileSync(join(repoRoot, 'engine/CMakeLists.txt'), 'utf8');
+
+function functionBody(source, signature) {
+  const start = source.indexOf(signature);
+  assert.ok(start >= 0, `${signature} is present`);
+  const open = source.indexOf('{', start + signature.length);
+  assert.ok(open >= 0, `${signature} has a body`);
+
+  let depth = 1;
+  for (let i = open + 1; i < source.length; i += 1) {
+    if (source[i] === '{') depth += 1;
+    if (source[i] === '}') depth -= 1;
+    if (depth === 0) return source.slice(open + 1, i);
+  }
+  assert.fail(`${signature} body is unterminated`);
+}
 
 test('immersive layout is driven by its own attribute, not by phone mode', () => {
   assert.match(html, /body\[data-engine-state="running"\]\[data-immersive="true"\] \.topbar/);
@@ -149,4 +166,15 @@ test('touch controls switch safely between gameplay and menu layouts', () => {
   assert.match(inputBackend, /hexenwailtouchmode/);
   assert.match(inputBackend, /queueMicrotask/,
     'menu-mode callbacks must not re-enter WebAssembly from IN_Commands');
+});
+
+test('Nitro and software modal confirmations do not poll browser input synchronously', () => {
+  assert.match(cmake, /set\(RENDERER_SOURCES[\s\S]*\$\{COMMONDIR\}\/screen\.c[\s\S]*\)/,
+    'all web renderer configurations compile the shared screen implementation');
+  const modal = functionBody(screen, 'int SCR_ModalMessage (const char *text)');
+  assert.match(modal,
+    /#if defined\(WEBQUAKE\)[\s\S]*?window\.confirm\(UTF8ToString\(\$0\)\)[\s\S]*?#else/,
+    'web builds must use the browser confirmation API');
+  assert.match(modal, /#else[\s\S]*Sys_SendKeyEvents \(\)/,
+    'the synchronous polling loop is restricted to native builds');
 });
