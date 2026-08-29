@@ -50,7 +50,7 @@ WebGlide remains buildable.
 
 ### The visual north star
 
-Nitro is the apex 1990s renderer Raven could not have shipped: an impossibly dynamic, spectacular version of the crunchy source art that should feel like a pre-rendered cutscene of its era. It completes Raven's artistic vision without treating period hardware limits as sacred. Its vocabulary remains palette ramps, colormap rows, lightmaps, ordered dither, stipple, sprites and deliberately finite budgets, but modern GPU techniques are welcome when they make that authored world more coherent.
+Nitro is the apex 1990s renderer Raven could not have shipped: an impossibly dynamic, spectacular version of the crunchy source art that should feel like a pre-rendered cutscene of its era. It completes Raven's artistic vision without treating period hardware limits as sacred. The software renderer supplies art direction, not a capability ceiling: Nitro uses its greater precision and GPU effects to realize that style at higher fidelity. Its vocabulary remains palette ramps, colormap rows, lightmaps, ordered dither, stipple, sprites and deliberately finite budgets, but modern GPU techniques are welcome when they make that authored world more coherent.
 
 This is not hardware retro-ism and not a conventional modern remaster. Compute, light fields and temporal accumulation may be used where they preserve the assets' chunky lighting language and remain efficient on Apple and Snapdragon X-era GPUs. PBR is not the destination. The software renderer remains the art-direction anchor: enhancements preserve its silhouette, contrast, palette membership and readability while extending its world-level vision to actors, weapons and effects. Every renderer-independent signal supplied by game code, model data and level content is usable evidence of artist intent; information discovered in another renderer is retained when it can enrich this vocabulary without importing that renderer's architecture.
 
@@ -342,26 +342,29 @@ one of these operations.
 
 Liquids carry a two-bit material identity alongside the existing turbulence
 flag. Water keeps the familiar crossed sine motion, slime drifts slowly, lava
-churns and portals move quickly in opposing directions. Translucent coverage is
-a stable 4x4 ordered stipple rather than noisy alpha, and a restrained sample
-from the previous scene colour bends what appears behind the surface before the
-result is snapped back into the palette. This is retained-frame refraction, not
-a physically based material or a new render pass.
+churns and portals move quickly in opposing directions. Smooth alpha is the
+default translucent treatment; the stable 4x4 ordered stipple remains an
+opt-in diagnostic alternative. A restrained sample from the previous scene
+colour bends what appears behind the surface before the result is snapped back
+into the palette. This is retained-frame refraction, not a physically based
+material or a new render pass.
 
 The compatibility alpha cvars still win when explicitly set below opaque.
 Otherwise the Nitro treatment gives authored translucent water, slime and lava
 respective coverage targets of 0.82, 0.88 and 0.94; portals retain their
 authored 0.7 default. Opaque water-content `*rtex` surfaces remain opaque.
 Liquid identity comes from the BSP contents classification rather than the
-often-generic texture name. Lava and portals also cap their colormap darkness
-row with a slow world-space breathing rhythm to provide restrained
-self-luminosity; this remains palette-domain shading, not bloom or HDR. Turning
-stipple or glow off restores the corresponding compatibility treatment.
+often-generic texture name. Lava therefore has an authored material identity
+even when its texture name is generic. It caps its colormap darkness row, then
+lifts only the texture's existing warm chroma with a slow world-space breathing
+rhythm; portals retain the darkness cap alone. The result is brighter, redder
+palette-domain self-luminosity without repainting the authored texture, bloom or
+HDR. Turning glow off restores ordinary lightmap shading.
 
 | Cvar | Default | Meaning |
 | --- | --- | --- |
 | `r_nitro_liquidmotion` | `1` | Distinct per-material movement; `0` restores the common authored sine warp. |
-| `r_nitro_liquidstipple` | `1` | Ordered liquid coverage and Nitro material alpha; `0` restores ordinary alpha and compatibility opacity. |
+| `r_nitro_liquidstipple` | `0` | Blend between smooth alpha and ordered liquid coverage; `1` selects full 4x4 stipple. |
 | `r_nitro_liquidrefract` | `0.12` | Previous-frame refraction strength, clamped to 0.25; `0` disables it. |
 | `r_nitro_liquidglow` | `1` | Palette-domain lava and portal luminosity; `0` restores ordinary lightmap shading. |
 | `r_nitro_glowhaze` | `0.35` | Restrained palette-domain diffusion around bright chromatic liquids, glows and magic; `0` disables it. |

@@ -229,12 +229,14 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       }
     }
   }
+  var liquidPulse = 1.0;
   if (turbulent && frame.liquidGlow > 0.0 &&
       (material == 2u || material == 3u)) {
     let glowRow = select(8.0, 4.0, material == 3u);
     let glowRate = select(1.7, 2.6, material == 3u);
     let breath = 0.82 + 0.18 * sin(frame.time * glowRate +
         input.worldPosition.x * 0.011 + input.worldPosition.y * 0.013);
+    liquidPulse = breath;
     row = min(row, i32(round(mix(f32(row), glowRow,
         frame.liquidGlow * breath))));
   }
@@ -258,6 +260,15 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
                              historySize - vec2i(1));
     let history = textureLoad(historyTexture, historyTexel, 0).rgb;
     rgb = paletteQuantize(mix(rgb, history, frame.liquidRefract * finalScale));
+  }
+  if (turbulent && material == 2u && frame.liquidGlow > 0.0) {
+    /* Lava's BSP contents identify the material; the authored texel still
+     * supplies its colour.  Lift only its existing warm signal so dark orange
+     * folds become luminous soup without repainting the texture. */
+    let warmth = smoothstep(0.0, 0.22, rgb.r - rgb.b);
+    let lift = frame.liquidGlow * liquidPulse * warmth;
+    let hot = rgb * (1.0 + 0.32 * lift) + vec3f(0.07, 0.018, 0.0) * lift;
+    rgb = paletteQuantize(mix(rgb, hot, lift));
   }
   let fog = atmosphereFog(input.fogDistance, input.worldPosition,
       dot(rgb, vec3f(0.2126, 0.7152, 0.0722)));
