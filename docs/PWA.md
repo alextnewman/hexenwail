@@ -11,7 +11,7 @@ This repository now includes a GitHub-Pages-deployable, installable PWA shell fo
 
 ## Current architecture
 
-- **Engine build:** Emscripten + SDL3 + WebGL2 / ES 3.0
+- **Engine build:** Emscripten + WebGPU
 - **PWA shell:** `web/index.html`, `web/app.js`, `web/sw.js`, `web/manifest.webmanifest`
 - **Persistent asset storage:** OPFS first, IndexedDB fallback
 - **Service worker:** caches launcher/runtime assets only; never caches user-imported game data
@@ -45,8 +45,7 @@ source ./emsdk_env.sh
 
 cd /path/to/hexenwail
 ./scripts/wasm-build.sh nitro engine/build-nitro   # primary renderer
-./scripts/wasm-build.sh software                    # parked reference
-./scripts/wasm-build.sh webgl2 engine/build-webgl2  # retained GPU renderer
+./scripts/wasm-build.sh software                    # software + WebGPU presentation
 ```
 
 `scripts/wasm-build.sh` is the same script CI runs, so the two cannot drift.
@@ -202,19 +201,9 @@ launcher panel:
   fog, warped/translucent liquids, fullbrights, glows and projected shadows.
   Build option value `webgpu`, macro `WEBGPUQUAKE`, bundle
   `hexenwail-nitro.*`.
-- **Software (parked reference)** — the classic 8bpp software rasteriser
-  presented on an accelerated canvas. It remains available as the exact
-  authored-pixel reference but is no longer the primary path.
-- **WebGlide (experimental GPU)** — an abortive experiment at a GPU renderer
-  chasing the mid-90s 3Dfx look — filtered textures, coloured light,
-  translucent water, fog, optional CRT scan-out — with modern shaders
-  under it. It is kept building but is not actively pursued, and it is
-  **off by default**: it may render incorrectly, produce
-  visual glitches, or fail to start entirely. Use only if you are actively
-  trying it out. WebGlide is deliberately distinct from any previous
-  "maximum GL2" WebGL2 profile — the shared build option value stays
-  `webgl2`, but the shipped bundle basename (`hexenwail-webglide.*`) and
-  the user-facing renderer name are WebGlide.
+- **Software + WebGPU presentation** — the classic 8bpp software rasteriser
+  presented through WebGPU. It remains available as the exact authored-pixel
+  reference but is no longer the primary path.
 
 The engine bundle is chosen once per launcher load, so a change reloads
 the launcher automatically when no game is running; if the engine is
@@ -223,21 +212,17 @@ launcher load (exit to the launcher via ☰ → **Sync & exit to launcher**).
 The preference is stored in the same local browser storage as the touch
 controls settings, alongside your other launcher preferences.
 
-If a selected parked bundle is missing from the artifact, the launcher
-fails loudly on load, names the toggle, and explains how to switch back to
-the software renderer so the launcher never ends up dead. To ship the
-other bundles locally, build those configurations explicitly before
-assembling `dist/`:
+If the selected bundle is missing from the artifact, the launcher fails loudly
+on load. Build both configurations before assembling `dist/`:
 
 ```bash
 ./scripts/wasm-build.sh nitro engine/build-nitro   # primary renderer
-./scripts/wasm-build.sh software                    # parked reference
-./scripts/wasm-build.sh webgl2 engine/build-webgl2  # WebGlide bundle
+./scripts/wasm-build.sh software                    # software reference
 ./scripts/wasm-assemble-artifact.sh dist
 ```
 
-CI builds every configuration on every run, so a deployed Pages artifact
-always ships all the bundles regardless of the launcher's default.
+CI builds both configurations on every run, so a deployed Pages artifact
+always ships both bundles regardless of the launcher's default.
 
 ## Performance capture
 
@@ -535,7 +520,6 @@ Practical ways to confirm readiness:
 - **Escape key:** iPad keyboards have none, so the web port maps `` ` `` to Escape and moves the console to `Shift`+`` ` ``
 - **Restart after Quit:** after the engine's normal Quit, the page returns to the launcher but reloads before starting a new game because the same WebAssembly runtime is not assumed to be restartable
 - **Storage persistence:** `navigator.storage.persist()` is requested, but Safari can still evict data under storage pressure
-- **Renderer feature gap vs desktop:** WebGL2 / ES 3.0 has no SSBOs, so `r_alias_gpu` remains disabled in WASM builds
 - **Import size limits:** large ZIP archives can still hit memory/storage constraints on tablets
 - **Music codec set:** Ogg Vorbis, MP3, FLAC and WAV decode in the client; Opus (`opusfile`) and the tracker formats (`libxmp`) are absent because neither has an Emscripten port
 - **MIDI:** there is no MIDI synthesiser in the web build, so a PAK-only install has no music until external music files are imported

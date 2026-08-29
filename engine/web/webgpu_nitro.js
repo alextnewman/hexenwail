@@ -22,7 +22,7 @@
  *     a uniform arena addressed by dynamic offset.  A door costs an offset,
  *     not a buffer.
  *
- * Palette semantics are the software renderer's, not WebGlide's: the world
+ * Palette semantics are the software renderer's: the world
  * shader looks the texel index up in the authored colormap row that the
  * lightmap intensity selects, exactly as d_scan.c does, and only then
  * resolves the palette.  Models carry the colormap row d_polyse.c would

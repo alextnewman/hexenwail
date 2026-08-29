@@ -3,12 +3,12 @@
  *
  * hexenwail's shared client code (cl_main.c, cl_effect.c, cl_parse.c,
  * menu.c, pr_csqc.c) is written against a handful of renderer-policy
- * symbols that the WebGL2 renderer publishes from r_webgl2.c. Some of
- * those knobs -- dynamic-light policy in particular -- are meaningful in
+ * renderer-policy symbols. Some of those knobs -- dynamic-light policy in
+ * particular -- are meaningful in
  * the software rasteriser too; others describe GPU features that have no
  * software counterpart.
  *
- * This file is the software counterpart of the r_webgl2.c cvar block:
+ * This file supplies the software renderer's cvar block:
  *   - light-policy cvars are real and honoured by the client;
  *   - GPU-only cvars exist so shared code links, and the menu rows that
  *     drive them are hidden under the software renderer (menu.c).
@@ -101,8 +101,8 @@ void R_SoftWebInitCvars (void)
 
 	per-entity PimpModel overrides
 
-	model.h declares this table as renderer-owned; r_webgl2.c carries the
-	WebGL2 copy. Behaviour must match exactly, because pr_cmds.c /
+	model.h declares this table as renderer-owned. Behaviour must match the
+	active renderer's entity semantics because pr_cmds.c /
 	pr_edict.c drive it from QuakeC.
 
 =============================================================================
@@ -155,8 +155,8 @@ int R_GetPimpFlags (entity_t *e, float **gsettings_out)
 Fog_ParseServerMessage
 
 svc_fog is a renderer-owned message: cl_parse.c dispatches it
-unconditionally and each renderer supplies the handler (the WebGL2 build
-does so from r_webgl2.c). The software rasteriser has no fog, but the
+unconditionally and each renderer supplies the handler. The software
+rasteriser has no fog, but the
 payload -- [byte] density, [byte] red, [byte] green, [byte] blue,
 [short] fade time -- still has to be drained or the rest of the server
 message is parsed at the wrong offset.

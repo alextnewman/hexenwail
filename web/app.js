@@ -4,7 +4,6 @@ import {
   createSaveBundle, getPakCompatibilityWarnings, isSavePath, planSaveImport, sha256, validateSaveBundle,
 } from './lib/save-bundle.js';
 import { PhoneControls, PHONE_CONTROL_KEYCODES } from './lib/phone-controls.js';
-import { runWebGLDiagnostics } from './lib/webgl-diagnostics.js';
 import { probeWebGPU } from './lib/webgpu-probe.js';
 
 const BASE_DIR = '/persistent';
@@ -58,13 +57,10 @@ const state = {
     perfCapture: false,
     phoneHintSeen: false,
     /* Which WebAssembly bundle to load at launcher startup:
-     *   'software' -> ./hexenwail.js            (parked reference renderer)
-     *   'webglide' -> ./hexenwail-webglide.js   (experimental GPU renderer)
-     *   'webgpu'   -> ./hexenwail-webgpu.js     (software + WebGPU presenter)
-     *   'nitro'    -> ./hexenwail-nitro.js      (shipping WebGlideNitro default)
-     * 'webgpu' and 'nitro' share the launcher's WebGPU device handoff but
-     * are otherwise unrelated: the first scans out the software
-     * framebuffer, the second builds and draws its own scene geometry.
+     *   'software' -> ./hexenwail.js       (software + WebGPU presentation)
+     *   'nitro'    -> ./hexenwail-nitro.js (shipping WebGlideNitro default)
+     * Both bundles share the launcher's WebGPU device handoff but otherwise
+     * render independently.
      * The engine script is loaded once during init(), so a change here
      * takes effect on the next launcher load; savePreferences() is what
      * makes the choice survive that reload. */
@@ -195,7 +191,7 @@ function updateLaunchState() {
   if (ui.launchButton) {
     ui.launchButton.disabled = !state.rendererReady || !ready || (state.engineStarted && !state.runtimeExited);
     ui.launchButton.textContent = !state.rendererReady
-      ? 'WebGL2 unavailable'
+      ? 'WebGPU unavailable'
       : state.runtimeExited
       ? 'Restart game'
       : state.engineStarted
@@ -212,7 +208,7 @@ function updateLaunchState() {
   }
   if (ui.requirementsText) {
     ui.requirementsText.textContent = !state.rendererReady
-      ? 'WebGL2 renderer self-test failed. See the runtime log.'
+      ? 'WebGPU initialization failed. See the runtime log.'
       : ready
       ? 'Required base game assets detected.'
       : 'Required: data1/pak0.pak and data1/pak1.pak from a legal Hexen II installation.';
@@ -706,7 +702,7 @@ function loadPreferences() {
       ? saved.perfCapture
       : Number(saved.perfOverlay) > 0;
     state.preferences.phoneHintSeen = Boolean(saved.phoneHintSeen);
-    if (['software', 'webglide', 'webgpu', 'nitro'].includes(saved.renderer)) state.preferences.renderer = saved.renderer;
+    if (['software', 'nitro'].includes(saved.renderer)) state.preferences.renderer = saved.renderer;
   } catch (error) {
     console.warn('Could not load launcher preferences', error);
   }
@@ -1324,18 +1320,10 @@ async function ensureEngineScriptLoaded() {
     return;
   }
 
-  /* The WebGlide GPU bundle ships under a distinct basename so it can
-   * sit next to the software one in the same dist directory; the two
-   * Emscripten .js files locate their own .wasm sibling by basename, so
-   * this URL is what routes the whole runtime. Log the choice through the
-   * runtime log so a bug report shows which bundle was in use. */
-  const useWebGlide = state.preferences.renderer === 'webglide';
-  const useWebGPU = state.preferences.renderer === 'webgpu';
+  /* Each Emscripten .js file locates its own .wasm sibling by basename.
+   * Log the choice so a bug report shows which bundle was in use. */
   const useNitro = state.preferences.renderer === 'nitro';
-  const scriptUrl = useWebGlide
-    ? './hexenwail-webglide.js'
-    : useWebGPU ? './hexenwail-webgpu.js'
-      : useNitro ? './hexenwail-nitro.js' : './hexenwail.js';
+  const scriptUrl = useNitro ? './hexenwail-nitro.js' : './hexenwail.js';
   logToConsole('[launcher]', `Loading engine bundle: ${scriptUrl} (renderer=${state.preferences.renderer})`);
 
   await new Promise((resolve, reject) => {
@@ -1347,22 +1335,10 @@ async function ensureEngineScriptLoaded() {
       resolve();
     };
     script.onerror = () => {
-      /* Fail loudly and name the toggle. The WebGlide bundle is optional
-       * in the artifact (see scripts/wasm-assemble-artifact.sh), so a
-       * build without it must not leave the launcher with a dead engine
-       * script and no obvious way back. */
-      const detail = useWebGlide
-        ? `Failed to load ${scriptUrl}. The WebGlide GPU bundle is missing from this artifact.`
-          + ' Open the "Renderer" card, switch to "Software (parked reference)",'
-          + ' and the launcher will reload with the shipping renderer.'
-        : useWebGPU
-          ? `Failed to load ${scriptUrl}. The WebGPU presenter preview is missing from this artifact.`
-            + ' Open the "Renderer" card, switch to "Software (parked reference)",'
-            + ' and the launcher will reload with the shipping presenter.'
-        : useNitro
+      const detail = useNitro
           ? `Failed to load ${scriptUrl}. The WebGlideNitro bundle is missing from this artifact.`
-            + ' Open the "Renderer" card, switch to "Software (parked reference)",'
-            + ' and the launcher will reload with the shipping renderer.'
+            + ' Open the "Renderer" card, switch to "Software + WebGPU presentation",'
+            + ' and the launcher will reload with the software renderer.'
         : `Failed to load ${scriptUrl}. Build the WASM target before serving this directory.`;
       reject(new Error(detail));
     };
@@ -1512,19 +1488,14 @@ function bindUi() {
    * data-engine-state are the same signal handleEngineQuit() sets, so a
    * finished game (runtimeExited) counts as "not running" here. */
   ui.rendererSetting?.addEventListener('change', () => {
-    const next = ['webglide', 'webgpu', 'nitro'].includes(ui.rendererSetting.value)
-      ? ui.rendererSetting.value : 'software';
+    const next = ui.rendererSetting.value === 'nitro' ? 'nitro' : 'software';
     if (next === state.preferences.renderer) return;
     state.preferences.renderer = next;
     savePreferences();
     applyPreferences();
-    const label = next === 'webglide'
-      ? 'WebGlide experimental GPU renderer'
-      : next === 'webgpu'
-        ? 'software renderer with the experimental WebGPU presenter'
-        : next === 'nitro'
-          ? 'WebGlideNitro primary native WebGPU renderer'
-          : 'software renderer';
+    const label = next === 'nitro'
+      ? 'WebGlideNitro primary native WebGPU renderer'
+      : 'software renderer with WebGPU presentation';
     appendRuntimeLog('[launcher]', `Renderer preference changed to ${next} (${label}).`);
     const enginePlaying = state.engineStarted && !state.runtimeExited;
     if (enginePlaying) {
@@ -1660,50 +1631,28 @@ async function init() {
     state.perfReport = '';
   }
   bindUi();
-  /* Both WebGPU bundles take the device from here rather than opening one
+  /* Both renderer bundles take the WebGPU device from here rather than opening one
    * of their own: the canvas can only ever have a single configured
    * context, and the launcher is what owns the canvas. */
-  if (state.preferences.renderer === 'webgpu' || state.preferences.renderer === 'nitro') {
-    const report = await probeWebGPU({ canvas: ui.canvas });
-    if (report.ok) {
-      const limits = report.handoff.limits;
-      report.handoff.onLost = (info) => {
-        const detail = info?.message ? `: ${info.message}` : '';
-        logToConsole('[renderer:error]',
-          `WebGPU device lost (${info?.reason ?? 'unknown'})${detail}`, true);
-        setStatus('WebGPU device lost. Reload the launcher to recover.', 'error');
-      };
-      getModule().hexenwailWebGPU = report.handoff;
-      state.rendererReady = true;
-      logToConsole('[renderer]', `WebGPU ${report.handoff.format}; `
-        + `max2D=${limits.maxTextureDimension2D}; layers=${limits.maxTextureArrayLayers}; `
-        + `bindGroups=${limits.maxBindGroups}; maxBuffer=${limits.maxBufferSize}`);
-    } else {
-      state.preferences.renderer = 'software';
-      savePreferences();
-      applyPreferences();
-      logToConsole('[renderer:warn]',
-        `${report.reason} Reloading with the WebGL2 software presenter.`);
-      setStatus(`${report.reason} Reloading with the shipping renderer…`, 'warn');
-      setTimeout(() => location.reload(), 60);
-      return;
-    }
+  const report = await probeWebGPU({ canvas: ui.canvas });
+  if (report.ok) {
+    const limits = report.handoff.limits;
+    report.handoff.onLost = (info) => {
+      const detail = info?.message ? `: ${info.message}` : '';
+      logToConsole('[renderer:error]',
+        `WebGPU device lost (${info?.reason ?? 'unknown'})${detail}`, true);
+      setStatus('WebGPU device lost. Reload the launcher to recover.', 'error');
+    };
+    getModule().hexenwailWebGPU = report.handoff;
+    state.rendererReady = true;
+    logToConsole('[renderer]', `WebGPU ${report.handoff.format}; `
+      + `max2D=${limits.maxTextureDimension2D}; layers=${limits.maxTextureArrayLayers}; `
+      + `bindGroups=${limits.maxBindGroups}; maxBuffer=${limits.maxBufferSize}`);
   } else {
-    try {
-      const report = runWebGLDiagnostics();
-      state.rendererReady = true;
-      logToConsole('[renderer]', `${report.profile}; GLSL ${report.shadingLanguage}; `
-        + `shaders=${report.shaders.length}; RGBA8-FBO=${report.framebuffer.width}x${report.framebuffer.height}; `
-        + `visible=${(report.framebuffer.nonBlackRatio * 100).toFixed(0)}%; `
-        + `postprocess=gamma/palette pass; `
-        + `HDR=${report.extensions.colorBufferFloat ? 'available' : 'disabled'}; `
-        + `OIT=${report.extensions.indexedBlend ? 'extension present' : 'sorted fallback'}`);
-    } catch (error) {
-      state.rendererReady = false;
-      setEngineState('fatal');
-      logToConsole('[renderer:error]', error.message, true);
-      setStatus(`WebGL2 renderer self-test failed: ${error.message}`, 'error');
-    }
+    state.rendererReady = false;
+    setEngineState('fatal');
+    logToConsole('[renderer:error]', report.reason, true);
+    setStatus(`WebGPU initialization failed: ${report.reason}`, 'error');
   }
   updateTouchOnlyEnvironment();
   bindBootCallbacks();

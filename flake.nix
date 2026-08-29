@@ -88,9 +88,9 @@
               export EM_CONFIG="''${EM_CONFIG:-$TMPDIR/.emscripten}"
             '';
 
-            # Use Emscripten's CMake toolchain.  WEB_RENDERER defaults to
-            # "software"; pass -DWEB_RENDERER=webgl2 to build the retained
-            # GPU renderer instead.  USE_CODEC_VORBIS is off here because a
+            # Use Emscripten's CMake toolchain. This package explicitly builds
+            # the software renderer with WebGPU presentation.
+            # USE_CODEC_VORBIS is off here because a
             # pure build cannot fetch the Emscripten vorbis port.
             configurePhase = ''
               runHook preConfigure
@@ -153,11 +153,8 @@
           shellHook = ''
             echo "Hexenwail web development environment"
             echo ""
-            echo "Build (software renderer, the shipping default):"
+            echo "Build the software renderer with WebGPU presentation:"
             echo "  ./scripts/wasm-build.sh software"
-            echo ""
-            echo "Build the retained WebGL2 renderer:"
-            echo "  ./scripts/wasm-build.sh webgl2 engine/build-webgl2"
             echo ""
             echo "Assemble and validate the static PWA artifact:"
             echo "  ./scripts/wasm-assemble-artifact.sh dist"

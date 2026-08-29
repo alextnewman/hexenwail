@@ -15,9 +15,7 @@
  * nothing is re-uploaded when a door opens.
  *
  * The scene preparation -- PVS marking, the BSP walk, the lightmap atlas
- * packing, the texture coordinate maths -- follows gl2_world.c, because
- * those are facts about Hexen II's BSP format rather than facts about
- * OpenGL.  Nothing below translates a GL call.
+ * packing and texture coordinate maths -- follows Hexen II's BSP format.
  *
  * Shading is the software renderer's, not GL's: the diffuse texture stays
  * an 8-bit index, the lightmap picks an authored colormap row, and the

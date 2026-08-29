@@ -21,35 +21,17 @@ option(USE_SOUND "Enable the browser audio backend" ON)
 option(USE_CODEC_VORBIS "Decode Ogg Vorbis music via the Emscripten vorbis port" ON)
 set(GAME_DATA_DIR "" CACHE PATH "Optional game data directory to preload")
 
-# Renderer selection. "webgpu" is the primary shipping configuration:
-# WebGlideNitro, the native WebGPU renderer. "software" keeps the parked
-# classic 8bpp rasterizer buildable and "webgl2" keeps the abortive WebGlide
-# experiment buildable.
-# See docs/web/SOFTWARE_RENDERER.md, docs/web/WEBGLIDE.md,
-# docs/web/WEBGLIDE_NITRO.md and docs/web/ARCHITECTURE.md.
-set(WEB_RENDERER "webgpu" CACHE STRING "Web renderer: software, webgl2 or webgpu")
-set_property(CACHE WEB_RENDERER PROPERTY STRINGS software webgl2 webgpu)
-if(NOT WEB_RENDERER STREQUAL "software" AND NOT WEB_RENDERER STREQUAL "webgl2"
-        AND NOT WEB_RENDERER STREQUAL "webgpu")
-    message(FATAL_ERROR "WEB_RENDERER must be 'software', 'webgl2' or 'webgpu' (got '${WEB_RENDERER}')")
+# Renderer selection. "webgpu" is WebGlideNitro, the primary shipping
+# configuration. "software" keeps the parked classic 8bpp rasterizer available
+# and presents its indexed framebuffer through WebGPU.
+# See docs/web/SOFTWARE_RENDERER.md, docs/web/WEBGLIDE_NITRO.md and
+# docs/web/ARCHITECTURE.md.
+set(WEB_RENDERER "webgpu" CACHE STRING "Web renderer: software or webgpu")
+set_property(CACHE WEB_RENDERER PROPERTY STRINGS software webgpu)
+if(NOT WEB_RENDERER STREQUAL "software" AND NOT WEB_RENDERER STREQUAL "webgpu")
+    message(FATAL_ERROR "WEB_RENDERER must be 'software' or 'webgpu' (got '${WEB_RENDERER}')")
 endif()
 message(STATUS "Web renderer: ${WEB_RENDERER}")
-
-# The software rasterizer and its accelerated presenter are separate layers.
-# The presenter only exists to get the 8bpp framebuffer onto the canvas, so it
-# is meaningless for the two GPU renderers: WebGlide owns its WebGL2 context
-# directly and WebGlideNitro owns its WebGPU device directly.
-set(WEB_PRESENTER "webgl2" CACHE STRING "Software renderer presenter: webgl2 or webgpu")
-set_property(CACHE WEB_PRESENTER PROPERTY STRINGS webgl2 webgpu)
-if(NOT WEB_PRESENTER STREQUAL "webgl2" AND NOT WEB_PRESENTER STREQUAL "webgpu")
-    message(FATAL_ERROR "WEB_PRESENTER must be 'webgl2' or 'webgpu' (got '${WEB_PRESENTER}')")
-endif()
-if(NOT WEB_RENDERER STREQUAL "software" AND NOT WEB_PRESENTER STREQUAL "webgl2")
-    message(FATAL_ERROR "WEB_PRESENTER only applies to WEB_RENDERER=software")
-endif()
-if(WEB_RENDERER STREQUAL "software")
-    message(STATUS "Software presenter: ${WEB_PRESENTER}")
-endif()
 
 add_compile_options(
     -Wall
@@ -85,23 +67,8 @@ set(RENDERER_SOURCES
     ${COMMONDIR}/web_perf.c
 )
 
-if(WEB_RENDERER STREQUAL "webgl2")
-    add_compile_definitions(WEBGL2QUAKE)
-    list(APPEND RENDERER_SOURCES
-        ${COMMONDIR}/model.c
-        ${ENGINE_TOP}/hexen2/r_webgl2.c
-        ${COMMONDIR}/draw_webgl2.c
-        ${COMMONDIR}/gl2_texture.c
-        ${COMMONDIR}/gl2_shader.c
-        ${COMMONDIR}/gl2_glide.c
-        ${COMMONDIR}/gl2_world.c
-        ${COMMONDIR}/gl2_alias.c
-        ${COMMONDIR}/gl_fog.c
-        ${COMMONDIR}/gl_refrag.c
-    )
-elseif(WEB_RENDERER STREQUAL "webgpu")
-    # WebGlideNitro. No gl2_* source is listed on purpose: this renderer
-    # shares no code with WebGlide, only scene-preparation ideas.
+if(WEB_RENDERER STREQUAL "webgpu")
+    # WebGlideNitro owns a native WebGPU rendering path.
     # gl_refrag.c is here because efrags are renderer-agnostic and the
     # software r_efrag.c is not (it reaches into the surface cache).
     add_compile_definitions(WEBGPUQUAKE)
@@ -116,10 +83,7 @@ elseif(WEB_RENDERER STREQUAL "webgpu")
         ${COMMONDIR}/gl_refrag.c
     )
 else()
-    add_compile_definitions(WEBSOFT)
-    if(WEB_PRESENTER STREQUAL "webgpu")
-        add_compile_definitions(WEBGPU_PRESENT)
-    endif()
+    add_compile_definitions(WEBSOFT WEBGPU_PRESENT)
     list(APPEND RENDERER_SOURCES
         ${COMMONDIR}/model.c
         ${ENGINE_TOP}/hexen2/r_alias.c
@@ -252,19 +216,13 @@ set(PLATFORM_SOURCES
     ${COMMONDIR}/midi_nul.c
     ${COMMONDIR}/cd_null.c
 )
-if(WEB_RENDERER STREQUAL "webgl2")
-    list(APPEND PLATFORM_SOURCES ${COMMONDIR}/vid_webgl2.c)
-elseif(WEB_RENDERER STREQUAL "webgpu")
+if(WEB_RENDERER STREQUAL "webgpu")
     list(APPEND PLATFORM_SOURCES ${COMMONDIR}/vid_webgpu.c)
 else()
     list(APPEND PLATFORM_SOURCES
         ${COMMONDIR}/vid_soft_web.c
+        ${COMMONDIR}/web_canvas_wgpu.c
     )
-    if(WEB_PRESENTER STREQUAL "webgpu")
-        list(APPEND PLATFORM_SOURCES ${COMMONDIR}/web_canvas_wgpu.c)
-    else()
-        list(APPEND PLATFORM_SOURCES ${COMMONDIR}/web_canvas_gl2.c)
-    endif()
 endif()
 add_compile_definitions(_NO_MIDIDRV)
 
@@ -277,8 +235,6 @@ add_executable(uhexen2_web
 )
 
 target_link_options(uhexen2_web PRIVATE
-    -sMIN_WEBGL_VERSION=2
-    -sMAX_WEBGL_VERSION=2
     -sALLOW_MEMORY_GROWTH=1
     -sINITIAL_MEMORY=134217728
     -sSTACK_SIZE=2097152
@@ -291,7 +247,7 @@ target_link_options(uhexen2_web PRIVATE
     --shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html
 )
 
-if(WEB_RENDERER STREQUAL "software" AND WEB_PRESENTER STREQUAL "webgpu")
+if(WEB_RENDERER STREQUAL "software")
     target_link_options(uhexen2_web PRIVATE
         --js-library=${CMAKE_CURRENT_SOURCE_DIR}/web/webgpu_present.js
     )
@@ -324,16 +280,8 @@ if(GAME_DATA_DIR)
 endif()
 
 target_link_libraries(uhexen2_web PRIVATE m)
-if(WEB_RENDERER STREQUAL "webgl2")
-    # The experimental WebGlide bundle ships alongside the software one and
-    # is picked by the launcher's renderer toggle, so it needs its own name.
-    set(WEB_OUTPUT_NAME hexenwail-webglide)
-elseif(WEB_RENDERER STREQUAL "webgpu")
-    # WebGlideNitro. Distinct from hexenwail-webgpu, which is the software
-    # rasterizer scanned out through a WebGPU presenter.
+if(WEB_RENDERER STREQUAL "webgpu")
     set(WEB_OUTPUT_NAME hexenwail-nitro)
-elseif(WEB_PRESENTER STREQUAL "webgpu")
-    set(WEB_OUTPUT_NAME hexenwail-webgpu)
 else()
     set(WEB_OUTPUT_NAME hexenwail)
 endif()

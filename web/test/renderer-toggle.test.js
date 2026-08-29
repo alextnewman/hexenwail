@@ -28,7 +28,7 @@ test('renderer preference defaults to the primary WebGlideNitro bundle', () => {
 test('loadPreferences accepts renderer values and migrates the perf preference', () => {
   const load = app.match(/function loadPreferences\(\) \{([\s\S]*?)\n\}/)?.[1];
   assert.ok(load, 'loadPreferences is defined');
-  assert.match(load, /\['software', 'webglide', 'webgpu', 'nitro'\]\.includes\(saved\.renderer\)/,
+  assert.match(load, /\['software', 'nitro'\]\.includes\(saved\.renderer\)/,
     'unknown renderer strings must fall back to the default');
   assert.match(load, /typeof saved\.perfCapture === 'boolean'/);
   assert.match(load, /Number\(saved\.perfOverlay\) > 0/,
@@ -46,33 +46,19 @@ test('launcher passes the configured perf capture to the engine on startup', () 
     'the launcher must explicitly disable an archived capture setting');
 });
 
-test('ensureEngineScriptLoaded routes the WebGlide preference to the GPU bundle URL', () => {
+test('ensureEngineScriptLoaded routes the selected renderer to its bundle URL', () => {
   const loader = app.match(/async function ensureEngineScriptLoaded\(\) \{([\s\S]*?)\n\}/)?.[1];
   assert.ok(loader, 'ensureEngineScriptLoaded is defined');
-  // The two engine bundles ship under distinct basenames so the
+  // The engine bundles ship under distinct basenames so the
   // Emscripten .js finds its own .wasm sibling by basename; the loader
   // picks one based on the persisted preference.
-  assert.match(loader, /state\.preferences\.renderer === 'webglide'/);
-  assert.match(loader, /state\.preferences\.renderer === 'webgpu'/);
   assert.match(loader, /state\.preferences\.renderer === 'nitro'/);
-  assert.match(loader, /'\.\/hexenwail-webglide\.js'/);
-  assert.match(loader, /'\.\/hexenwail-webgpu\.js'/);
   assert.match(loader, /'\.\/hexenwail-nitro\.js'/);
   assert.match(loader, /'\.\/hexenwail\.js'/);
   // The choice is logged through the runtime log so a bug report shows
   // which bundle was in use.
   assert.match(loader, /logToConsole\('\[launcher\]',/);
   assert.match(loader, /Loading engine bundle/);
-});
-
-test('a missing WebGlide bundle fails loudly and names the toggle', () => {
-  const loader = app.match(/async function ensureEngineScriptLoaded\(\) \{([\s\S]*?)\n\}/)?.[1];
-  assert.ok(loader, 'ensureEngineScriptLoaded is defined');
-  // The error path must not leave a dead launcher: name the card the
-  // user actually sees, and tell them how to get to the parked software
-  // renderer.
-  assert.match(loader, /Renderer/);
-  assert.match(loader, /Software \(parked reference\)/);
 });
 
 test('the launcher exposes copyable raw performance capture', () => {
@@ -84,24 +70,18 @@ test('the launcher exposes copyable raw performance capture', () => {
   assert.doesNotMatch(html, /Frame-time graph/);
 });
 
-test('the launcher exposes Nitro as primary and keeps parked renderers selectable', () => {
+test('the launcher exposes Nitro and software-on-WebGPU only', () => {
   assert.match(html, /id="renderer-setting"/);
   assert.match(html, /<option value="software">/);
-  assert.match(html, /<option value="webglide">/);
-  assert.match(html, /<option value="webgpu">/);
   assert.match(html, /<option value="nitro">/);
-  // The old "gl"/"glide" values must not reappear in the DOM: user-facing
-  // wording is WebGlide, and the persisted preference string is
-  // "webglide". Renaming the old spelling silently would leave a stale
-  // preference in a browser localStorage.
+  assert.doesNotMatch(html, /<option value="webglide">/);
+  assert.doesNotMatch(html, /<option value="webgpu">/);
   assert.doesNotMatch(html, /<option value="glide">/);
   assert.doesNotMatch(html, /<option value="gl">/);
   const card = html.match(/<h2>Renderer<\/h2>([\s\S]*?)<\/section>/)?.[1];
   assert.ok(card, 'the Renderer card is defined');
   assert.match(card, /Software renderer/);
-  assert.match(card, /parked/);
-  assert.match(card, /WebGlide/);
-  assert.match(card, /abortive/);
+  assert.match(card, /WebGPU/);
   assert.match(card, /WebGlideNitro/);
   assert.match(card, /primary renderer/);
   assert.match(card, /WebGlideNitro \(default\)/);
@@ -120,65 +100,39 @@ test('changing the toggle mid-play does not yank the tab out from a running game
     'a mid-play change must surface an explicit "reload to apply" affordance');
   // The user-facing label in the runtime log and hint text must be the
   // canonical name.
-  assert.match(handler, /WebGlide experimental GPU renderer/);
-  assert.match(handler, /experimental WebGPU presenter/);
+  assert.match(handler, /software renderer with WebGPU presentation/);
   assert.match(handler, /WebGlideNitro primary native WebGPU renderer/);
 });
 
-test('the assemble script picks up the WebGlide bundle when the webgl2 build is present', () => {
-  // Optional so a local `make dist` (software-only) still works.
-  assert.match(assembleScript, /engine\/build-webgl2\/bin/);
-  assert.match(assembleScript, /hexenwail-webglide\.js/);
-  assert.match(assembleScript, /hexenwail-webglide\.wasm/);
-  assert.match(assembleScript, /if \[ -d "\$GL_BUILD_BIN" \]/);
-  assert.match(assembleScript, /assembling the PWA artifact without WebGlide/);
-  // The old spelling must not linger in either the copy or the
-  // filenames -- CMake now names the bundle "hexenwail-webglide".
-  assert.doesNotMatch(assembleScript, /hexenwail-gl\./);
-  assert.match(assembleScript, /hexenwail-webgpu\.js/);
-  assert.match(assembleScript, /hexenwail-webgpu\.wasm/);
+test('the assemble script ships only software and Nitro renderer bundles', () => {
+  assert.match(assembleScript, /hexenwail\.js/);
+  assert.match(assembleScript, /hexenwail-nitro\.js/);
+  assert.doesNotMatch(assembleScript, /hexenwail-webglide/);
+  assert.doesNotMatch(assembleScript, /hexenwail-webgpu/);
 });
 
-test('the validate script requires Nitro and rejects half-shipped parked bundles', () => {
-  // Informational when both files are absent (matches the .data /
-  // .worker.js contract already in the script); hard failure when only
-  // one half of the pair is present, because that is always a broken
-  // build.
-  assert.match(validateScript, /hexenwail-webglide\.js/);
-  assert.match(validateScript, /hexenwail-webglide\.wasm/);
-  assert.match(validateScript, /only one half of the WebGlide bundle is present/);
+test('the validate script requires Nitro and software bundles only', () => {
+  assert.match(validateScript, /require "hexenwail\.js"/);
   assert.match(validateScript, /require "hexenwail-nitro\.js"/);
-  assert.doesNotMatch(validateScript, /hexenwail-gl\./);
-  assert.match(validateScript, /hexenwail-webgpu\.js/);
-  assert.match(validateScript, /hexenwail-webgpu\.wasm/);
-  assert.match(validateScript, /only one half of the WebGPU presenter bundle is present/);
+  assert.doesNotMatch(validateScript, /hexenwail-webglide/);
+  assert.doesNotMatch(validateScript, /hexenwail-webgpu/);
 });
 
 test('the WebGPU presenter stays a software scan-out path, distinct from Nitro', () => {
-  assert.match(cmake, /set\(WEB_PRESENTER "webgl2"/);
-  assert.match(cmake, /WEB_PRESENTER STREQUAL "webgpu"/);
-  assert.match(cmake, /add_compile_definitions\(WEBGPU_PRESENT\)/);
+  assert.doesNotMatch(cmake, /WEB_PRESENTER/);
+  assert.match(cmake, /add_compile_definitions\(WEBSOFT WEBGPU_PRESENT\)/);
   assert.match(cmake, /web_canvas_wgpu\.c/);
   assert.match(cmake, /webgpu_present\.js/);
-  // The presenter is selected by WEB_PRESENTER and keeps WEBSOFT; only
-  // WEB_RENDERER=webgpu may define WEBGPUQUAKE. Guard the coupling so a
-  // future edit cannot quietly turn the presenter into "the Nitro build".
-  assert.match(cmake, /WEB_PRESENTER only applies to WEB_RENDERER=software/);
-  const nitroBranch = cmake.match(/elseif\(WEB_RENDERER STREQUAL "webgpu"\)([\s\S]*?)\nelse\(\)/)?.[1];
-  assert.ok(nitroBranch, 'WEB_RENDERER=webgpu has its own renderer-source branch');
-  assert.match(nitroBranch, /add_compile_definitions\(WEBGPUQUAKE\)/,
+  const currentNitroBranch = cmake.match(/if\(WEB_RENDERER STREQUAL "webgpu"\)([\s\S]*?)\nelse\(\)/)?.[1];
+  assert.ok(currentNitroBranch, 'WEB_RENDERER=webgpu has its own renderer-source branch');
+  assert.match(currentNitroBranch, /add_compile_definitions\(WEBGPUQUAKE\)/,
     'WEBGPUQUAKE is positive and belongs to WEB_RENDERER=webgpu alone');
-  assert.match(nitroBranch, /\$\{COMMONDIR\}\/nitro_model\.c/,
+  assert.match(currentNitroBranch, /\$\{COMMONDIR\}\/nitro_model\.c/,
     'Nitro owns a software-derived loader with authored lighting metadata');
-  assert.doesNotMatch(nitroBranch, /\$\{COMMONDIR\}\/model\.c/,
+  assert.doesNotMatch(currentNitroBranch, /\$\{COMMONDIR\}\/model\.c/,
     'Nitro must not compile both implementations of the model API');
-  assert.doesNotMatch(nitroBranch, /\$\{COMMONDIR\}\/gl2_/,
-    'WebGlideNitro must not compile any WebGlide source');
-  const webglideBranch = cmake.match(/if\(WEB_RENDERER STREQUAL "webgl2"\)([\s\S]*?)\nelseif\(WEB_RENDERER STREQUAL "webgpu"\)/)?.[1];
-  const softwareBranch = cmake.match(/elseif\(WEB_RENDERER STREQUAL "webgpu"\)[\s\S]*?\nelse\(\)([\s\S]*?)\nendif\(\)\n\nset\(CLIENT_SOURCES/)?.[1];
-  assert.match(webglideBranch, /\$\{COMMONDIR\}\/model\.c/);
+  const softwareBranch = cmake.match(/if\(WEB_RENDERER STREQUAL "webgpu"\)[\s\S]*?\nelse\(\)([\s\S]*?)\nendif\(\)\n\nset\(CLIENT_SOURCES/)?.[1];
   assert.match(softwareBranch, /\$\{COMMONDIR\}\/model\.c/);
-  assert.match(wasmAction, /wasm-build\.sh webgpu engine\/build-webgpu/);
   assert.doesNotMatch(webgpuPresenter, /\bsmooth:\s*u32/,
     'WGSL reserves the word smooth');
 });
@@ -186,7 +140,7 @@ test('the WebGPU presenter stays a software scan-out path, distinct from Nitro',
 test('WebGlideNitro is a native WebGPU renderer, not a GL translation layer', () => {
   // The build wiring: its own WEB_RENDERER value, its own JS library, its
   // own bundle basename, and no software rasterizer sources.
-  assert.match(cmake, /set_property\(CACHE WEB_RENDERER PROPERTY STRINGS software webgl2 webgpu\)/);
+  assert.match(cmake, /set_property\(CACHE WEB_RENDERER PROPERTY STRINGS software webgpu\)/);
   assert.match(cmake, /webgpu_nitro\.js/);
   assert.match(cmake, /set\(WEB_OUTPUT_NAME hexenwail-nitro\)/);
   assert.match(cmake, /r_webgpu\.c/);
@@ -217,7 +171,7 @@ test('WebGlideNitro is a native WebGPU renderer, not a GL translation layer', ()
 
 test('WebGlideNitro draws entities, sprites and the view weapon its own way', () => {
   // The entity source is Nitro's own, wired only into the webgpu branch.
-  const nitroBranch = cmake.match(/elseif\(WEB_RENDERER STREQUAL "webgpu"\)([\s\S]*?)\nelse\(\)/)?.[1];
+  const nitroBranch = cmake.match(/if\(WEB_RENDERER STREQUAL "webgpu"\)([\s\S]*?)\nelse\(\)/)?.[1];
   assert.ok(nitroBranch, 'WEB_RENDERER=webgpu has its own renderer-source branch');
   assert.match(nitroBranch, /wgpu_entity\.c/,
     'the entity path is a Nitro source, not a shared or WebGlide one');
@@ -318,33 +272,23 @@ test('WebGlideNitro implements the authored visual effects', () => {
 test('the nitro build is reachable from the scripts, CI and the offline shell', () => {
   assert.match(buildScript, /nitro\)/);
   assert.match(buildScript, /renderer="webgpu"/);
+  assert.match(buildScript, /Unknown renderer.*expected 'nitro' or 'software'/);
   assert.match(assembleScript, /hexenwail-nitro\.js/);
   assert.match(assembleScript, /hexenwail-nitro\.wasm/);
   assert.match(validateScript, /require "hexenwail-nitro\.js"/);
   assert.match(validateScript, /require "hexenwail-nitro\.wasm"/);
   assert.match(wasmAction, /wasm-build\.sh nitro engine\/build-nitro/);
-  assert.match(wasmAction, /missing the WebGlideNitro bundle/);
+  assert.match(wasmAction, /hexenwail-nitro\.js hexenwail-nitro\.wasm/);
   assert.match(serviceWorker, /'\.\/hexenwail-nitro\.js'/);
   const core = serviceWorker.match(/const CORE_ASSETS = \[([\s\S]*?)\];/)?.[1];
   assert.ok(core, 'CORE_ASSETS is defined');
   assert.match(core, /hexenwail-nitro/);
 });
 
-test('the canonical docs do not make WebGlide a Nitro gate or performance baseline', () => {
-  // Owner instruction, on the record: WebGlide performance is not a
-  // criterion for anything. Nitro is measured on the target iPad against
-  // its own captures, so a future edit must not quietly restore the gate.
+test('the canonical docs describe Nitro without the deleted WebGlide renderer', () => {
   const flat = (text) => text.replace(/\s+/g, ' ');
   const nitroDoc = readFileSync(join(repoRoot, 'docs/web/WEBGLIDE_NITRO.md'), 'utf8');
-  const webglideDoc = readFileSync(join(repoRoot, 'docs/web/WEBGLIDE.md'), 'utf8');
-  assert.doesNotMatch(nitroDoc, /^## The gate$/m,
-    'the WebGlide gate section is removed, not renamed');
   assert.match(nitroDoc, /^## How Nitro is measured$/m);
-  assert.match(flat(nitroDoc), /WebGlide is not a performance baseline, a gate, or an optimisation criterion/);
   assert.match(flat(nitroDoc), /measured directly on the target iPad, against Nitro's own captures/);
-  // WebGlide is framed as abortive, yet stays buildable: deleting it is a
-  // separate decision the owner has not made.
-  assert.match(flat(webglideDoc), /abortive experiment/);
-  assert.match(flat(webglideDoc), /must keep compiling/);
-  assert.match(cmake, /WEB_RENDERER STREQUAL "webgl2"/);
+  assert.doesNotMatch(cmake, /WEBGL2QUAKE|WEB_RENDERER STREQUAL "webgl2"/);
 });

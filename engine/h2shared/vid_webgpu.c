@@ -1,8 +1,8 @@
 /*
  * vid_webgpu.c -- the video layer for WebGlideNitro.
  *
- * The WebGL2 build creates its own context here (vid_webgl2.c); this one has
- * nothing to create.  The launcher already requested the adapter, configured
+ * There is no context to create here. The launcher already requested the
+ * adapter, configured
  * the canvas and left the device on Module.hexenwailWebGPU, so all this file
  * does is the two things that are genuinely the video layer's job: decide
  * the two decoupled sizes, and hand the renderer the indexed-colour
@@ -54,8 +54,7 @@ const unsigned int ColorPercent[16] = {
 };
 
 /*
- * Two sizes, deliberately decoupled -- the same policy as the WebGlide and
- * software builds.
+ * Two sizes, deliberately decoupled from the panel.
  *
  *   glwidth/glheight  the canvas, in real device pixels.
  *   vid.width/height  the UI space the 320-wide status bar and menus are

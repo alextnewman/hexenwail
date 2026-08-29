@@ -15,8 +15,7 @@ CI results cannot drift.
 When invoked:
 1. Ensure `emcmake`/`emmake` are on PATH (`source "$EMSDK/emsdk_env.sh"`).
 2. Run `./scripts/wasm-build.sh software 2>&1` and capture full output.
-3. Run `./scripts/wasm-build.sh webgl2 engine/build-webgl2 2>&1` — the WebGL2
-   renderer is retained and must not silently rot.
+3. Run `./scripts/wasm-build.sh nitro engine/build-nitro 2>&1`.
 4. On success: confirm both configurations built and report the artifacts in
    `engine/build/bin/`.
 5. On failure: parse compiler errors, map each to file:line, summarize the root
@@ -37,7 +36,7 @@ Always show the 3 lines of context around each error location (use Read tool).
 Report format:
 ```
 BUILD: FAILED (or PASSED)
-Configurations: software=PASS webgl2=PASS
+Configurations: software=PASS nitro=PASS
 Errors: N
 ---
 engine/hexen2/foo.c:123 — undeclared identifier 'bar'

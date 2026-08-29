@@ -111,7 +111,7 @@ static	cvar_t	scr_showpause = {"showpause", "1", CVAR_NONE};
 static	cvar_t	scr_showfps = {"showfps", "0", CVAR_NONE};
 #if defined(WEBQUAKE)
 /* Owned by gl_screen.c in the GLQUAKE build; the browser client draws its
- * 2D through draw_webgl2.c and this screen module, so it owns them here.
+ * 2D through its renderer backend and this screen module, so it owns them here.
  * scr_centerprintbg: 0 = off, 1 = full-width thin dim strip, 2 = text-width dim box.
  * scr_menubgstyle:   0 = no dim, 1 = simple dim, 2 = dim + translucent menu-area box. */
 cvar_t		scr_centerprintbg = {"scr_centerprintbg", "2", CVAR_ARCHIVE};

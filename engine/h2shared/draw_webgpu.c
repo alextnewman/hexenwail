@@ -1,7 +1,7 @@
 /*
  * draw_webgpu.c -- the 2D layer for WebGlideNitro.
  *
- * Same API as draw_webgl2.c and the same canvas placement, but the frame
+ * Implements the shared 2D API and canvas placement, but the frame
  * shape is different.  Rather than a draw call per quad, every quad in the
  * frame lands in one CPU arena, consecutive quads sharing a texture collapse
  * into one run, and the whole thing is handed to Nitro_EndFrame as a single

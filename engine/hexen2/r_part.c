@@ -1441,12 +1441,7 @@ R_DrawParticles
 */
 extern	cvar_t	sv_gravity;
 
-#if defined(WEBGL2QUAKE)
-void R_DrawParticles (void)
-{
-	WebGL2_DrawParticles(active_particles);
-}
-#elif defined(WEBGPUQUAKE)
+#if defined(WEBGPUQUAKE)
 void R_DrawParticles (void)
 {
 	WebGPU_DrawParticles(active_particles);

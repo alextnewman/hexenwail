@@ -48,52 +48,6 @@ for optional in hexenwail.data hexenwail.worker.js; do
 	fi
 done
 
-# The WebGlide experimental GPU bundle is optional here for the same
-# reason it is optional in wasm-assemble-artifact.sh: a local artifact may
-# omit this retained experiment. CI builds every renderer and
-# .github/actions/wasm-build enforces that
-# both bundles reached the artifact -- that is where the CI-side "must
-# ship both" contract lives, not here. When one half of the pair is
-# present without the other, though, that is always a broken build.
-gl_js="$DIST_DIR/hexenwail-webglide.js"
-gl_wasm="$DIST_DIR/hexenwail-webglide.wasm"
-if [ -s "$gl_js" ] && [ -s "$gl_wasm" ]; then
-	echo "OK (optional present): $gl_js"
-	echo "OK (optional present): $gl_wasm"
-	for optional in hexenwail-webglide.data hexenwail-webglide.worker.js engine-shell-debug-webglide.html; do
-		if [ -s "$DIST_DIR/$optional" ]; then
-			echo "OK (optional present): $DIST_DIR/$optional"
-		fi
-	done
-elif [ -s "$gl_js" ] || [ -s "$gl_wasm" ]; then
-	echo "INVALID: only one half of the WebGlide bundle is present" \
-		"(hexenwail-webglide.js and hexenwail-webglide.wasm must ship together)" >&2
-	missing=1
-else
-	echo "info: optional artifact not present: $DIST_DIR/hexenwail-webglide.js" \
-		"(WebGlide GPU bundle)"
-fi
-
-# The WebGPU presenter preview follows the same optional-pair rule.
-gpu_js="$DIST_DIR/hexenwail-webgpu.js"
-gpu_wasm="$DIST_DIR/hexenwail-webgpu.wasm"
-if [ -s "$gpu_js" ] && [ -s "$gpu_wasm" ]; then
-	echo "OK (optional present): $gpu_js"
-	echo "OK (optional present): $gpu_wasm"
-	for optional in hexenwail-webgpu.data hexenwail-webgpu.worker.js engine-shell-debug-webgpu.html; do
-		if [ -s "$DIST_DIR/$optional" ]; then
-			echo "OK (optional present): $DIST_DIR/$optional"
-		fi
-	done
-elif [ -s "$gpu_js" ] || [ -s "$gpu_wasm" ]; then
-	echo "INVALID: only one half of the WebGPU presenter bundle is present" \
-		"(hexenwail-webgpu.js and hexenwail-webgpu.wasm must ship together)" >&2
-	missing=1
-else
-	echo "info: optional artifact not present: $DIST_DIR/hexenwail-webgpu.js" \
-		"(WebGPU presenter feasibility bundle)"
-fi
-
 # WebGlideNitro is required above; this section reports its optional sidecars.
 nitro_js="$DIST_DIR/hexenwail-nitro.js"
 nitro_wasm="$DIST_DIR/hexenwail-nitro.wasm"

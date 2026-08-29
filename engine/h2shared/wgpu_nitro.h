@@ -1,16 +1,11 @@
 /*
  * wgpu_nitro.h -- internal interface of the WebGlideNitro renderer.
  *
- * WebGlideNitro is the web port's native WebGPU renderer.  It is not a
- * translation of the WebGlide (WebGL2) renderer and it does not present the
- * software rasteriser's framebuffer: it builds its own scene geometry and
- * hands WebGPU batched, indexed triangles.  WebGlide is an abortive
- * experiment that is kept buildable; it is used here only as an optional
- * reference for *what* a frame contains -- which surfaces are visible, how a
- * lightmap atlas is packed, where the scene is scanned out -- never for how
- * to call an API, and never as a performance baseline.  What Nitro must look
- * like is defined by the software rasteriser, and what it costs is measured
- * on the target iPad against Nitro's own captures.
+ * WebGlideNitro is the web port's native WebGPU renderer. It does not present
+ * the software rasteriser's framebuffer: it builds its own scene geometry and
+ * hands WebGPU batched, indexed triangles. What Nitro must look like is defined
+ * by the software rasteriser, and what it costs is measured on the target iPad
+ * against Nitro's own captures.
  *
  * WebGlideNitro is the primary renderer. Its design lives in
  * docs/web/WEBGLIDE_NITRO.md; the software rasteriser is parked as its
