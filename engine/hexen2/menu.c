@@ -2337,6 +2337,8 @@ static int M_Display_DetectPreset (void)
 	    fabsf(Cvar_VariableValue("r_nitro_shadowmotion") - 0.12f) < 0.001f &&
 	    Cvar_VariableValue("r_nitro_projectileribbons") != 0 &&
 	    Cvar_VariableValue("r_nitro_spelleffects") != 0 &&
+	    Cvar_VariableValue("r_nitro_coloredlight") != 0 &&
+	    Cvar_VariableValue("r_nitro_extra_dynamic_lights") != 0 &&
 	    Cvar_VariableValue("r_nitro_dither") != 0 &&
 	    Cvar_VariableValue("r_nitro_resolve") != 0 &&
 	    Cvar_VariableValue("r_nitro_paletteshifts") != 0 &&
@@ -2533,6 +2535,8 @@ static void M_Display_AdjustSliders (int dir)
 			Cvar_SetValue ("r_nitro_glowhaze", 0.35f);
 			Cvar_SetValue ("r_nitro_projectileribbons", 1);
 			Cvar_SetValue ("r_nitro_spelleffects", 1);
+			Cvar_SetValue ("r_nitro_coloredlight", 1);
+			Cvar_SetValue ("r_nitro_extra_dynamic_lights", 1);
 			Cvar_SetValue ("r_nitro_shadowmotion", 0.12f);
 			Cvar_SetValue ("r_nitro_dither", 1);
 			Cvar_SetValue ("r_nitro_resolve", 1);
