@@ -1274,7 +1274,7 @@ static void WGPUEntity_DrawSpriteModel (entity_t *entity, unsigned int extraflag
 		return;
 
 	if (model->flags & EF_HOLEY)
-		texflags = NITROTEX_HOLEY;
+		texflags |= NITROTEX_HOLEY;
 	if (model->flags & EF_TRANSPARENT)
 		alpha = 0.5f;
 	if (entity->drawflags & DRF_TRANSLUCENT)

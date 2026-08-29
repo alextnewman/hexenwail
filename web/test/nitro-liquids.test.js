@@ -43,12 +43,13 @@ test('liquid motion is material-specific with the authored warp as its off state
 });
 
 test('liquid translucency uses stable ordered coverage', () => {
+  assert.match(renderer, /r_nitro_liquidstipple = \{"r_nitro_liquidstipple", "0"/);
   assert.match(backend, /let coverage = mix\(1\.0, alpha, frame\.liquidStipple\)/);
   assert.match(backend, /if \(threshold > coverage\)[\s\S]*discard/);
   assert.match(backend, /alpha \/= coverage/);
-  assert.match(world, /alpha \+= \(0\.82f - alpha\) \* style/);
-  assert.match(world, /1\.0f - 0\.12f \* style/);
-  assert.match(world, /1\.0f - 0\.06f \* style/);
+  assert.match(world, /alpha = 0\.82f/);
+  assert.match(world, /return 0\.88f/);
+  assert.match(world, /return 0\.94f/);
   assert.match(world, /r_wateralpha\.value >= 1\.0f/,
     'authored alpha values just below one must not be replaced by Nitro defaults');
   assert.doesNotMatch(world, /!translucent && r_wateralpha\.value >= 1\.0f/,
@@ -74,6 +75,9 @@ test('lava and portals receive reversible palette-domain luminosity', () => {
   assert.match(backend, /material == 2u \|\| material == 3u/);
   assert.match(backend, /let breath = 0\.82 \+ 0\.18 \* sin\(frame\.time/);
   assert.match(backend, /row = min\(row,[\s\S]*frame\.liquidGlow \* breath/);
+  assert.match(backend, /let warmth = smoothstep\(0\.0, 0\.22, rgb\.r - rgb\.b\)/);
+  assert.match(backend, /let hot = rgb \* \(1\.0 \+ 0\.32 \* lift\)/);
+  assert.match(backend, /rgb = paletteQuantize\(mix\(rgb, hot, lift\)\)/);
   assert.match(backend, /label: 'WebGlideNitro frame uniform',\s+size: 144/);
   assert.doesNotMatch(backend, /liquidGlow[\s\S]{0,200}(bloom|hdr)/i);
 });

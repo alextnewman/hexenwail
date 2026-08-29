@@ -7,6 +7,13 @@ const header = read('engine/h2shared/wgpu_nitro.h');
 const entities = read('engine/h2shared/wgpu_entity.c');
 const world = read('engine/h2shared/wgpu_world.c');
 
+test('Nitro sprites always preserve their authored clear index', () => {
+  assert.match(
+    entities,
+    /unsigned int\s+texflags = NITROTEX_ALPHA;[\s\S]*if \(model->flags & EF_HOLEY\)[\s\S]*texflags \|= NITROTEX_HOLEY;/,
+  );
+});
+
 test('Nitro preserves authored DRF translucency independently of liquid alpha', () => {
   assert.match(header, /#define NITRO_DRF_ALPHA\s+0\.5f/);
 

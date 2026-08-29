@@ -1144,14 +1144,11 @@ static float WGPUWorld_LiquidAlpha (const texture_t *texture, byte material,
 				   qboolean translucent)
 {
 	const char	*name;
-	float		style = CLAMP (0.0f, r_nitro_liquidstipple.value, 1.0f);
 	float		alpha;
 
 	if (!texture)
 	{
 		alpha = WGPUWorld_ClampAlpha (r_turbalpha.value);
-		if (r_turbalpha.value >= 1.0f)
-			alpha += (0.82f - alpha) * style;
 		return alpha;
 	}
 	name = (texture->name[0] == '*') ? texture->name + 1 : texture->name;
@@ -1163,18 +1160,18 @@ static float WGPUWorld_LiquidAlpha (const texture_t *texture, byte material,
 	case NITROLIQUID_LAVA:
 		if (r_lavaalpha.value > 0)
 			return WGPUWorld_ClampAlpha (r_lavaalpha.value);
-		return 1.0f - 0.06f * style;
+		return 0.94f;
 	case NITROLIQUID_SLIME:
 		if (r_slimealpha.value > 0)
 			return WGPUWorld_ClampAlpha (r_slimealpha.value);
-		return 1.0f - 0.12f * style;
+		return 0.88f;
 	case NITROLIQUID_WATER:
 		if (!translucent && !strstr (name, "water") &&
 		    !strstr (name, "ice") && !strstr (name, "glass"))
 			return 1.0f;
 		alpha = WGPUWorld_ClampAlpha (r_wateralpha.value);
 		if (r_wateralpha.value >= 1.0f)
-			alpha += (0.82f - alpha) * style;
+			alpha = 0.82f;
 		return alpha;
 	}
 
@@ -1182,20 +1179,20 @@ static float WGPUWorld_LiquidAlpha (const texture_t *texture, byte material,
 	{
 		if (r_lavaalpha.value > 0)
 			return WGPUWorld_ClampAlpha (r_lavaalpha.value);
-		return 1.0f - 0.06f * style;
+		return 0.94f;
 	}
 	if (!q_strncasecmp (name, "slime", 5))
 	{
 		if (r_slimealpha.value > 0)
 			return WGPUWorld_ClampAlpha (r_slimealpha.value);
-		return 1.0f - 0.12f * style;
+		return 0.88f;
 	}
 	if (translucent || strstr (name, "water") || strstr (name, "ice") ||
 	    strstr (name, "glass"))
 	{
 		alpha = WGPUWorld_ClampAlpha (r_wateralpha.value);
 		if (r_wateralpha.value >= 1.0f)
-			alpha += (0.82f - alpha) * style;
+			alpha = 0.82f;
 		return alpha;
 	}
 	return WGPUWorld_ClampAlpha (r_turbalpha.value);

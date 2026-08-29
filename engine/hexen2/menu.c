@@ -2341,7 +2341,7 @@ static int M_Display_DetectPreset (void)
 	    Cvar_VariableValue("r_nitro_resolve") != 0 &&
 	    Cvar_VariableValue("r_nitro_paletteshifts") != 0 &&
 	    Cvar_VariableValue("r_nitro_liquidmotion") != 0 &&
-	    Cvar_VariableValue("r_nitro_liquidstipple") != 0 &&
+	    Cvar_VariableValue("r_nitro_liquidstipple") == 0 &&
 	    fabsf(Cvar_VariableValue("r_nitro_liquidrefract") - 0.12f) < 0.001f &&
 	    Cvar_VariableValue("r_nitro_liquidglow") != 0)
 		return 7;	/* Moody */
@@ -2538,7 +2538,7 @@ static void M_Display_AdjustSliders (int dir)
 			Cvar_SetValue ("r_nitro_resolve", 1);
 			Cvar_SetValue ("r_nitro_paletteshifts", 1);
 			Cvar_SetValue ("r_nitro_liquidmotion", 1);
-			Cvar_SetValue ("r_nitro_liquidstipple", 1);
+			Cvar_SetValue ("r_nitro_liquidstipple", 0);
 			Cvar_SetValue ("r_nitro_liquidrefract", 0.12f);
 			Cvar_SetValue ("r_nitro_liquidglow", 1);
 			Cvar_SetValue (MENU_GLOWS_NAME, 1);
