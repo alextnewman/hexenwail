@@ -6,6 +6,11 @@ const read = (path) => readFileSync(path, 'utf8');
 const header = read('engine/h2shared/wgpu_nitro.h');
 const entities = read('engine/h2shared/wgpu_entity.c');
 const world = read('engine/h2shared/wgpu_world.c');
+const backend = read('engine/web/webgpu_nitro.js');
+const softwareModel = read('engine/h2shared/model.c');
+const webglModel = read('engine/h2shared/gl_model.c');
+const nitroModel = read('engine/h2shared/nitro_model.c');
+const menu = read('engine/hexen2/menu.c');
 
 test('Nitro sprites always preserve their authored clear index', () => {
   assert.match(
@@ -34,4 +39,25 @@ test('Nitro preserves authored DRF translucency independently of liquid alpha', 
     1,
     'brush entities use the authored half blend',
   );
+});
+
+test('the magic missile restores its packed colour and alpha semantics', () => {
+  for (const loader of [softwareModel, webglModel, nitroModel]) {
+    assert.equal(
+      (loader.match(/q_strcasecmp \(mod->name, "models\/ball\.mdl"\)[\s\S]{0,80}EF_SPECIAL_TRANS/g) ?? []).length,
+      2,
+      'both alias formats mark the magic missile as special translucent',
+    );
+  }
+  assert.match(header, /#define NITROTEX_SPECIAL_TRANS\s+64u/);
+  assert.match(entities, /model->flags & EF_SPECIAL_TRANS[\s\S]{0,80}NITROTEX_SPECIAL_TRANS/);
+  assert.match(backend, /packedIndex >> 4u/);
+  assert.match(backend, /colorPercent\[packedIndex & 15u\] \/ 255\.0/);
+});
+
+test('Moody restores colored dynamic glows', () => {
+  for (const name of ['r_nitro_coloredlight', 'r_nitro_extra_dynamic_lights']) {
+    assert.match(menu, new RegExp(`Cvar_VariableValue\\("${name}"\\) != 0`));
+    assert.match(menu, new RegExp(`Cvar_SetValue \\("${name}", 1\\)`));
+  }
 });

@@ -142,6 +142,7 @@ void WGPU_PolyBlendColor (float *rgba);
 #define NITROTEX_ALPHA		2u	/* palette index 255 is clear (2D pics) */
 #define NITROTEX_WRAP		4u	/* repeat instead of clamping */
 #define NITROTEX_TURB		8u	/* authored liquid sine warp */
+#define NITROTEX_SPECIAL_TRANS	64u	/* packed Hexen II colour/alpha nibbles */
 #define NITROTEX_LIQUID_SHIFT	4u
 #define NITROTEX_LIQUID_MASK	(3u << NITROTEX_LIQUID_SHIFT)
 #define NITROTEX_LIQUID_WATER	(0u << NITROTEX_LIQUID_SHIFT)

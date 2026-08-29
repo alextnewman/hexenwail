@@ -3196,6 +3196,8 @@ static void Mod_LoadAliasModelNew (qmodel_t *mod, void *buffer)
 	pheader = (aliashdr_t *) Hunk_AllocName (size, loadname);
 
 	mod->flags = LittleLong (pinmodel->flags);
+	if (!q_strcasecmp (mod->name, "models/ball.mdl"))
+		mod->flags |= EF_SPECIAL_TRANS;
 	Mod_SetExtraFlags (mod);	/* Ironwail r_nolerp_list */
 
 //
@@ -3393,6 +3395,8 @@ static void Mod_LoadAliasModel (qmodel_t *mod, void *buffer)
 	pheader = (aliashdr_t *) Hunk_AllocName (size, loadname);
 
 	mod->flags = LittleLong (pinmodel->flags);
+	if (!q_strcasecmp (mod->name, "models/ball.mdl"))
+		mod->flags |= EF_SPECIAL_TRANS;
 	Mod_SetExtraFlags (mod);	/* Ironwail r_nolerp_list */
 
 //
@@ -3775,6 +3779,7 @@ static void Mod_Print (void)
 		}
 	}
 
+
 	MOD_Printf (FH, "Cached models:\n");
 	for (i = 0, mod = mod_known; i < mod_numknown; i++, mod++)
 	{
@@ -3797,4 +3802,3 @@ static void Mod_Print (void)
 		Con_Printf ("Wrote to mcache.txt\n");
 	}
 }
-

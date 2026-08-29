@@ -472,13 +472,28 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   let size = vec2i(texParams.size);
   let texel = clamp(vec2i(floor(input.uv * texParams.size)),
                     vec2i(0), size - vec2i(1));
-  let index = textureLoad(diffuseTexture, texel, 0).r;
+  let packedIndex = textureLoad(diffuseTexture, texel, 0).r;
+  var index = packedIndex;
 
   if ((texParams.flags & 1u) != 0u && index == 0u) {
     discard;
   }
   if ((texParams.flags & 2u) != 0u && index == 255u) {
     discard;
+  }
+  var alpha = input.alpha;
+  if ((texParams.flags & 64u) != 0u) {
+    if (packedIndex == 0u) {
+      discard;
+    }
+    let colorIndex = array<u32, 16>(
+      0u, 31u, 47u, 63u, 79u, 95u, 111u, 127u,
+      143u, 159u, 175u, 191u, 199u, 207u, 223u, 231u);
+    let colorPercent = array<f32, 16>(
+      25.0, 51.0, 76.0, 102.0, 114.0, 127.0, 140.0, 153.0,
+      165.0, 178.0, 191.0, 204.0, 216.0, 229.0, 237.0, 247.0);
+    index = colorIndex[packedIndex >> 4u];
+    alpha *= colorPercent[packedIndex & 15u] / 255.0;
   }
 
   var shaded = index;
@@ -502,7 +517,7 @@ fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
   }
   let fog = atmosphereFog(input.fogDistance, input.worldPosition,
       dot(rgb, vec3f(0.2126, 0.7152, 0.0722)));
-  return vec4f(paletteQuantize(mix(rgb, frame.fogColor, fog)), input.alpha);
+  return vec4f(paletteQuantize(mix(rgb, frame.fogColor, fog)), alpha);
 }`,
 
     effectShader: `

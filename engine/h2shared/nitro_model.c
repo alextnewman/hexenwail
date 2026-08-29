@@ -2355,6 +2355,8 @@ static void Mod_LoadAliasModelNew (qmodel_t *mod, void *buffer)
 
 //	mod->cache.data = pheader;
 	mod->flags = LittleLong (pinmodel->flags);
+	if (!q_strcasecmp (mod->name, "models/ball.mdl"))
+		mod->flags |= EF_SPECIAL_TRANS;
 
 //
 // endian-adjust and copy the data, starting with the alias model header
@@ -2631,6 +2633,8 @@ static void Mod_LoadAliasModel (qmodel_t *mod, void *buffer)
 
 //	mod->cache.data = pheader;
 	mod->flags = LittleLong (pinmodel->flags);
+	if (!q_strcasecmp (mod->name, "models/ball.mdl"))
+		mod->flags |= EF_SPECIAL_TRANS;
 
 //
 // endian-adjust and copy the data, starting with the alias model header

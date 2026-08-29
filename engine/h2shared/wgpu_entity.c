@@ -390,8 +390,10 @@ static int WGPUEntity_AliasSkin (entity_t *entity, const aliashdr_t *paliashdr,
 	if (size <= 0)
 		return 0;
 
-	if (entity->model->flags & (EF_HOLEY | EF_TRANSPARENT | EF_SPECIAL_TRANS))
+	if (entity->model->flags & (EF_HOLEY | EF_TRANSPARENT))
 		flags |= NITROTEX_HOLEY;
+	if (entity->model->flags & EF_SPECIAL_TRANS)
+		flags |= NITROTEX_SPECIAL_TRANS;
 
 	entnum = (int)(entity - cl_entities) - 1;
 	if (entity->colormap && entity->colormap != vid.colormap &&
@@ -806,8 +808,6 @@ static void WGPUEntity_DrawAliasModel (entity_t *entity, unsigned int extraflags
 		alpha = ENTALPHA_DECODE(entity->alpha);
 		flags |= NITROMODEL_BLEND_ALPHA;
 	}
-	if (model->flags & EF_SPECIAL_TRANS)
-		flags = (flags & ~NITROMODEL_BLEND_ALPHA) | NITROMODEL_BLEND_ADD;
 	alpha = CLAMP(0.0f, alpha, 1.0f);
 	alphabyte = (int)(alpha * 255.0f + 0.5f);
 
