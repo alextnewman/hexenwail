@@ -2,7 +2,7 @@
  * draw_soft_web.c -- extended 2D API for the web software renderer.
  *
  * The shared client code in hexenwail was written against the extended
- * (Ironwail-parity) 2D API that the WebGL2 renderer publishes: alpha pics,
+ * Ironwail-parity 2D API: alpha pics,
  * alpha fills, glyph batching, multi-canvas UI scaling and full-screen
  * intermission art. draw.c -- the classic 8bpp rasteriser's 2D layer --
  * predates all of that.
@@ -55,7 +55,7 @@ static float	draw_charalpha = 1.0f;
 Draw_SoftWebInit
 
 Registers the UI-scaling cvars that shared client code reads. Called from
-Draw_Init() so the software and WebGL2 builds expose the same cvar set.
+Draw_Init() so the software renderer exposes the expected cvar set.
 ================
 */
 void Draw_SoftWebInit (void)
@@ -82,7 +82,7 @@ GL_SetCanvas
 
 The software rasteriser has no projection matrix, so a canvas is simply a
 translation of the 2D drawing origin: the 320-wide UI canvases are placed
-on the framebuffer exactly where the WebGL2 backend's viewport puts them.
+on the framebuffer at the same logical positions as Nitro's 2D path.
 The scale is always 1 (see SCR_CalcUIScale), so the canvas rectangle is:
 
   CANVAS_SBAR : 320 x UI_SBAR_CANVAS_HEIGHT, bottom of screen, centred
