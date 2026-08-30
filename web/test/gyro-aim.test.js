@@ -17,7 +17,7 @@ function environment(overrides = {}) {
   };
 }
 
-test('device gyro rotates into screen coordinates and emits relative look', () => {
+test('device gyro follows native device axes instead of screen rotation', () => {
   const looks = [];
   const env = environment({ screen: { orientation: { angle: 90 } } });
   const gyro = new GyroAim({ look: (...values) => looks.push(values) },
@@ -30,8 +30,8 @@ test('device gyro rotates into screen coordinates and emits relative look', () =
   });
 
   assert.equal(looks.length, 1);
-  assert.ok(Math.abs(looks[0][0] - (-10 * 0.02 / 0.022)) < 1e-9);
-  assert.ok(Math.abs(looks[0][1] - (20 * 0.02 / 0.022)) < 1e-9);
+  assert.ok(Math.abs(looks[0][0] - (20 * 0.02 / 0.022)) < 1e-9);
+  assert.ok(Math.abs(looks[0][1] - (10 * 0.02 / 0.022)) < 1e-9);
 });
 
 test('device motion permission is requested before events are attached', async () => {

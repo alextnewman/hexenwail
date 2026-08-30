@@ -147,12 +147,17 @@ export class GyroAim {
     const deltaSeconds = clampDeltaSeconds(elapsed, this.options.maxDeltaSeconds);
     if (!deltaSeconds) return;
 
-    const angle = finite(this.environment.screen?.orientation?.angle ?? this.environment.orientation);
-    const radians = angle * Math.PI / 180;
+    /*
+     * Keep the motion sensor mapped to the phone's native axes so it behaves
+     * like a fine-tuned cursor instead of a screen-rotation hack.  Safari
+     * exposes beta/gamma in the device's local frame; applying a second
+     * rotation from the viewport angle makes the axes drift and leaves one
+     * direction feeling dead on some iPhone orientations.
+     */
     const beta = finite(rate.beta);
     const gamma = finite(rate.gamma);
-    const pitch = beta * Math.cos(radians) + gamma * Math.sin(radians);
-    const yaw = gamma * Math.cos(radians) - beta * Math.sin(radians);
+    const pitch = beta;
+    const yaw = gamma;
     this.emitRates(yaw, pitch, deltaSeconds);
   }
 
