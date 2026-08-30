@@ -153,11 +153,14 @@ export class GyroAim {
      * exposes beta/gamma in the device's local frame; applying a second
      * rotation from the viewport angle makes the axes drift and leaves one
      * direction feeling dead on some iPhone orientations.
+     *
+     * Some motion-sensor implementations expose raw x/y slots instead of
+     * beta/gamma, but the web bridge treats left/right as yaw and up/down as
+     * pitch. Keep both axis names accepted so the X-axis drift does not vanish
+     * on a browser or controller that reports the raw local axes directly.
      */
-    const beta = finite(rate.beta);
-    const gamma = finite(rate.gamma);
-    const pitch = beta;
-    const yaw = gamma;
+    const yaw = finite(rate.gamma ?? rate.x ?? rate[0]);
+    const pitch = finite(rate.beta ?? rate.y ?? rate[1]);
     this.emitRates(yaw, pitch, deltaSeconds);
   }
 
