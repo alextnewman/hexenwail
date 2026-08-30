@@ -1475,8 +1475,9 @@ void WGPUWorld_DrawBrushEntity (entity_t *entity)
 
 		VectorCopy (wgpu_modelorg, offset);
 		AngleVectors (entity->angles, forward, right, up);
+		VectorInverse (right); /* local +Y is left, as in R_AliasSetUpTransform */
 		wgpu_modelorg[0] = DotProduct (offset, forward);
-		wgpu_modelorg[1] = -DotProduct (offset, right);
+		wgpu_modelorg[1] = DotProduct (offset, right);
 		wgpu_modelorg[2] = DotProduct (offset, up);
 	}
 
@@ -1498,18 +1499,43 @@ void WGPUWorld_DrawBrushEntity (entity_t *entity)
 	if (light >= 0.0f)
 		light = CLAMP(0.0f, light, 1.0f);
 
-	/* GLQuake's order: translate, yaw about Z, -pitch about Y, roll
-	 * about X.  The view projection is applied on the CPU so the shader
-	 * has one matrix to multiply by, not two. */
-	WGPU_MatrixTranslate (&translate, entity->origin[0], entity->origin[1],
-				entity->origin[2]);
-	WGPU_MatrixRotate (&rotate, entity->angles[1], 0, 0, 1);
-	WGPU_MatrixMultiply (&temp, &translate, &rotate);
-	WGPU_MatrixRotate (&rotate, -entity->angles[0], 0, 1, 0);
-	WGPU_MatrixMultiply (&local, &temp, &rotate);
-	WGPU_MatrixRotate (&rotate, entity->angles[2], 1, 0, 0);
-	WGPU_MatrixMultiply (&temp, &local, &rotate);
-	WGPU_MatrixMultiply (&mvp, &wgpu_view_projection, &temp);
+	if (rotated)
+	{
+		vec3_t	forward, right, up;
+	
+		AngleVectors (entity->angles, forward, right, up);
+		VectorInverse (right); /* local +Y is left, as in R_AliasSetUpTransform */
+		/* Store the basis as columns to match the engine's column-major mat4. */
+		WGPU_MatrixIdentity (&local);
+		local.m[0] = forward[0];
+		local.m[1] = forward[1];
+		local.m[2] = forward[2];
+		local.m[4] = right[0];
+		local.m[5] = right[1];
+		local.m[6] = right[2];
+		local.m[8] = up[0];
+		local.m[9] = up[1];
+		local.m[10] = up[2];
+		local.m[12] = entity->origin[0];
+		local.m[13] = entity->origin[1];
+		local.m[14] = entity->origin[2];
+		WGPU_MatrixMultiply (&mvp, &wgpu_view_projection, &local);
+	}
+	else
+	{
+		/* GLQuake's order: translate, yaw about Z, -pitch about Y, roll
+		 * about X.  The view projection is applied on the CPU so the shader
+		 * has one matrix to multiply by, not two. */
+		WGPU_MatrixTranslate (&translate, entity->origin[0], entity->origin[1],
+					entity->origin[2]);
+		WGPU_MatrixRotate (&rotate, entity->angles[1], 0, 0, 1);
+		WGPU_MatrixMultiply (&temp, &translate, &rotate);
+		WGPU_MatrixRotate (&rotate, -entity->angles[0], 0, 1, 0);
+		WGPU_MatrixMultiply (&local, &temp, &rotate);
+		WGPU_MatrixRotate (&rotate, entity->angles[2], 1, 0, 0);
+		WGPU_MatrixMultiply (&temp, &local, &rotate);
+		WGPU_MatrixMultiply (&mvp, &wgpu_view_projection, &temp);
+	}
 
 	block = WGPUWorld_NewEntityBlock (&mvp, alpha, light);
 
