@@ -3,13 +3,13 @@
 ![Screenshot](docs/screenshot1.png)
 *New worlds await!* ([Wheel of Karma](https://www.moddb.com/mods/wheel-of-karma-a-tulku-odyssey), by Inky)
 
-This project is a web-native port of uHexen2 for installed iOS PWA devices. The Hexenwail codebase was used as a convenient starting point, but the project now diverges materially from the original Hexenwail goal and architecture.
+This project is not a Hexenwail fork in the original product sense. It is a web-native port of uHexen2 built specifically for installed iOS PWA devices. The Hexenwail codebase was used as a practical starting point because it already had the modern engine scaffolding we wanted, but the target architecture and goals are materially different.
 
-> History: This project inherits code from a Hexenwail fork, but it is not a Hexenwail project in the original sense.
+> History: This repo inherits code from a Hexenwail fork, but it is a distinct web-native uHexen2 port with a custom platform layer, custom renderer assumptions, and a browser-first deployment target. The browser is treated as an independent game console OS, not as a generic SDL/Linux desktop port.
 
 ## [Latest Release](https://github.com/hexenwail/hexenwail/releases) | [Report a Bug](https://github.com/hexenwail/hexenwail/issues)
 
-This project follows the same modernization spirit as [Ironwail](https://github.com/andrei-drexler/ironwail), but it is a purpose-built web stack for uHexen2 rather than a traditional Hexenwail desktop fork.
+This is not an Ironwail-style desktop modernization or a generic cross-platform engine fork. We are not trying to preserve a one-size-fits-all Unix/SDL architecture or chase a modern desktop renderer. The goal is to make Hexen II playable as a native-feeling web game on iOS/PWA while keeping the original uHexen2 lineage and mod compatibility intact.
 
 Raven Software released the Hexen II source code in 2000. [Hammer of Thyrion](http://uhexen2.sourceforge.net/) (2004–2018) by O. Sezer became the definitive cross-platform engine. [uHexen2](https://github.com/sezero/uhexen2) continued the work with graphical enhancements and mod support — notably Shanjaq and Inky's contributions. YouHexen2 inherits that lineage, while building a distinct web-native platform around it.
 
