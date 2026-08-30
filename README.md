@@ -1,27 +1,31 @@
-# Hexen II: Hexenwail
+# YouHexen2
 
 ![Screenshot](docs/screenshot1.png)
 *New worlds await!* ([Wheel of Karma](https://www.moddb.com/mods/wheel-of-karma-a-tulku-odyssey), by Inky)
 
+This project is a web-native port of uHexen2 for installed iOS PWA devices. The Hexenwail codebase was used as a convenient starting point, but the project now diverges materially from the original Hexenwail goal and architecture.
+
+> History: This project inherits code from a Hexenwail fork, but it is not a Hexenwail project in the original sense.
+
 ## [Latest Release](https://github.com/hexenwail/hexenwail/releases) | [Report a Bug](https://github.com/hexenwail/hexenwail/issues)
 
-Just as [Ironwail](https://github.com/andrei-drexler/ironwail) took sezero's [QuakeSpasm](https://github.com/sezero/quakespasm) and modernized its renderer, Hexenwail does the same for Hexen II.
+This project follows the same modernization spirit as [Ironwail](https://github.com/andrei-drexler/ironwail), but it is a purpose-built web stack for uHexen2 rather than a traditional Hexenwail desktop fork.
 
-Raven Software released the Hexen II source code in 2000. [Hammer of Thyrion](http://uhexen2.sourceforge.net/) (2004–2018) by O. Sezer became the definitive cross-platform engine. [uHexen2](https://github.com/sezero/uhexen2) continued the work with graphical enhancements and mod support — notably Shanjaq and Inky's contributions. Hexenwail (2025) began when [Storm over Thyrion](https://www.moddb.com/mods/storm-over-thyrion) shipped without a buildable Linux client, and grew into a full GL 4.3 modernization.
+Raven Software released the Hexen II source code in 2000. [Hammer of Thyrion](http://uhexen2.sourceforge.net/) (2004–2018) by O. Sezer became the definitive cross-platform engine. [uHexen2](https://github.com/sezero/uhexen2) continued the work with graphical enhancements and mod support — notably Shanjaq and Inky's contributions. YouHexen2 inherits that lineage, while building a distinct web-native platform around it.
 
-Hexenwail does *not* include any original game assets; a valid copy of Hexen II is *required* and can be purchased from [GOG](https://www.gog.com/en/game/hexen_ii). You need `data1/pak0.pak` and `data1/pak1.pak`. For Portal of Praevus, add `portals/pak3.pak`; it is auto-included when you launch with `-game modname` / `-mod modname` (use `-noportals` to opt out), and is toggleable from the Mods menu.
+YouHexen2 does *not* include any original game assets; a valid copy of Hexen II is *required* and can be purchased from [GOG](https://www.gog.com/en/game/hexen_ii). You need `data1/pak0.pak` and `data1/pak1.pak`. For Portal of Praevus, add `portals/pak3.pak`; it is auto-included when you launch with `-game modname` / `-mod modname` (use `-noportals` to opt out), and is toggleable from the Mods menu.
 
 See [USAGE.md](USAGE.md) for external textures, Steam Deck setup, and mod configuration.
 
 ## Which version should I use?
 
-**Lineage:** Hexen II by Raven Software, published by id Software *(1997)* → engine source open-sourced under the GPL *(2000)* → Anvil of Thyrion Linux port (Dan Olson & Clément Bourdarias) → Hammer of Thyrion / uHexen2 (O. Sezer, *2004*–2018; final release 1.5.9 on *2018-06-06*) → Shanjaq's additions → Hexenwail *(2026)*
+**Lineage:** Hexen II by Raven Software, published by id Software *(1997)* → engine source open-sourced under the GPL *(2000)* → Anvil of Thyrion Linux port (Dan Olson & Clément Bourdarias) → Hammer of Thyrion / uHexen2 (O. Sezer, *2004*–2018; final release 1.5.9 on *2018-06-06*) → Shanjaq's additions → YouHexen2 *(2026)*
 
 There are three living branches of the Hexen II engine, depending on what you want to play:
 
 - **Vanilla & upstream maintenance** — [Hammer of Thyrion / uHexen2](https://github.com/sezero/uhexen2), sezero's `main` branch. The reference cross-platform engine: the most faithful to the original release and the best base for general play and ongoing portability work.
 - **Classic community mods (Shanjaq era)** — [Shanjaq's fork](https://github.com/shanjaq/uhexen2) through its final `uhexen2-r6303.zip` build. This is the engine many mods in the active [Hexen II Discord community](https://discord.com/channels/557756282430554112) were built and tested against, so it remains the safest choice for that catalog of content.
-- **Steam Deck & modern systems** — Hexenwail (this project). A GL 4.3 / SDL3 modernization with gamepad support, render scaling, display presets, and Flatpak packaging, aimed at current hardware while staying mod-compatible.
+- **Steam Deck & modern systems** — YouHexen2 (this project). A web-native uHexen2 port with custom platform and renderer logic, gamepad support, render scaling, and PWA deployment for modern hardware.
 
 ## Platforms
 
@@ -105,7 +109,7 @@ Two ways to attach music to a custom map:
    "CD"   "10"          // numeric fallback for engines without MIDI-key support
    ```
    Ship `<gamedir>/music/arena.ogg` (or `.opus`/`.mp3`/`.flac`/`.wav`/`.mid`/etc.).
-   Hexenwail also looks under `<gamedir>/music/<subdir>/arena.ogg` so multiple
+   YouHexen2 also looks under `<gamedir>/music/<subdir>/arena.ogg` so multiple
    authors can keep their tracks in separate folders without colliding.
 
 2. **Numeric track + remap** — keep the legacy `track%02d.ogg` layout but use
@@ -126,7 +130,7 @@ Two ways to attach music to a custom map:
 
 ## Building
 
-Hexenwail targets **Emscripten only** — `engine/CMakeLists.txt` fails the configure
+YouHexen2 targets **Emscripten only** — `engine/CMakeLists.txt` fails the configure
 step on any other toolchain, and there is no native Linux or Windows binary. The
 deployment target is an installed iOS PWA; see
 [docs/web/ARCHITECTURE.md](docs/web/ARCHITECTURE.md) for the settled scope and
