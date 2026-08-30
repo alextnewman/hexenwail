@@ -1505,6 +1505,7 @@ void WGPUWorld_DrawBrushEntity (entity_t *entity)
 	
 		AngleVectors (entity->angles, forward, right, up);
 		VectorInverse (right); /* local +Y is left, as in R_AliasSetUpTransform */
+		/* Store the basis as columns to match the engine's column-major mat4. */
 		WGPU_MatrixIdentity (&local);
 		local.m[0] = forward[0];
 		local.m[1] = forward[1];
