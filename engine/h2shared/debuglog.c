@@ -71,7 +71,7 @@ void LOG_Printf (const char *fmt, ...)
 static void LOG_PrintVersion (void)
 {
 /* repeating the PrintVersion() messages from main() here */
-	LOG_Printf("Hexenwail %s (%s)\n", HW_VERSION, PLATFORM_STRING);
+	LOG_Printf("YouHexen2 %s (%s)\n", HW_VERSION, PLATFORM_STRING);
 	LOG_Printf("based on Hexen II engine %4.2f / Hammer of Thyrion 1.5.10\n", ENGINE_VERSION);
 }
 

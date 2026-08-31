@@ -598,7 +598,7 @@ async function exportSaves() {
     const file = new File([bytes], filename, { type: 'application/zip' });
     if (navigator.share && navigator.canShare?.({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: 'Hexenwail save bundle' });
+        await navigator.share({ files: [file], title: 'YouHexen2 save bundle' });
         setSaveMessage(`Exported ${saveEntries.length} save file(s), ${formatBytes(bytes.byteLength)}.`, 'success');
         return;
       } catch (error) {
@@ -953,7 +953,7 @@ async function handleEngineQuit(kind = 'quit', message = '') {
   releasePhoneInputs();
   const intentional = kind === 'quit';
   try {
-    setStatus(intentional ? 'Hexenwail quit. Syncing saves…' : `Engine stopped unexpectedly. Syncing saves…`, intentional ? 'info' : 'error');
+    setStatus(intentional ? 'YouHexen2 quit. Syncing saves…' : `Engine stopped unexpectedly. Syncing saves…`, intentional ? 'info' : 'error');
     await syncRuntimeToStorage();
   } catch (error) {
     console.warn('Quit-time save sync failed', error);
@@ -964,7 +964,7 @@ async function handleEngineQuit(kind = 'quit', message = '') {
     exitNativeFullscreen().catch((error) => console.warn('Leaving fullscreen failed', error));
     closePhoneOverlay();
     setStatus(intentional
-      ? 'Hexenwail stopped. Use Restart game to start a fresh WASM runtime.'
+      ? 'YouHexen2 stopped. Use Restart game to start a fresh WASM runtime.'
       : `Engine fatal error: ${message || 'unknown error'}. Restart game reloads a clean runtime.`, intentional ? 'info' : 'error');
     updateLaunchState();
     state.quitInProgress = false;
@@ -986,7 +986,7 @@ async function startEngineFromUserAction() {
    * before the first frame is drawn. */
   enterFullscreenPlay().catch((error) => appendRuntimeLog('[launcher]', `Fullscreen on launch failed: ${error.message}`));
   scheduleCanvasResize();
-  setStatus('Starting Hexenwail…');
+  setStatus('Starting YouHexen2…');
   try {
     const Module = getModule();
     if (typeof Module.callMain !== 'function') {
@@ -998,7 +998,7 @@ async function startEngineFromUserAction() {
       throw new Error(`Engine exited during startup with status ${exitStatus}.`);
     }
     scheduleCanvasResize();
-    setStatus('Hexenwail running. Press ☰ to leave fullscreen or return to the launcher.');
+    setStatus('YouHexen2 running. Press ☰ to leave fullscreen or return to the launcher.');
   } catch (error) {
     if (state.quitInProgress) return;
     state.engineStarted = false;

@@ -6023,7 +6023,7 @@ static void M_Quit_Draw (void)
 
 #define QUIT_CENTER(str)	((320 - (int)strlen(str) * 8) / 2)
 	{
-		const char *l0 = "Hexenwail " HW_VERSION;
+		const char *l0 = "YouHexen2 " HW_VERSION;
 		const char *l1 = "Hammer of Thyrion 1.5.10 by sezero";
 		const char *l2 = "Hexen II 1.29 by Raven Software";
 		const char *l3 = "with Shanjaq & Inky additions,";

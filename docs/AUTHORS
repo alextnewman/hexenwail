@@ -1,9 +1,9 @@
-Hexenwail - a Hexen II source port
-  https://github.com/hexenwail/hexenwail
-  Based on Hammer of Thyrion (uHexen2) by O. Sezer
+YouHexen2 - a web-native Hexen II source port
+  https://github.com/alextnewman/hexenwail
+  Based on Hexenwail and Hammer of Thyrion (uHexen2)
 
-Hexenwail Maintainer:
----------------------
+Hexenwail codebase maintainer:
+------------------------------
   Bob Bobber
 
 Hammer of Thyrion Maintainer:
@@ -73,4 +73,3 @@ More contributors (documentation & testing):
 
 If you think your name is missing and should be mentioned here,
 please contact us so we can add it.
-

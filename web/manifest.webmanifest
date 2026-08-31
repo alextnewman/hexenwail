@@ -1,13 +1,13 @@
 {
-  "name": "Hexenwail PWA",
-  "short_name": "Hexenwail",
+  "name": "YouHexen2",
+  "short_name": "YouHexen2",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "landscape",
   "background_color": "#12101b",
   "theme_color": "#2b2242",
-  "description": "Offline-capable GitHub Pages PWA launcher for the Hexenwail WebAssembly build. Import your legally acquired Hexen II assets locally in the browser.",
+  "description": "A web-native HTML5 port of uHexen2 for iPadOS, powered by WebGlideNitro and playable offline.",
   "icons": [
     {
       "src": "./icons/icon.svg",

@@ -86,11 +86,11 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
     try {
       device.pushErrorScope('validation');
       const module = device.createShaderModule({
-        label: 'Hexenwail indexed presenter',
+        label: 'YouHexen2 indexed presenter',
         code: WebGPUCanvas.shader,
       });
       pipeline = device.createRenderPipeline({
-        label: 'Hexenwail indexed presenter',
+        label: 'YouHexen2 indexed presenter',
         layout: 'auto',
         vertex: { module, entryPoint: 'vertexMain' },
         fragment: {
@@ -101,12 +101,12 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
         primitive: { topology: 'triangle-list' },
       });
       paramsBuffer = device.createBuffer({
-        label: 'Hexenwail presenter parameters',
+        label: 'YouHexen2 presenter parameters',
         size: 16,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
       paletteTexture = device.createTexture({
-        label: 'Hexenwail palette',
+        label: 'YouHexen2 palette',
         size: { width: 256, height: 1 },
         format: 'rgba8unorm',
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
@@ -144,7 +144,7 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
     if (state.width === width && state.height === height) return;
     state.indexedTexture?.destroy();
     state.indexedTexture = state.device.createTexture({
-      label: 'Hexenwail indexed framebuffer',
+      label: 'YouHexen2 indexed framebuffer',
       size: { width, height },
       format: 'r8uint',
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
@@ -209,7 +209,7 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
     state.device.queue.writeBuffer(state.paramsBuffer, 0, params);
 
     const encoder = state.device.createCommandEncoder({
-      label: 'Hexenwail presenter commands',
+      label: 'YouHexen2 presenter commands',
     });
     const pass = encoder.beginRenderPass({
       colorAttachments: [{

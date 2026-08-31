@@ -1,6 +1,6 @@
 # YouHexen2 PWA / GitHub Pages build
 
-This repository now includes a GitHub-Pages-deployable, installable PWA shell for the WebAssembly build of YouHexen2, including fullscreen play and a rudimentary phone mode for iPhone/iOS Safari.
+This is the build and platform guide for YouHexen2, a web-native HTML5/WebAssembly port of uHexen2 deployed as an installable PWA for iPadOS and iOS. WebGlideNitro is its primary native WebGPU renderer; the classic software renderer remains available as the correctness reference.
 
 ## Goals
 

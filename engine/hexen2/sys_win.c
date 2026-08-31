@@ -444,7 +444,7 @@ static int Sys_GetBasedir (char *argv0, char *dst, size_t dstsize)
 
 static void PrintVersion (void)
 {
-	Sys_Printf ("Hexenwail %s (%s)\n", HW_VERSION, PLATFORM_STRING);
+	Sys_Printf ("YouHexen2 %s (%s)\n", HW_VERSION, PLATFORM_STRING);
 	Sys_Printf ("based on Hexen II engine %4.2f / Hammer of Thyrion 1.5.10\n", ENGINE_VERSION);
 }
 
