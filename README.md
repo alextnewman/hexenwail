@@ -1,6 +1,6 @@
 # YouHexen2
 
-**Hexen II rebuilt as an HTML5 game for iPad.**
+**Hexen II rebuilt as an HTML5 game for web-centric devices like iPad.**
 
 [Play or install](https://alextnewman.github.io/youhexen2/) · [Report a bug](https://github.com/alextnewman/youhexen2/issues)
 
@@ -43,7 +43,7 @@ Nitro draws the complete playable scene, but its correctness work is still in pr
 
 ## Platform
 
-The supported target is an installed PWA on iPadOS, tuned and measured on iPad Pro hardware. iPhone is supported by the same platform layer and touch interface. Other browsers may work, but Android, desktop browsers, native desktop builds, multiplayer, and dedicated servers are not development targets.
+The supported target is an installed PWA on iPadOS, tuned and measured on iPad Pro hardware. iPhone is supported by the same platform layer and touch interface. Other browsers may work, but Android, desktop browsers, native desktop builds, multiplayer, and dedicated servers are not development targets. It runs well on Firefox for Windows-ARM64, but that result is omitted because I am the only person on Earth who uses that. 
 
 The port is deliberately single-threaded. Its HTML5 platform layer directly owns WebAudio, browser input, OPFS/IndexedDB storage, fullscreen and canvas sizing, and the Emscripten main loop instead of preserving desktop abstractions that do not help the iOS build.
 
