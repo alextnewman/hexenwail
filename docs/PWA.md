@@ -109,7 +109,7 @@ The workflow:
 
 All launcher URLs are relative (`./...`) so the site works under project Pages paths such as:
 
-- `https://<user>.github.io/hexenwail/`
+- `https://<user>.github.io/youhexen2/`
 
 ## Installing on iPadOS / iOS
 

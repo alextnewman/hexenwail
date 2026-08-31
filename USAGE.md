@@ -4,7 +4,7 @@ YouHexen2 is used through its HTML5 launcher, not through a native executable.
 
 ## Install and import
 
-1. Open the [YouHexen2 launcher](https://alextnewman.github.io/hexenwail/) in Safari.
+1. Open the [YouHexen2 launcher](https://alextnewman.github.io/youhexen2/) in Safari.
 2. Choose **Share → Add to Home Screen** and open the installed app.
 3. Import `pak0.pak` and `pak1.pak` from a legally owned copy of Hexen II. You can select loose PAKs, a directory, or a ZIP containing the game tree.
 4. Import `portals/pak3.pak` if you own Portal of Praevus.
