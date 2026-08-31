@@ -1,6 +1,6 @@
 # Demo Configuration Files
 
-Hexenwail supports per-demo configuration files that allow modders and content creators to customize engine behavior for specific demos without modifying the engine itself.
+YouHexen2 supports per-demo configuration files that allow modders and content creators to customize engine behavior for specific demos without modifying the engine itself.
 
 ## How It Works
 

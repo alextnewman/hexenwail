@@ -1,13 +1,13 @@
 {
-  "name": "Hexenwail",
-  "short_name": "Hexenwail",
+  "name": "YouHexen2",
+  "short_name": "YouHexen2",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "landscape",
   "background_color": "#12101b",
   "theme_color": "#2b2242",
-  "description": "Install Hexenwail on iPadOS, import your legally acquired Hexen II data, and play offline.",
+  "description": "A web-native HTML5 port of uHexen2 for iPadOS, powered by WebGlideNitro and playable offline.",
   "icons": [
     {
       "src": "./icons/icon.svg",

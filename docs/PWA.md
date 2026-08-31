@@ -1,6 +1,6 @@
-# Hexenwail PWA / GitHub Pages build
+# YouHexen2 PWA / GitHub Pages build
 
-This is the build and platform guide for Hexenwail's GitHub-Pages-deployable, installable PWA shell, including fullscreen play and a phone mode for iPhone/iOS Safari.
+This is the build and platform guide for YouHexen2, a web-native HTML5/WebAssembly port of uHexen2 deployed as an installable PWA for iPadOS and iOS. WebGlideNitro is its primary native WebGPU renderer; the classic software renderer remains available as the correctness reference.
 
 ## Goals
 

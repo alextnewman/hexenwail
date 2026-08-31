@@ -1,5 +1,5 @@
 {
-  description = "Hexenwail - uHexen2 (Hammer of Thyrion) as an installable iOS PWA";
+  description = "YouHexen2 - a web-native uHexen2 port for installed iOS PWAs";
 
   nixConfig = {
     extra-substituters = [ "https://hexenwail.cachix.org" ];
@@ -125,7 +125,7 @@
             '';
 
             meta = with pkgs.lib; {
-              description = "Hexenwail - installable WebAssembly PWA build";
+              description = "YouHexen2 - installable WebAssembly PWA build";
               longDescription = ''
                 uHexen2 built for the browser as an installable PWA, using the
                 classic 8bpp software renderer presented on an accelerated
@@ -151,7 +151,7 @@
           ];
 
           shellHook = ''
-            echo "Hexenwail web development environment"
+            echo "YouHexen2 web development environment"
             echo ""
             echo "Build the software renderer with WebGPU presentation:"
             echo "  ./scripts/wasm-build.sh software"

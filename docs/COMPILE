@@ -1,59 +1,33 @@
-Hexenwail - Compiling from source
+YouHexen2 - compiling from source
 =================================
 
-Hexenwail uses CMake and builds on Linux and Windows.
-The recommended way to build on NixOS/Nix is with the provided flake.
+YouHexen2 is an Emscripten-only HTML5/WebAssembly target. engine/CMakeLists.txt intentionally rejects native toolchains; there is no current Linux, Windows, SDL, or OpenGL build.
 
+Requirements:
 
-Building with Nix (recommended):
-================================
+  - Emscripten SDK 4.0.23
+  - CMake
+  - Node.js 22 or newer for PWA tests
 
-    nix build
+Use the convenience targets from the repository root:
 
-This produces the binary in result/bin/.
+    source "$EMSDK/emsdk_env.sh"
 
+    make build          # WebGlideNitro, the primary native WebGPU renderer
+    make build-software # classic 8-bit renderer with WebGPU presentation
+    make dist           # build both renderers and assemble the PWA in dist/
+    make test           # run the Node-based PWA tests
 
-Building with CMake:
-====================
+The Makefile calls the same scripts used by CI, Pages, and release builds:
 
-Prerequisites:
-  - CMake 3.20+
-  - A C compiler with C11 support (GCC 10+, Clang 12+)
-  - SDL3 development libraries
-  - OpenGL 4.3 capable driver
+    ./scripts/wasm-build.sh nitro engine/build-nitro
+    ./scripts/wasm-build.sh software
+    ./scripts/wasm-assemble-artifact.sh dist
+    ./scripts/wasm-validate-artifact.sh dist
 
-Optional libraries for music playback:
-  - libogg and libvorbis (or libtremor) for OGG Vorbis
-  - libmad or libmpg123 for MP3
-  - libogg, opus, and opusfile for Opus
-  - libFLAC for FLAC
-  - libxmp or libmikmod for tracker music (MOD/S3M/XM/IT)
+WEB_RENDERER is the only renderer selector:
 
-Build steps:
+  webgpu   WebGlideNitro; defines WEBGPUQUAKE and emits hexenwail-nitro.*
+  software classic rasterizer; defines WEBSOFT and emits hexenwail.*
 
-    mkdir build && cd build
-    cmake ..
-    make
-
-The binary will be named glhexen2 (Linux) or glh2.exe (Windows).
-
-
-Cross-compiling for Windows:
-============================
-
-Use MinGW-w64 with CMake:
-
-    mkdir build-win && cd build-win
-    cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/mingw-w64.cmake ..
-    make
-
-
-Links:
-------
-SDL homepage        : https://libsdl.org/
-Ogg/Vorbis homepage : https://xiph.org/
-Opus homepage       : https://opus-codec.org/
-libmad homepage     : http://www.underbit.com/products/mad/
-mpg123 homepage     : http://mpg123.org/
-FLAC homepage       : https://xiph.org/flac/
-libxmp homepage     : https://github.com/libxmp/libxmp
+The inherited hexenwail bundle names are stable internal identifiers. See web/ARCHITECTURE.md for the complete platform and macro contract and PWA.md for local serving and deployment.

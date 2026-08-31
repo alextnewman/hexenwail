@@ -1,38 +1,38 @@
-# Usage
+# Using YouHexen2
 
-## External textures
+YouHexen2 is used through its HTML5 launcher, not through a native executable.
 
-Hexenwail supports external texture overrides — drop hi-res TGA/PNG/PCX files into the game directory to replace internal assets:
+## Install and import
 
-| Asset type | Override path | Cvar |
-|------------|--------------|------|
-| BSP textures | `textures/<name>.tga` | `r_texture_external 1` |
-| Model skins | `models/<model>_<skin>.tga` | `r_texture_external 1` |
-| HUD/menu graphics | `gfx/<name>.tga` | `r_texture_external_hud 1` |
+1. Open the [YouHexen2 launcher](https://alextnewman.github.io/hexenwail/) in Safari.
+2. Choose **Share → Add to Home Screen** and open the installed app.
+3. Import `pak0.pak` and `pak1.pak` from a legally owned copy of Hexen II. You can select loose PAKs, a directory, or a ZIP containing the game tree.
+4. Import `portals/pak3.pak` if you own Portal of Praevus.
+5. Press **Start game**. Assets and saves are retained in browser storage for offline play.
 
-## AI upscale tool
+There is no Flatpak data directory or `glhexen2` command in the current product. The old Linux, Windows, SDL, OpenGL, and Steam Deck instructions belonged to the Hexenwail desktop ancestor and no longer apply.
 
-Use `tools/upscale-pak.sh` to extract and upscale all assets from a PAK file (requires nix):
+## Renderer
 
-```bash
-# Base game
-./tools/upscale-pak.sh ~/hexen2/data1/pak0.pak ~/hexen2/data1
+The launcher’s **Renderer** card selects the engine bundle:
 
-# Full game (palette from pak0)
-./tools/upscale-pak.sh ~/hexen2/data1/pak1.pak ~/hexen2/data1 --palette ~/hexen2/data1/pak0.pak
+- **WebGlideNitro** is the default native WebGPU renderer.
+- **Software + WebGPU presentation** is the classic 8-bit correctness reference.
 
-# Portal of Praevus
-./tools/upscale-pak.sh ~/hexen2/portals/pak3.pak ~/hexen2/portals --palette ~/hexen2/data1/pak0.pak
-```
+Changing the renderer reloads the launcher before the next game starts. Both choices use the same imported data and saves.
 
-Options: `--scale 2|3|4` (default 4), `--upscaler realcugan|realesrgan` (default realcugan), `--denoise -1|0|1|2|3`.
+## Controls
 
-## Game data paths
+Touch controls appear automatically on a touch-only device and can be forced on or off in the launcher. Gyro aim is optional and has its own sensitivity and Y-inversion setting.
 
-**Flatpak:** Drop your game data into `~/.var/app/io.github.hexenwail.hexenwail/.hexen2/`
+A standard browser gamepad can drive gameplay and every menu. On an iPad keyboard, `` ` `` acts as Escape and `Shift`+`` ` `` opens the console. Mouse input works where Safari exposes it, but iPadOS does not currently provide Pointer Lock.
 
-To launch a mod with portals data included: `glhexen2 -mod <modname>`
+## Saves
 
-## Steam Deck
+The engine periodically synchronizes saves to persistent browser storage and also syncs when the app leaves the foreground. Use **Export saves** to make a portable ZIP and **Import saves** to restore it. Save bundles never include commercial PAK or music data.
 
-Add Hexenwail to Steam, then right-click it → Properties → Controller → set the override to **Gamepad** (or "Gamepad with Joystick Trackpad"). The default Desktop layout emulates keyboard input instead of passing the controller through to SDL.
+## Music
+
+The HTML5 build decodes OGG Vorbis, MP3, FLAC, and WAV. It does not synthesize the MIDI files inside the original PAKs, so import external music named for the MIDI track requested by the map—for example, `casa1.ogg`, not `track02.ogg`.
+
+See [the complete PWA guide](docs/PWA.md) for storage behavior, file mapping, save compatibility, controls, offline updates, performance capture, and troubleshooting. See [the music guide](docs/README.music) for the CD-track-to-MIDI-name table.

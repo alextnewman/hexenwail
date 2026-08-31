@@ -284,7 +284,7 @@ being parsed at the wrong offset.
 The restored rasteriser is verbatim uHexen2 with one exception:
 `R_NewMap()` in `engine/hexen2/r_main.c` now calls
 `Mod_RestoreAliasModelDefaults()` and `R_ClearPimpOverrides()`. Without it,
-hexenwail's per-entity PimpModel overrides bleed
+YouHexen2's per-entity PimpModel overrides bleed
 across map changes.
 
 ## Building and validating

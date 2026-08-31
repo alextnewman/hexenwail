@@ -141,7 +141,7 @@ export async function validateSaveBundle(bytes) {
   }
   const files = await extractZipEntries(bytes, { limits: { maxEntries: SAVE_BUNDLE_LIMITS.maxFiles + 1, maxSingleEntrySize: SAVE_BUNDLE_LIMITS.maxFileBytes, maxTotalUncompressedSize: SAVE_BUNDLE_LIMITS.maxTotalBytes } });
   const manifestFile = files.find((file) => file.name === SAVE_MANIFEST_PATH);
-  assertBundle(manifestFile, 'Not a Hexenwail save bundle: manifest is missing');
+  assertBundle(manifestFile, 'Not a YouHexen2 save bundle: manifest is missing');
   let manifest;
   try { manifest = JSON.parse(decoder.decode(manifestFile.data)); } catch { throw new Error('Save bundle manifest is not valid JSON'); }
   assertBundle(manifest?.format === SAVE_BUNDLE_FORMAT, 'Unsupported save bundle format');

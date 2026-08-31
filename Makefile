@@ -1,4 +1,4 @@
-# Hexenwail Build System - Convenience Makefile
+# YouHexen2 Build System - Convenience Makefile
 #
 # This engine targets Emscripten only: engine/CMakeLists.txt fails the
 # configure step outright on any other toolchain. There is no native
@@ -8,7 +8,7 @@
 .PHONY: help build build-software build-nitro dist test clean
 
 help:
-	@echo "Hexenwail Build Targets"
+	@echo "YouHexen2 Build Targets"
 	@echo "======================"
 	@echo ""
 	@echo "Requires emcmake/emmake on PATH:"

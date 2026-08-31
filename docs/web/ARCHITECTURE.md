@@ -2,19 +2,17 @@
 
 **Status:** canonical. This document, together with
 [`WEBGLIDE_NITRO.md`](WEBGLIDE_NITRO.md), is the agreed design for the
-hexenwail web target. Read both before changing anything under `engine/`,
+YouHexen2 web target. Read both before changing anything under `engine/`,
 `web/`, or `docs/web/`. If reality and these documents disagree, one of them
 is a bug — say so explicitly rather than quietly re-deriving a new plan.
 
 ## What this project is
 
-hexenwail is a hard port of **uHexen2 (Hammer of Thyrion)** to the web
+YouHexen2 is a hard port of **uHexen2 (Hammer of Thyrion)** to the web
 platform, deployed as an **installed iOS PWA**. That is the whole goal: a
 Hexen II you can install on an iPad and play offline.
 
-hexenwail was forked from a modernised uHexen2 tree because its build
-bindings were convenient, not because we wanted its renderer. The modern GPU
-renderer is a means, never the end.
+The source tree began with Hexenwail because its modern uHexen2 build bindings were convenient, not because we wanted its desktop product or renderer. The repository, bundles and compatibility-sensitive interfaces retain `hexenwail` as an internal identifier; the product is YouHexen2. The modern GPU renderer is a means, never the end.
 
 ## Non-goals
 

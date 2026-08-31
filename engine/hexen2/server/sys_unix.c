@@ -488,7 +488,7 @@ static int Sys_GetUserdir (char *dst, size_t dstsize)
 
 static void PrintVersion (void)
 {
-	Sys_Printf ("Hexenwail %s (%s)\n", HW_VERSION, PLATFORM_STRING);
+	Sys_Printf ("YouHexen2 %s (%s)\n", HW_VERSION, PLATFORM_STRING);
 	Sys_Printf ("Hexen II dedicated server %4.2f\n", ENGINE_VERSION);
 }
 
@@ -615,4 +615,3 @@ int main (int argc, char **argv)
 
 	return 0;
 }
-
