@@ -1,80 +1,81 @@
-# YouHexen2
+# Hexenwail
 
-**Hexen II as an installable iOS game.**
+**uHexen2 rebuilt for the iPad.**
 
-![Wheel of Karma running in YouHexen2](docs/screenshot1.png)
+![Wheel of Karma running in Hexenwail](docs/screenshot1.png)
 
 *Wheel of Karma by Inky.*
 
-[Launch the PWA](https://alextnewman.github.io/hexenwail/) · [Report a bug](https://github.com/alextnewman/hexenwail/issues)
+[Play or install](https://alextnewman.github.io/hexenwail/) · [Report a bug](https://github.com/alextnewman/hexenwail/issues)
 
-YouHexen2 is a hard port of [uHexen2 / Hammer of Thyrion](https://github.com/sezero/uhexen2) to an installed iOS PWA. It is a WebAssembly game client with its own browser platform layer, native WebGPU rendering, local asset storage, touch controls, and offline play. The browser is treated like a console operating system rather than another desktop windowing backend.
+Hexenwail is a web port of [Hammer of Thyrion / uHexen2](https://github.com/sezero/uhexen2) made for an installed iOS PWA. The engine runs as WebAssembly, renders through WebGPU, keeps the player’s game data and saves in browser storage, and works offline after installation.
 
-This repository began with the Hexenwail tree because it provided useful modern build scaffolding around uHexen2. That ancestry no longer defines the product: YouHexen2 targets iPadOS and iOS only, does not build native Linux or Windows clients, and is not pursuing a generic SDL port or an Ironwail-style desktop renderer.
+This is not the desktop source port the old README described. There is no current Linux, Windows, SDL, or OpenGL build. The browser is its own platform here, much like a console port, and the project is designed around the hardware and constraints of an iPad rather than around cross-platform parity.
 
-Some internal source paths, persistent storage keys, and build artifacts still use the historical `hexenwail` identifier. Those are implementation names, not a separate edition of the game.
+## Playing
 
-## Play
+Hexenwail does not include the copyrighted Hexen II data. You need `data1/pak0.pak` and `data1/pak1.pak` from a legally owned copy of the game; [GOG](https://www.gog.com/en/game/hexen_ii) and Steam both sell it.
 
-YouHexen2 does not include Hexen II game data. You need a legally owned copy of the game; [GOG](https://www.gog.com/en/game/hexen_ii) and Steam both sell it.
+1. Open the [launcher](https://alextnewman.github.io/hexenwail/) in Safari.
+2. Choose **Share → Add to Home Screen**, then open the installed app.
+3. Import the two PAK files, a directory containing them, or a ZIP of the game directory.
+4. Start the game. Imported assets and saves remain local to the device and are available offline.
 
-1. Open the PWA in Safari and choose **Share → Add to Home Screen**.
-2. Launch it from the Home Screen.
-3. Import `data1/pak0.pak` and `data1/pak1.pak`, or import a directory or ZIP containing them.
-4. Start the game. The launcher stores the assets and saves locally so subsequent sessions work offline.
+Import `portals/pak3.pak` to play Portal of Praevus. The launcher also accepts compatible mods and loose OGG, MP3, FLAC, and WAV music. Hexen II’s PAK files contain MIDI music, but the web build has no MIDI synthesizer, so external music files are required for music playback.
 
-For Portal of Praevus, also import `portals/pak3.pak`. Loose OGG, MP3, FLAC, and WAV music files can be imported alongside the PAKs. The web build has no MIDI synthesizer, so a PAK-only installation has no music.
+The PWA includes:
 
-The launcher supports touch controls and optional gyro aim. Keyboard, mouse, and standard browser gamepads are also supported; on a tablet, a physical controller is the primary non-touch input.
+- touch controls with optional gyro aiming;
+- direct browser gamepad support, including complete controller-driven menus;
+- keyboard and mouse input where the browser exposes them;
+- automatic save synchronization plus save export and restore;
+- edge-to-edge play, orientation and resize handling, and offline updates.
 
-See [the PWA guide](docs/PWA.md) for asset layouts, music naming, save export and restore, controls, offline behavior, and troubleshooting.
+See [the PWA guide](docs/PWA.md) for data layouts, music filenames, controls, saves, storage behavior, and troubleshooting.
 
 ## Rendering
 
-The launcher ships two renderer configurations:
+Hexenwail ships two renderers and lets the player choose between them in the launcher.
 
-- **WebGlideNitro** is the default and the project’s primary renderer. It is a native WebGPU backend built around indexed textures, palette and colormap lighting, authored light styles, dither, stipple, and deliberately finite effects budgets. It extends that 1990s visual language with dynamic lights, fog, translucent and warped liquids, glows, projected shadows, and spell-specific effects instead of replacing it with a conventional modern remaster.
-- **Software + WebGPU presentation** runs uHexen2’s classic 8-bit software rasterizer and expands its indexed framebuffer through a WebGPU scan-out pass. It remains available as the authored-pixel correctness reference.
+**WebGlideNitro** is the default. It is a native WebGPU renderer that keeps Hexen II’s indexed textures, palette ramps, colormap lighting, authored light styles, dither, stipple, and hard-edged 1990s character. It uses the GPU to extend that language with dynamic colored lighting, fog, warped and translucent liquids, glows, projected shadows, and spell-specific effects rather than turning the game into a conventional modern remaster.
 
-WebGlideNitro draws the complete playable scene, but correctness work is still in progress. The software renderer is the reference when the two disagree. See [the Nitro design](docs/web/WEBGLIDE_NITRO.md) and [software renderer design](docs/web/SOFTWARE_RENDERER.md) for the precise contracts and current status.
+**Software + WebGPU presentation** runs uHexen2’s classic 8-bit software rasterizer, then presents its indexed framebuffer through one WebGPU scan-out pass. It is the exact authored-pixel reference and the correctness baseline for Nitro.
 
-## Product scope
+Nitro draws the complete playable scene, but its correctness work is still in progress. The details and current boundaries live in [the WebGlideNitro design](docs/web/WEBGLIDE_NITRO.md). The reference path is documented in [the software renderer design](docs/web/SOFTWARE_RENDERER.md).
 
-- **Primary target:** an installed PWA on iPadOS, tuned and tested on iPad Pro hardware.
-- **Runtime:** Emscripten/WebAssembly, one main thread, WebGPU, WebAudio, and browser-owned persistent storage.
-- **Input:** touch, gyro, keyboard, mouse, and the browser Gamepad API.
-- **Content:** Hexen II, Portal of Praevus, and compatible uHexen2 community content imported by the player.
-- **Not targets:** native desktop builds, SDL/POSIX parity, Android or desktop browsers as first-class platforms, multiplayer, or a dedicated server.
+## Scope
 
-Other browsers may work, but they are not the compatibility or performance target.
+The supported target is an installed PWA on iPadOS, tuned and measured on iPad Pro hardware. iPhone is supported by the same platform layer and touch interface. Other browsers may work, but Android, desktop browsers, native desktop builds, multiplayer, and dedicated servers are not development targets.
 
-## Build
+The port is deliberately single-threaded. Its platform layer directly owns WebAudio, browser input, OPFS/IndexedDB storage, fullscreen and canvas sizing, and the Emscripten main loop instead of preserving desktop abstractions that do not help the iOS build.
 
-The build requires the [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) version `4.0.23`. Node.js 22 or newer runs the launcher tests.
+## Building
+
+The build requires the [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) version `4.0.23`. Node.js 22 or newer runs the PWA tests.
 
 ```bash
 source "$EMSDK/emsdk_env.sh"
 
 make build          # WebGlideNitro
-make build-software # classic software renderer with WebGPU presentation
-make dist           # build both renderers and assemble the static PWA in dist/
-make test           # run the PWA shell tests
+make build-software # software renderer with WebGPU presentation
+make dist           # build both renderers and assemble dist/
+make test           # run the PWA tests
 ```
 
-The Make targets call the same scripts used by CI and GitHub Pages. `WEB_RENDERER=webgpu` selects WebGlideNitro; `WEB_RENDERER=software` selects the software reference. Both configurations must continue to build.
+These targets call the same scripts used by CI, Pages, and releases. `WEB_RENDERER=webgpu` selects WebGlideNitro and `WEB_RENDERER=software` selects the software reference; both configurations must continue to build.
 
-For the architecture, renderer macro contract, deployment pipeline, and performance capture format, read:
+Developer documentation:
 
 - [Web port architecture](docs/web/ARCHITECTURE.md)
-- [WebGlideNitro](docs/web/WEBGLIDE_NITRO.md)
+- [WebGlideNitro renderer](docs/web/WEBGLIDE_NITRO.md)
 - [Software renderer](docs/web/SOFTWARE_RENDERER.md)
-- [PWA shell and local storage](docs/PWA.md)
+- [PWA shell and storage](docs/PWA.md)
 - [Performance capture](docs/web/PERF_CAPTURE.md)
 
-## Lineage and license
+## History, credits, and license
 
-Hexen II was created by Raven Software and published by id Software. This project descends from the open-source Hexen II engine through Anvil of Thyrion, Hammer of Thyrion / uHexen2, Shanjaq’s work, and Hexenwail. It also retains code and ideas from the broader Quake source-port community. See [the full authors list](docs/AUTHORS) for attribution.
+Hexenwail descends from Raven Software’s Hexen II source release through Anvil of Thyrion, Hammer of Thyrion / uHexen2, Shanjaq’s work, and the earlier desktop Hexenwail fork. The current web port retains code and ideas from those projects and from the wider Quake source-port community. See [the full authors list](docs/AUTHORS).
 
 The engine is distributed under the GNU General Public License, version 2 or later. See [LICENSE](LICENSE) and [docs/COPYING](docs/COPYING). Bundled third-party components retain their own licenses.
 
-YouHexen2 is an unaffiliated fan project. It does not include copyrighted game data. Hexen and Quake are trademarks of their respective owners.
+Hexenwail is an unaffiliated fan project and does not include game data. Hexen and Quake are trademarks of their respective owners.

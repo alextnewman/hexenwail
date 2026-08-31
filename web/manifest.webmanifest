@@ -1,5 +1,5 @@
 {
-  "name": "Hexenwail PWA",
+  "name": "Hexenwail",
   "short_name": "Hexenwail",
   "start_url": "./",
   "scope": "./",
@@ -7,7 +7,7 @@
   "orientation": "landscape",
   "background_color": "#12101b",
   "theme_color": "#2b2242",
-  "description": "Offline-capable GitHub Pages PWA launcher for the Hexenwail WebAssembly build. Import your legally acquired Hexen II assets locally in the browser.",
+  "description": "Install Hexenwail on iPadOS, import your legally acquired Hexen II data, and play offline.",
   "icons": [
     {
       "src": "./icons/icon.svg",

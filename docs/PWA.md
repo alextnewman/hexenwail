@@ -1,6 +1,6 @@
-# YouHexen2 PWA / GitHub Pages build
+# Hexenwail PWA / GitHub Pages build
 
-This repository now includes a GitHub-Pages-deployable, installable PWA shell for the WebAssembly build of YouHexen2, including fullscreen play and a rudimentary phone mode for iPhone/iOS Safari.
+This is the build and platform guide for Hexenwail's GitHub-Pages-deployable, installable PWA shell, including fullscreen play and a phone mode for iPhone/iOS Safari.
 
 ## Goals
 
