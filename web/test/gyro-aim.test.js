@@ -34,6 +34,23 @@ test('device gyro follows native device axes instead of screen rotation', () => 
   assert.ok(Math.abs(looks[0][1] - (10 * 0.02 / 0.022)) < 1e-9);
 });
 
+test('device motion keeps the raw X axis when the browser exposes x/y slots', () => {
+  const looks = [];
+  const env = environment();
+  const gyro = new GyroAim({ look: (...values) => looks.push(values) },
+    { deadZoneDegrees: 0 }, env);
+  gyro.setEnabled(true);
+  env.listeners.get('devicemotion')({
+    rotationRate: { x: 25, y: 15 },
+    interval: 20,
+    timeStamp: 100,
+  });
+
+  assert.equal(looks.length, 1);
+  assert.ok(Math.abs(looks[0][0] - (25 * 0.02 / 0.022)) < 1e-9);
+  assert.ok(Math.abs(looks[0][1] - (15 * 0.02 / 0.022)) < 1e-9);
+});
+
 test('device motion permission is requested before events are attached', async () => {
   let requests = 0;
   const env = environment({
