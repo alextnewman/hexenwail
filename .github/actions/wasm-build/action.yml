@@ -120,7 +120,11 @@ runs:
       run: |
         source "$PWD/emsdk/emsdk_env.sh"
         export EM_CACHE="$HOME/.emscripten_cache"
-        mkdir -p "$EM_CACHE"
+        mkdir -p \
+          "$EM_CACHE" \
+          "$EM_CACHE/sysroot/lib/pkgconfig" \
+          "$EM_CACHE/sysroot/lib/wasm32-emscripten" \
+          "$EM_CACHE/sysroot/include"
         embuilder build ogg vorbis
 
     - name: Build WebAssembly client (parked software reference)
@@ -128,7 +132,11 @@ runs:
       run: |
         source "$PWD/emsdk/emsdk_env.sh"
         export EM_CACHE="$HOME/.emscripten_cache"
-        mkdir -p "$EM_CACHE"
+        mkdir -p \
+          "$EM_CACHE" \
+          "$EM_CACHE/sysroot/lib/pkgconfig" \
+          "$EM_CACHE/sysroot/lib/wasm32-emscripten" \
+          "$EM_CACHE/sysroot/include"
         ./scripts/wasm-build.sh software
 
     # WebGlideNitro: a native WebGPU renderer that pushes real engine
@@ -139,7 +147,11 @@ runs:
       run: |
         source "$PWD/emsdk/emsdk_env.sh"
         export EM_CACHE="$HOME/.emscripten_cache"
-        mkdir -p "$EM_CACHE"
+        mkdir -p \
+          "$EM_CACHE" \
+          "$EM_CACHE/sysroot/lib/pkgconfig" \
+          "$EM_CACHE/sysroot/lib/wasm32-emscripten" \
+          "$EM_CACHE/sysroot/include"
         ./scripts/wasm-build.sh nitro engine/build-nitro
 
     - name: Assemble PWA artifact
