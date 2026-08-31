@@ -1,214 +1,80 @@
 # YouHexen2
 
-![Screenshot](docs/screenshot1.png)
-*New worlds await!* ([Wheel of Karma](https://www.moddb.com/mods/wheel-of-karma-a-tulku-odyssey), by Inky)
+**Hexen II as an installable iOS game.**
 
-This project is not a Hexenwail fork in the original product sense. It is a web-native port of uHexen2 built specifically for installed iOS PWA devices. The Hexenwail codebase was used as a practical starting point because it already had the modern engine scaffolding we wanted, but the target architecture and goals are materially different.
+![Wheel of Karma running in YouHexen2](docs/screenshot1.png)
 
-> History: This repo inherits code from a Hexenwail fork, but it is a distinct web-native uHexen2 port with a custom platform layer, custom renderer assumptions, and a browser-first deployment target. The browser is treated as an independent game console OS, not as a generic SDL/Linux desktop port.
+*Wheel of Karma by Inky.*
 
-## [Latest Release](https://github.com/hexenwail/hexenwail/releases) | [Report a Bug](https://github.com/hexenwail/hexenwail/issues)
+[Launch the PWA](https://alextnewman.github.io/hexenwail/) · [Report a bug](https://github.com/alextnewman/hexenwail/issues)
 
-This is not an Ironwail-style desktop modernization or a generic cross-platform engine fork. We are not trying to preserve a one-size-fits-all Unix/SDL architecture or chase a modern desktop renderer. The goal is to make Hexen II playable as a native-feeling web game on iOS/PWA while keeping the original uHexen2 lineage and mod compatibility intact.
+YouHexen2 is a hard port of [uHexen2 / Hammer of Thyrion](https://github.com/sezero/uhexen2) to an installed iOS PWA. It is a WebAssembly game client with its own browser platform layer, native WebGPU rendering, local asset storage, touch controls, and offline play. The browser is treated like a console operating system rather than another desktop windowing backend.
 
-Raven Software released the Hexen II source code in 2000. [Hammer of Thyrion](http://uhexen2.sourceforge.net/) (2004–2018) by O. Sezer became the definitive cross-platform engine. [uHexen2](https://github.com/sezero/uhexen2) continued the work with graphical enhancements and mod support — notably Shanjaq and Inky's contributions. YouHexen2 inherits that lineage, while building a distinct web-native platform around it.
+This repository began with the Hexenwail tree because it provided useful modern build scaffolding around uHexen2. That ancestry no longer defines the product: YouHexen2 targets iPadOS and iOS only, does not build native Linux or Windows clients, and is not pursuing a generic SDL port or an Ironwail-style desktop renderer.
 
-YouHexen2 does *not* include any original game assets; a valid copy of Hexen II is *required* and can be purchased from [GOG](https://www.gog.com/en/game/hexen_ii). You need `data1/pak0.pak` and `data1/pak1.pak`. For Portal of Praevus, add `portals/pak3.pak`; it is auto-included when you launch with `-game modname` / `-mod modname` (use `-noportals` to opt out), and is toggleable from the Mods menu.
+Some internal source paths, persistent storage keys, and build artifacts still use the historical `hexenwail` identifier. Those are implementation names, not a separate edition of the game.
 
-See [USAGE.md](USAGE.md) for external textures, Steam Deck setup, and mod configuration.
+## Play
 
-## Which version should I use?
+YouHexen2 does not include Hexen II game data. You need a legally owned copy of the game; [GOG](https://www.gog.com/en/game/hexen_ii) and Steam both sell it.
 
-**Lineage:** Hexen II by Raven Software, published by id Software *(1997)* → engine source open-sourced under the GPL *(2000)* → Anvil of Thyrion Linux port (Dan Olson & Clément Bourdarias) → Hammer of Thyrion / uHexen2 (O. Sezer, *2004*–2018; final release 1.5.9 on *2018-06-06*) → Shanjaq's additions → YouHexen2 *(2026)*
+1. Open the PWA in Safari and choose **Share → Add to Home Screen**.
+2. Launch it from the Home Screen.
+3. Import `data1/pak0.pak` and `data1/pak1.pak`, or import a directory or ZIP containing them.
+4. Start the game. The launcher stores the assets and saves locally so subsequent sessions work offline.
 
-There are three living branches of the Hexen II engine, depending on what you want to play:
+For Portal of Praevus, also import `portals/pak3.pak`. Loose OGG, MP3, FLAC, and WAV music files can be imported alongside the PAKs. The web build has no MIDI synthesizer, so a PAK-only installation has no music.
 
-- **Vanilla & upstream maintenance** — [Hammer of Thyrion / uHexen2](https://github.com/sezero/uhexen2), sezero's `main` branch. The reference cross-platform engine: the most faithful to the original release and the best base for general play and ongoing portability work.
-- **Classic community mods (Shanjaq era)** — [Shanjaq's fork](https://github.com/shanjaq/uhexen2) through its final `uhexen2-r6303.zip` build. This is the engine many mods in the active [Hexen II Discord community](https://discord.com/channels/557756282430554112) were built and tested against, so it remains the safest choice for that catalog of content.
-- **Steam Deck & modern systems** — YouHexen2 (this project). A web-native uHexen2 port with custom platform and renderer logic, gamepad support, render scaling, and PWA deployment for modern hardware.
+The launcher supports touch controls and optional gyro aim. Keyboard, mouse, and standard browser gamepads are also supported; on a tablet, a physical controller is the primary non-touch input.
 
-## Platforms
+See [the PWA guide](docs/PWA.md) for asset layouts, music naming, save export and restore, controls, offline behavior, and troubleshooting.
 
-| Platform | Renderer | Packaging | Status |
-|----------|----------|-----------|--------|
-| 64-bit Linux / SDL3 | OpenGL 4.3 | Nix, Flatpak, tarball | Supported |
-| 64-bit Windows / SDL3 | OpenGL 4.3 | ZIP (cross-compiled from Nix) | Supported |
+## Rendering
 
-Planned:
+The launcher ships two renderer configurations:
 
-| Platform | Renderer | Status |
-|----------|----------|--------|
-| Flathub listing | OpenGL 4.3 | Not started |
-| AppImage | OpenGL 4.3 | Not started |
+- **WebGlideNitro** is the default and the project’s primary renderer. It is a native WebGPU backend built around indexed textures, palette and colormap lighting, authored light styles, dither, stipple, and deliberately finite effects budgets. It extends that 1990s visual language with dynamic lights, fog, translucent and warped liquids, glows, projected shadows, and spell-specific effects instead of replacing it with a conventional modern remaster.
+- **Software + WebGPU presentation** runs uHexen2’s classic 8-bit software rasterizer and expands its indexed framebuffer through a WebGPU scan-out pass. It remains available as the authored-pixel correctness reference.
 
-## Features
+WebGlideNitro draws the complete playable scene, but correctness work is still in progress. The software renderer is the reference when the two disagree. See [the Nitro design](docs/web/WEBGLIDE_NITRO.md) and [software renderer design](docs/web/SOFTWARE_RENDERER.md) for the precise contracts and current status.
 
-### Rendering
-- Full GLSL 4.30 core pipeline — zero immediate mode, zero fixed-function
-- Reversed-Z depth buffer via `ARB_clip_control` (`gl_reversed_z`) for precision at distance
-- Lightmap atlas, batched world draws, hardware-instanced alias models
-- Unified-shader brush entity batched dispatch (`r_brush_inst`, default on) — same compiled program as world surfaces so within-shader `invariant gl_Position` covers coplanar joins
-- MSAA, FXAA, anisotropic filtering
-- Render scale (25–100%), retro dithering mode
-- Display presets: Faithful / Crunchy / Retro / Clean / Modern / Ultra
-- Brightness/contrast via post-process shader
-- HDR tonemap with exposure slider
-- Scrolling two-layer sky (configurable speed) and skybox support
-- Shader-based fog, underwater color tint, underwater warp, underwater caustics (`r_caustics`), motion blur
-- Fence textures, water tint options, glow effects with fog attenuation
-- Per-entity alpha (ENTALPHA), translucent brush entities, world lightmap overbright (`gl_overbright`), model overbright (`gl_overbright_models`), fullbright skins
-- Correct index-0 transparency for all model skins (fixes black backgrounds on projectiles, weapons, items)
-- MD3 model format support (Quake 3 models with GPU-compressed vertex decoding)
-- External texture overrides for BSP textures, model skins, and HUD graphics (TGA/PNG/PCX)
-- Physics/render decoupling with entity and lightstyle interpolation; pose-driven alias animation lerp (`r_lerpmodels`, `r_lerp_viewmodel`)
-- FOV slider, FPS limiter, HUD modes (Full/Mini/Off/Clean)
-- HUD / menu / crosshair / console scale sliders (auto by framebuffer height)
-- Console alpha + brightness sliders
+## Product scope
 
-### Input
-- WASD + mouselook defaults
-- Scancode-based bindings (works on AZERTY, Dvorak, etc.)
-- Mouse-driven menus with hover, click, and scroll wheel
-- Key bindings menu with type-to-search (includes weapon impulses)
-- Live substring filter in Display/Rendering/Graphics/Game option submenus
-- Xbox/PlayStation/Nintendo gamepad with circular deadzone, power-curve easing, rumble, hot-plug
-- Always-run, raw mouse input, configurable pitch clamp, smooth-mouse filter (`m_filter`)
+- **Primary target:** an installed PWA on iPadOS, tuned and tested on iPad Pro hardware.
+- **Runtime:** Emscripten/WebAssembly, one main thread, WebGPU, WebAudio, and browser-owned persistent storage.
+- **Input:** touch, gyro, keyboard, mouse, and the browser Gamepad API.
+- **Content:** Hexen II, Portal of Praevus, and compatible uHexen2 community content imported by the player.
+- **Not targets:** native desktop builds, SDL/POSIX parity, Android or desktop browsers as first-class platforms, multiplayer, or a dedicated server.
 
-### Mod support
-- Protocol support (18/19/20/21), auto-detection and upgrade between 19–21
-- Case-insensitive file lookups
-- Runs [Wheel of Karma](https://www.moddb.com/mods/wheel-of-karma-a-tulku-odyssey) and [Storm over Thyrion](https://www.moddb.com/mods/storm-over-thyrion) out of the box
-- [PimpModel](http://earthday.free.fr/Inkys-Hexen-II-Mapping-Corner/mapping-tricks-pimp.html) entity overrides
-- Extended QuakeC builtins (`SOLID_GHOST`, entity alpha)
-- 8192 max entities, 2048 sound channels
-- Mods menu (up to 128 entries, scrollable with PgUp/PgDn/Home/End/mousewheel), per-mod config, portals data toggle
-- Per-liquid alpha (`r_wateralpha`, `r_lavaalpha`, `r_slimealpha`, `r_telealpha`) + `r_turbalpha` catch-all for custom-named mod liquids
-- TrueLightning (`cl_truelightning`)
+Other browsers may work, but they are not the compatibility or performance target.
 
-### Audio
-- OGG Vorbis, Opus, MP3, FLAC, WAV music (CD track fallback)
-- Tracker music via libxmp (MOD/S3M/XM/IT) and UMX containers
-- MIDI via FluidSynth (Linux) or native Windows MIDI, with soundfont auto-detection
-- Per-mod music subdirs (`<gamedir>/music/<author>/`)
-- `bgm_remap NN <name>` — map a CD track number to a named music file
-- Underwater audio low-pass (`snd_waterfx`)
-- 2048 sound channels, 44.1 kHz default
+## Build
 
-> The web/PWA build ships a subset: OGG Vorbis, MP3, FLAC and WAV only. Opus,
-> the tracker formats and MIDI need libraries with no Emscripten port, so a
-> PAK-only install has no music there until external music files are imported.
-> See [`docs/web/ARCHITECTURE.md`](docs/web/ARCHITECTURE.md) and
-> [`docs/PWA.md`](docs/PWA.md).
-
-### Custom music for mappers
-Two ways to attach music to a custom map:
-
-1. **Named music (recommended)** — set worldspawn keys in your BSP:
-   ```
-   "MIDI" "arena"
-   "CD"   "10"          // numeric fallback for engines without MIDI-key support
-   ```
-   Ship `<gamedir>/music/arena.ogg` (or `.opus`/`.mp3`/`.flac`/`.wav`/`.mid`/etc.).
-   YouHexen2 also looks under `<gamedir>/music/<subdir>/arena.ogg` so multiple
-   authors can keep their tracks in separate folders without colliding.
-
-2. **Numeric track + remap** — keep the legacy `track%02d.ogg` layout but use
-   `bgm_remap` from the console (or autoexec.cfg) to point a numeric track at
-   any named file:
-   ```
-   bgm_remap 18 myambient
-   bgm_remap list
-   bgm_remap 18 -            // clear
-   ```
-
-### Platform
-- Emscripten/WebAssembly, deployed as an installable iOS PWA
-- CMake build with a build-time renderer selector (`WEB_RENDERER`)
-- GitHub Actions CI builds both renderer configurations and validates the PWA artifact
-- Continuous GitHub Pages deployment; tagged releases publish the PWA bundle
-- Console log to disk (OPFS), HiDPI-aware canvas presentation
-
-## Building
-
-YouHexen2 targets **Emscripten only** — `engine/CMakeLists.txt` fails the configure
-step on any other toolchain, and there is no native Linux or Windows binary. The
-deployment target is an installed iOS PWA; see
-[docs/web/ARCHITECTURE.md](docs/web/ARCHITECTURE.md) for the settled scope and
-[docs/PWA.md](docs/PWA.md) for the shell, asset import, and deployment notes.
-
-The web build defaults to WebGlideNitro, the native WebGPU renderer. uHexen2's
-classic 8bpp software rasteriser remains selectable and presents its indexed
-framebuffer through WebGPU.
-
-**Requirements:** the [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html)
-(CI pins `4.0.23`) and Node.js 22+ for the PWA shell tests.
+The build requires the [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) version `4.0.23`. Node.js 22 or newer runs the launcher tests.
 
 ```bash
 source "$EMSDK/emsdk_env.sh"
 
-make build          # WebGlideNitro (the shipping default)
-make build-software # software renderer with WebGPU presentation
-make build-nitro    # WebGlideNitro, the native WebGPU renderer
-make dist           # assemble + validate the static PWA artifact in dist/
-make test           # PWA shell tests
+make build          # WebGlideNitro
+make build-software # classic software renderer with WebGPU presentation
+make dist           # build both renderers and assemble the static PWA in dist/
+make test           # run the PWA shell tests
 ```
 
-Those targets wrap the scripts CI uses, so local and CI builds cannot drift:
+The Make targets call the same scripts used by CI and GitHub Pages. `WEB_RENDERER=webgpu` selects WebGlideNitro; `WEB_RENDERER=software` selects the software reference. Both configurations must continue to build.
 
-```bash
-./scripts/wasm-build.sh software
-./scripts/wasm-build.sh nitro  engine/build-nitro    # -> hexenwail-nitro.*
-./scripts/wasm-assemble-artifact.sh dist
-./scripts/wasm-validate-artifact.sh dist
-```
+For the architecture, renderer macro contract, deployment pipeline, and performance capture format, read:
 
-To configure CMake directly:
+- [Web port architecture](docs/web/ARCHITECTURE.md)
+- [WebGlideNitro](docs/web/WEBGLIDE_NITRO.md)
+- [Software renderer](docs/web/SOFTWARE_RENDERER.md)
+- [PWA shell and local storage](docs/PWA.md)
+- [Performance capture](docs/web/PERF_CAPTURE.md)
 
-```bash
-emcmake cmake -S engine -B build                       # WebGlideNitro (default)
-emcmake cmake -S engine -B build -DWEB_RENDERER=software
-emcmake cmake -S engine -B build -DWEB_RENDERER=webgpu # WebGlideNitro
-```
+## Lineage and license
 
-**Nix** (developer convenience; CI uses the pinned emsdk, not the flake):
+Hexen II was created by Raven Software and published by id Software. This project descends from the open-source Hexen II engine through Anvil of Thyrion, Hammer of Thyrion / uHexen2, Shanjaq’s work, and Hexenwail. It also retains code and ideas from the broader Quake source-port community. See [the full authors list](docs/AUTHORS) for attribution.
 
-```bash
-nix develop     # web toolchain shell
-nix build       # best-effort WASM build -> installable PWA tree
-```
+The engine is distributed under the GNU General Public License, version 2 or later. See [LICENSE](LICENSE) and [docs/COPYING](docs/COPYING). Bundled third-party components retain their own licenses.
 
-Design documents: [docs/web/ARCHITECTURE.md](docs/web/ARCHITECTURE.md),
-[docs/web/SOFTWARE_RENDERER.md](docs/web/SOFTWARE_RENDERER.md),
-[docs/web/WEBGLIDE_NITRO.md](docs/web/WEBGLIDE_NITRO.md) and
-[docs/web/PERF_CAPTURE.md](docs/web/PERF_CAPTURE.md).
-
-## Contributing
-
-Contributions are welcome — bug reports, code cleanup, and documentation are all appreciated. Please file issues and pull requests on [GitHub](https://github.com/hexenwail/hexenwail/issues).
-
-## License
-
-GPL-2.0-or-later. See [COPYING](COPYING).
-
-Bundled third-party libraries:
-- [dr_libs](https://github.com/mackron/dr_libs) (public domain / MIT-0) — MP3, FLAC, WAV decoders
-- [SDL3](https://www.libsdl.org/) (Zlib) — platform abstraction
-- [libogg/libvorbis](https://xiph.org/) (BSD-3) — OGG Vorbis audio
-- [libopus/opusfile](https://opus-codec.org/) (BSD-3) — Opus audio
-- [libxmp](https://github.com/libxmp/libxmp) (MIT) — tracker music (MOD, S3M, XM, IT)
-- [FluidSynth](https://www.fluidsynth.org/) (LGPL-2.1) — MIDI synthesis
-
-## Credits
-
-Based on [uHexen2 / Hammer of Thyrion](http://uhexen2.sourceforge.net/) by O. Sezer and contributors, which is based on the Hexen II source release by [Raven Software](https://en.wikipedia.org/wiki/Raven_Software) and [id Software](https://en.wikipedia.org/wiki/Id_Software).
-
-*The name? **Hexen** + Iron**wail** — a modernized Hexen II engine in the spirit of Ironwail for Quake.*
-
-Incorporates code and techniques from the Quake engine modernization community:
-- [Ironwail](https://github.com/andrei-drexler/ironwail) — GL 4.3 shader pipeline approach, software rendering emulation (palette dithering), render scale, gamepad input, scancode-based keyboard input, sound channel management
-- [QuakeSpasm](https://sourceforge.net/projects/quakespasm/) — texture manager, fog system, console infrastructure
-- [QuakeSpasm-Spiked](https://github.com/AAS/quakespasm-spiked) — protocol extensions, mod compatibility patterns
-
----
-
-Hexenwail is a fan project and is not affiliated with Raven Software or id Software. Hexen and Quake are trademarks of their respective owners.
+YouHexen2 is an unaffiliated fan project. It does not include copyrighted game data. Hexen and Quake are trademarks of their respective owners.
