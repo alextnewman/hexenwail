@@ -7,7 +7,7 @@
   "orientation": "landscape",
   "background_color": "#12101b",
   "theme_color": "#2b2242",
-  "description": "A web-native HTML5 port of uHexen2 for iPadOS, powered by WebGlideNitro and playable offline.",
+  "description": "A web-native HTML5 port of uHexen2 for iPadOS, powered by WebGPU and playable offline.",
   "icons": [
     {
       "src": "./icons/icon.svg",

@@ -1,7 +1,7 @@
 YouHexen2 - a web-native Hexen II port
 ======================================
 
-https://github.com/alextnewman/hexenwail
+https://github.com/alextnewman/youhexen2
 
 YouHexen2 is Hammer of Thyrion / uHexen2 rebuilt as an HTML5 game for an installed iOS PWA. The engine runs as WebAssembly and owns first-party browser backends for WebGPU rendering, WebAudio, input, persistent storage, lifecycle, and fullscreen play.
 

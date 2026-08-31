@@ -2,11 +2,7 @@
 
 **Hexen II rebuilt as an HTML5 game for iPad.**
 
-![Wheel of Karma running in YouHexen2](docs/screenshot1.png)
-
-*Wheel of Karma by Inky.*
-
-[Play or install](https://alextnewman.github.io/hexenwail/) · [Report a bug](https://github.com/alextnewman/hexenwail/issues)
+[Play or install](https://alextnewman.github.io/youhexen2/) · [Report a bug](https://github.com/alextnewman/youhexen2/issues)
 
 YouHexen2 is a web-native port of [Hammer of Thyrion / uHexen2](https://github.com/sezero/uhexen2). It runs the original game engine as WebAssembly inside an installable iOS PWA, renders through WebGPU, stores the player’s game data and saves locally, and works offline after installation.
 
@@ -18,7 +14,7 @@ The repository, generated bundles, storage formats, and some C/JavaScript interf
 
 YouHexen2 does not include the copyrighted Hexen II data. You need `data1/pak0.pak` and `data1/pak1.pak` from a legally owned copy of the game; [GOG](https://www.gog.com/en/game/hexen_ii) and Steam both sell it.
 
-1. Open the [launcher](https://alextnewman.github.io/hexenwail/) in Safari.
+1. Open the [launcher](https://alextnewman.github.io/youhexen2/) in Safari.
 2. Choose **Share → Add to Home Screen**, then open the installed app.
 3. Import the two PAK files, a directory containing them, or a ZIP of the game directory.
 4. Start the game. Imported assets and saves remain local to the device and are available offline.
