@@ -119,12 +119,16 @@ runs:
       shell: bash
       run: |
         source "$PWD/emsdk/emsdk_env.sh"
+        export EM_CACHE="$HOME/.emscripten_cache"
+        mkdir -p "$EM_CACHE"
         embuilder build ogg vorbis
 
     - name: Build WebAssembly client (parked software reference)
       shell: bash
       run: |
         source "$PWD/emsdk/emsdk_env.sh"
+        export EM_CACHE="$HOME/.emscripten_cache"
+        mkdir -p "$EM_CACHE"
         ./scripts/wasm-build.sh software
 
     # WebGlideNitro: a native WebGPU renderer that pushes real engine
@@ -134,6 +138,8 @@ runs:
       shell: bash
       run: |
         source "$PWD/emsdk/emsdk_env.sh"
+        export EM_CACHE="$HOME/.emscripten_cache"
+        mkdir -p "$EM_CACHE"
         ./scripts/wasm-build.sh nitro engine/build-nitro
 
     - name: Assemble PWA artifact
