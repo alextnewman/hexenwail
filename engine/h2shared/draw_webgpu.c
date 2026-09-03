@@ -492,13 +492,15 @@ void GL_SetCanvas (canvastype canvas)
 
 void Draw_FlushCharBatch (void) {}
 
-/* Zero selects an integer automatic scale; explicit values come from the
- * existing HUD/menu settings. Each canvas clamps the result to its own
- * minimum useful logical size. */
+/* The WebGPU menu and crosshair canvases remain at their established 1x
+ * scale. The status-bar cvar alone selects an integer automatic scale or an
+ * explicit value, which each HUD canvas clamps to its useful logical size. */
 float SCR_CalcUIScale (cvar_t *user)
 {
 	float	s = user ? user->value : 0.0f;
 
+	if (user != &scr_sbarscale)
+		return 1.0f;
 	if (s <= 0.0f)
 	{
 		s = floorf ((float)vid.height / 480.0f);
