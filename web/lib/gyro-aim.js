@@ -13,11 +13,28 @@ function finite(value) {
 }
 
 function applyDeadZone(value, deadZone) {
-  return Math.abs(value) >= deadZone ? value : 0;
+  const zone = Number.isFinite(Number(deadZone)) ? Math.max(0, Number(deadZone)) : DEFAULT_GYRO_AIM_OPTIONS.deadZoneDegrees;
+  return Math.abs(value) >= zone ? value : 0;
 }
 
 function clampDeltaSeconds(value, maximum) {
   return Math.max(0, Math.min(value, maximum));
+}
+
+function readAxis(source, preferredKeys, fallbackIndexes = []) {
+  if (!source || (typeof source !== 'object' && !Array.isArray(source))) {
+    return 0;
+  }
+
+  for (const key of preferredKeys) {
+    const value = Number(source[key]);
+    if (Number.isFinite(value)) return value;
+  }
+  for (const index of fallbackIndexes) {
+    const value = Number(source[index]);
+    if (Number.isFinite(value)) return value;
+  }
+  return 0;
 }
 
 export class GyroAim {
@@ -150,11 +167,12 @@ export class GyroAim {
     /*
      * Map yaw to rotation around the phone's screen-normal axis, so twisting
      * the phone turns the view like a held sphere. Pitch remains rotation
-     * around the phone's native X axis. Some implementations expose the same
-     * axes as z/x slots or an indexed vector.
+     * around the phone's native X axis. Motion payloads vary by browser and
+     * device, so accept the standard alpha/beta/gamma names and their z/x or
+     * indexed forms without changing the base mapping.
      */
-    const yaw = -finite(rate.alpha ?? rate.z ?? rate[2]);
-    const pitch = finite(rate.beta ?? rate.x ?? rate[0]);
+    const yaw = -readAxis(rate, ['alpha', 'z', 'gamma'], [2, 1, 0]);
+    const pitch = readAxis(rate, ['beta', 'x'], [0, 1]);
     this.emitRates(yaw, pitch, deltaSeconds);
   }
 
@@ -167,7 +185,11 @@ export class GyroAim {
     }
     for (const gamepad of gamepads) {
       const velocity = gamepad?.pose?.angularVelocity;
-      if (velocity && velocity.length >= 3) return velocity;
+      if (!velocity) continue;
+      if (Array.isArray(velocity) && velocity.length >= 3) return velocity;
+      if (velocity && typeof velocity === 'object' && (('x' in velocity) || ('y' in velocity) || ('z' in velocity))) {
+        return velocity;
+      }
     }
     return null;
   }
@@ -184,11 +206,9 @@ export class GyroAim {
       this.lastGamepadTimestamp = timestamp;
       const deltaSeconds = clampDeltaSeconds(elapsed, this.options.maxDeltaSeconds);
       if (deltaSeconds) {
-        this.emitRates(
-          -finite(velocity[1]) * RADIANS_TO_DEGREES,
-          finite(velocity[0]) * RADIANS_TO_DEGREES,
-          deltaSeconds,
-        );
+        const yaw = -readAxis(velocity, ['yaw', 'y', 'z'], [1, 2, 0]);
+        const pitch = readAxis(velocity, ['pitch', 'x'], [0, 1]);
+        this.emitRates(yaw * RADIANS_TO_DEGREES, pitch * RADIANS_TO_DEGREES, deltaSeconds);
       }
     } else {
       this.lastGamepadTimestamp = null;
