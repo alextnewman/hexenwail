@@ -153,7 +153,7 @@ export class GyroAim {
      * around the phone's native X axis. Some implementations expose the same
      * axes as z/x slots or an indexed vector.
      */
-    const yaw = finite(rate.alpha ?? rate.z ?? rate[2]);
+    const yaw = -finite(rate.alpha ?? rate.z ?? rate[2]);
     const pitch = finite(rate.beta ?? rate.x ?? rate[0]);
     this.emitRates(yaw, pitch, deltaSeconds);
   }

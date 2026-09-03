@@ -30,7 +30,7 @@ test('device gyro maps phone twist to yaw and native X rotation to pitch', () =>
   });
 
   assert.equal(looks.length, 1);
-  assert.ok(Math.abs(looks[0][0] - (20 * 0.02 / 0.022)) < 1e-9);
+  assert.ok(Math.abs(looks[0][0] - (-20 * 0.02 / 0.022)) < 1e-9);
   assert.ok(Math.abs(looks[0][1] - (10 * 0.02 / 0.022)) < 1e-9);
 });
 
@@ -47,7 +47,7 @@ test('device motion accepts raw Z and X axis slots', () => {
   });
 
   assert.equal(looks.length, 1);
-  assert.ok(Math.abs(looks[0][0] - (25 * 0.02 / 0.022)) < 1e-9);
+  assert.ok(Math.abs(looks[0][0] - (-25 * 0.02 / 0.022)) < 1e-9);
   assert.ok(Math.abs(looks[0][1] - (15 * 0.02 / 0.022)) < 1e-9);
 });
 
@@ -119,6 +119,6 @@ test('gyro Y inversion is independent and leaves yaw unchanged', () => {
     timeStamp: 100,
   });
 
-  assert.ok(Math.abs(looks[0][0] - (20 * 0.02 / 0.022)) < 1e-9);
+  assert.ok(Math.abs(looks[0][0] - (-20 * 0.02 / 0.022)) < 1e-9);
   assert.ok(Math.abs(looks[0][1] - (-10 * 0.02 / 0.022)) < 1e-9);
 });
