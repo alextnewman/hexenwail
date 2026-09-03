@@ -104,6 +104,10 @@ void GL_SetCanvas (canvastype newcanvas)
 		draw_canvas_x = (vid.width - UI_CANVAS_WIDTH) / 2;
 		draw_canvas_y = vid.height - UI_SBAR_CANVAS_HEIGHT;
 		break;
+	case CANVAS_HUD:
+		draw_canvas_x = 0;
+		draw_canvas_y = 0;
+		break;
 	case CANVAS_MENU:
 		draw_canvas_x = (vid.width - UI_CANVAS_WIDTH) / 2;
 		draw_canvas_y = 0;
@@ -137,6 +141,14 @@ float SCR_CalcUIScale (cvar_t *user)
 {
 	(void) user;
 	return 1.0f;
+}
+
+void Draw_GetCanvasSize (int *width, int *height)
+{
+	if (width)
+		*width = vid.width;
+	if (height)
+		*height = vid.height;
 }
 
 /*

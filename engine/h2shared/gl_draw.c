@@ -1769,6 +1769,15 @@ void GL_SetCanvas (canvastype newcanvas)
 			  SBAR_CANVAS_BUMP_H + SBAR_CANVAS_TOP_H + SBAR_CANVAS_BOT_H,
 			  0, -99999, 99999);
 		break;
+	case CANVAS_HUD:
+		s = SCR_CalcUIScale (&scr_sbarscale);
+		s = q_min (s, (float)glwidth / 160.0f);
+		s = q_min (s, (float)glheight / 100.0f);
+		w = (int)(glwidth / s);
+		h = (int)(glheight / s);
+		glViewport_fp (glx, gly, glwidth, glheight);
+		GL_Ortho (0, w, h, 0, -99999, 99999);
+		break;
 	case CANVAS_MENU:
 		s = SCR_CalcUIScale (&scr_menuscale);
 		/* Clamp horizontally so the 320-wide canvas fits the screen. */
@@ -1805,6 +1814,27 @@ void GL_SetCanvas (canvastype newcanvas)
 
 	GL_MatrixMode(GL_MAT_MODELVIEW);
 	GL_LoadIdentity();
+}
+
+void Draw_GetCanvasSize (int *width, int *height)
+{
+	float	s;
+
+	if (currentcanvas == CANVAS_HUD)
+	{
+		s = SCR_CalcUIScale (&scr_sbarscale);
+		s = q_min (s, (float)glwidth / 160.0f);
+		s = q_min (s, (float)glheight / 100.0f);
+		if (width)
+			*width = (int)(glwidth / s);
+		if (height)
+			*height = (int)(glheight / s);
+		return;
+	}
+	if (width)
+		*width = vid.width;
+	if (height)
+		*height = vid.height;
 }
 
 /*

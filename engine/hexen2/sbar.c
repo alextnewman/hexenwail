@@ -121,6 +121,7 @@ static qboolean sb_ShowDM;
 static qboolean inv_flg;	// true - show inventory interface
 
 static float InventoryHideTime;
+static canvastype sbar_canvas = CANVAS_SBAR;
 
 extern const char *ClassNames[MAX_PLAYER_CLASS];	//from menu.c
 
@@ -409,13 +410,16 @@ static qboolean SetChainPosition(float health, float maxHealth, qboolean immedia
 
 static void DrawFullScreenInfo(void)
 {
-	int		y;
+	int		y, width, height;
 	int	mana, maxMana;
 	char	tempStr[80];
 
-	y = BarHeight-37;
-	Sbar_DrawPic(3, y, Draw_CachePic("gfx/bmmana.lmp"));
-	Sbar_DrawPic(3, y+18, Draw_CachePic("gfx/gmmana.lmp"));
+	sbar_canvas = CANVAS_HUD;
+	GL_SetCanvas (CANVAS_HUD);
+	Draw_GetCanvasSize (&width, &height);
+	y = height - 44;
+	Sbar_DrawPic(8, y, Draw_CachePic("gfx/bmmana.lmp"));
+	Sbar_DrawPic(8, y+18, Draw_CachePic("gfx/gmmana.lmp"));
 
 	maxMana = (int)cl.v.max_mana;
 	// Blue mana
@@ -425,7 +429,7 @@ static void DrawFullScreenInfo(void)
 	else if (mana > maxMana)
 		mana = maxMana;
 	sprintf(tempStr, "%03d", mana);
-	Sbar_DrawSmallString(10, y+6, tempStr);
+	Sbar_DrawSmallString(15, y+6, tempStr);
 
 	// Green mana
 	mana = (int)cl.v.greenmana;
@@ -434,16 +438,17 @@ static void DrawFullScreenInfo(void)
 	else if (mana > maxMana)
 		mana = maxMana;
 	sprintf(tempStr, "%03d", mana);
-	Sbar_DrawSmallString(10, y+18+6, tempStr);
+	Sbar_DrawSmallString(15, y+18+6, tempStr);
 
 	// HP
-	Sbar_DrawNum(38, y+18, cl.v.health, 3);
+	Sbar_DrawNum(43, y+18, cl.v.health, 3);
 
 	// Current inventory item
 	if (cl.inv_selected >= 0)
 	{
-		DrawBarArtifactIcon(288, y + 7, cl.inv_selected);
+		DrawBarArtifactIcon(width - 40, y + 7, cl.inv_selected);
 	}
+	sbar_canvas = CANVAS_SBAR;
 }
 
 //==========================================================================
@@ -1881,40 +1886,40 @@ COMPILE_TIME_ASSERT(sbar_canvas, (int)SBAR_TOTAL_HEIGHT == UI_SBAR_CANVAS_HEIGHT
 
 static void Sbar_DrawPic(int x, int y, qpic_t *pic)
 {
-	GL_SetCanvas (CANVAS_SBAR);
-	Draw_PicCropped (x, SBAR_Y(y), pic);
+	GL_SetCanvas (sbar_canvas);
+	Draw_PicCropped (x, sbar_canvas == CANVAS_SBAR ? SBAR_Y(y) : y, pic);
 }
 
 static void Sbar_DrawTransPic(int x, int y, qpic_t *pic)
 {
-	GL_SetCanvas (CANVAS_SBAR);
-	Draw_TransPicCropped (x, SBAR_Y(y), pic);
+	GL_SetCanvas (sbar_canvas);
+	Draw_TransPicCropped (x, sbar_canvas == CANVAS_SBAR ? SBAR_Y(y) : y, pic);
 }
 
 #if 0	/* no callers */
 static void Sbar_DrawCharacter(int x, int y, int num)
 {
-	GL_SetCanvas (CANVAS_SBAR);
-	Draw_Character (x + 4, SBAR_Y(y), num);
+	GL_SetCanvas (sbar_canvas);
+	Draw_Character (x + 4, sbar_canvas == CANVAS_SBAR ? SBAR_Y(y) : y, num);
 }
 
 static void Sbar_DrawString(int x, int y, const char *str)
 {
-	GL_SetCanvas (CANVAS_SBAR);
-	Draw_String (x, SBAR_Y(y), str);
+	GL_SetCanvas (sbar_canvas);
+	Draw_String (x, sbar_canvas == CANVAS_SBAR ? SBAR_Y(y) : y, str);
 }
 
 static void Sbar_DrawSmallCharacter(int x, int y, int num)
 {
-	GL_SetCanvas (CANVAS_SBAR);
-	Draw_SmallCharacter (x + 4, SBAR_Y(y), num);
+	GL_SetCanvas (sbar_canvas);
+	Draw_SmallCharacter (x + 4, sbar_canvas == CANVAS_SBAR ? SBAR_Y(y) : y, num);
 }
 #endif
 
 static void Sbar_DrawSmallString(int x, int y, const char *str)
 {
-	GL_SetCanvas (CANVAS_SBAR);
-	Draw_SmallString (x, SBAR_Y(y), str);
+	GL_SetCanvas (sbar_canvas);
+	Draw_SmallString (x, sbar_canvas == CANVAS_SBAR ? SBAR_Y(y) : y, str);
 }
 
 static void DrawBarArtifactNumber(int x, int y, int number)
@@ -1929,4 +1934,3 @@ static void DrawBarArtifactNumber(int x, int y, int number)
 	artiNumName[11] = '0'+number%10;
 	Sbar_DrawTransPic(x, y, Draw_CachePic(artiNumName));
 }
-

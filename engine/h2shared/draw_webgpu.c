@@ -68,8 +68,9 @@ static float	ramp_white_scale[3] = { 1.0f, 1.0f, 1.0f };
 
 static byte	player_pixels[MAX_PLAYER_CLASS][WEB_PLAYER_WIDTH * WEB_PLAYER_HEIGHT];
 static float	character_alpha = 1.0f;
-/* Origin of the current 2D canvas, in screen pixels (see GL_SetCanvas). */
-static int	canvas_x, canvas_y;
+/* Transform and logical size of the current 2D canvas (see GL_SetCanvas). */
+static float	canvas_x, canvas_y, canvas_scale = 1.0f;
+static int	canvas_width, canvas_height;
 
 /*
 =============================================================================
@@ -141,8 +142,10 @@ static void Draw_Quad (int texture, float x, float y, float width, float height,
 	float sl, float tl, float sh, float th, float r, float g, float b, float a)
 {
 	/* canvas coordinates -> screen coordinates */
-	const float	x0 = x + canvas_x, y0 = y + canvas_y;
-	const float	x1 = x0 + width, y1 = y0 + height;
+	const float	x0 = x * canvas_scale + canvas_x;
+	const float	y0 = y * canvas_scale + canvas_y;
+	const float	x1 = x0 + width * canvas_scale;
+	const float	y1 = y0 + height * canvas_scale;
 	unsigned int	color;
 	wgpuui_vertex_t	*out;
 
@@ -439,44 +442,79 @@ void Draw_ReInit (void) { draw_reinit = true; Draw_Init (); draw_reinit = false;
 ================
 GL_SetCanvas
 
-Places one of the fixed-size logical UI canvases on the screen. Draw_Quad
-translates every 2D vertex by the canvas origin, which is what anchors the
-status bar to the bottom of the screen and centres the menus; sbar.c and
-menu.c draw in canvas coordinates. The UI scale is 1 here -- the software
-renderer's canvases must land in the same place, and it cannot scale 2D.
+Places a logical UI canvas on the screen. Draw_Quad applies its scale and
+origin to every vertex. The classic status bar keeps its fixed 320-wide
+canvas, while the mini HUD uses the full display aspect.
 ================
 */
 void GL_SetCanvas (canvastype canvas)
 {
+	float	s;
+
+	canvas_x = canvas_y = 0.0f;
+	canvas_scale = 1.0f;
+	canvas_width = vid.width;
+	canvas_height = vid.height;
+
 	switch (canvas)
 	{
 	case CANVAS_SBAR:
-		canvas_x = (vid.width - UI_CANVAS_WIDTH) / 2;
-		canvas_y = vid.height - UI_SBAR_CANVAS_HEIGHT;
+		s = SCR_CalcUIScale (&scr_sbarscale);
+		s = q_min (s, (float)vid.width / (float)UI_CANVAS_WIDTH);
+		s = q_min (s, (float)vid.height / (float)UI_SBAR_CANVAS_HEIGHT);
+		canvas_scale = s;
+		canvas_x = ((float)vid.width - UI_CANVAS_WIDTH * s) * 0.5f;
+		canvas_y = (float)vid.height - UI_SBAR_CANVAS_HEIGHT * s;
+		canvas_width = UI_CANVAS_WIDTH;
+		canvas_height = UI_SBAR_CANVAS_HEIGHT;
+		break;
+	case CANVAS_HUD:
+		s = SCR_CalcUIScale (&scr_sbarscale);
+		s = q_min (s, (float)vid.width / 160.0f);
+		s = q_min (s, (float)vid.height / 100.0f);
+		canvas_scale = s;
+		canvas_width = (int)((float)vid.width / s);
+		canvas_height = (int)((float)vid.height / s);
 		break;
 	case CANVAS_MENU:
 		canvas_x = (vid.width - UI_CANVAS_WIDTH) / 2;
-		canvas_y = 0;
+		canvas_width = UI_CANVAS_WIDTH;
 		break;
 	default:
-		canvas_x = 0;
-		canvas_y = 0;
 		break;
 	}
 
-	if (canvas_x < 0)
-		canvas_x = 0;
-	if (canvas_y < 0)
-		canvas_y = 0;
+	if (canvas_x < 0.0f)
+		canvas_x = 0.0f;
+	if (canvas_y < 0.0f)
+		canvas_y = 0.0f;
 }
 
 void Draw_FlushCharBatch (void) {}
 
-/* The web 2D layers do not scale the UI canvases -- all of them place them
- * at scale 1 -- so report that honestly. menu.c derives its mouse
- * hit-testing from this value, and a scale the canvas does not actually
- * apply would move the hit boxes away from the glyphs. */
-float SCR_CalcUIScale (cvar_t *user) { (void)user; return 1.0f; }
+/* Zero selects an integer automatic scale; explicit values come from the
+ * existing HUD/menu settings. Each canvas clamps the result to its own
+ * minimum useful logical size. */
+float SCR_CalcUIScale (cvar_t *user)
+{
+	float	s = user ? user->value : 0.0f;
+
+	if (s <= 0.0f)
+	{
+		s = floorf ((float)vid.height / 480.0f);
+		if (s < 1.0f)
+			s = 1.0f;
+	}
+	return s;
+}
+
+void Draw_GetCanvasSize (int *width, int *height)
+{
+	if (width)
+		*width = canvas_width;
+	if (height)
+		*height = canvas_height;
+}
 
 void Draw_Pic (int x, int y, qpic_t *pic)
 {
