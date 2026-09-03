@@ -17,14 +17,14 @@ function environment(overrides = {}) {
   };
 }
 
-test('device gyro follows native device axes instead of screen rotation', () => {
+test('device gyro maps phone twist to yaw and native X rotation to pitch', () => {
   const looks = [];
   const env = environment({ screen: { orientation: { angle: 90 } } });
   const gyro = new GyroAim({ look: (...values) => looks.push(values) },
     { deadZoneDegrees: 0 }, env);
   gyro.setEnabled(true);
   env.listeners.get('devicemotion')({
-    rotationRate: { beta: 10, gamma: 20 },
+    rotationRate: { alpha: 20, beta: 10, gamma: 30 },
     interval: 20,
     timeStamp: 100,
   });
@@ -34,14 +34,14 @@ test('device gyro follows native device axes instead of screen rotation', () => 
   assert.ok(Math.abs(looks[0][1] - (10 * 0.02 / 0.022)) < 1e-9);
 });
 
-test('device motion keeps the raw X axis when the browser exposes x/y slots', () => {
+test('device motion accepts raw Z and X axis slots', () => {
   const looks = [];
   const env = environment();
   const gyro = new GyroAim({ look: (...values) => looks.push(values) },
     { deadZoneDegrees: 0 }, env);
   gyro.setEnabled(true);
   env.listeners.get('devicemotion')({
-    rotationRate: { x: 25, y: 15 },
+    rotationRate: { x: 15, y: 30, z: 25 },
     interval: 20,
     timeStamp: 100,
   });
@@ -100,7 +100,7 @@ test('inactive input sources do not move the view', () => {
     gamepadActive: () => false,
   }, {}, env);
   gyro.setEnabled(true);
-  gyro.handleDeviceMotion({ rotationRate: { beta: 20, gamma: 20 }, interval: 20, timeStamp: 100 });
+  gyro.handleDeviceMotion({ rotationRate: { alpha: 20, beta: 20 }, interval: 20, timeStamp: 100 });
   gyro.pollGamepads(100);
   gyro.pollGamepads(120);
 
@@ -114,7 +114,7 @@ test('gyro Y inversion is independent and leaves yaw unchanged', () => {
     { deadZoneDegrees: 0, invertY: true }, env);
   gyro.setEnabled(true);
   env.listeners.get('devicemotion')({
-    rotationRate: { beta: 10, gamma: 20 },
+    rotationRate: { alpha: 20, beta: 10 },
     interval: 20,
     timeStamp: 100,
   });
