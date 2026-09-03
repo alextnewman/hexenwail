@@ -118,12 +118,14 @@ typedef enum {
 	CANVAS_NONE,
 	CANVAS_DEFAULT,
 	CANVAS_SBAR,
+	CANVAS_HUD,
 	CANVAS_MENU,
 	CANVAS_CROSSHAIR,
 	CANVAS_INVALID = -1
 } canvastype;
 
 void GL_SetCanvas (canvastype newcanvas);
+void Draw_GetCanvasSize (int *width, int *height);
 
 /* Logical size of the fixed 320-wide UI canvases, in canvas units.
    CANVAS_SBAR is anchored to the bottom of the screen and horizontally

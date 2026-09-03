@@ -263,6 +263,8 @@ screen at scale 1:
 | `CANVAS_MENU` | 320 wide, anchored to the **top** of the screen, horizontally centred. |
 | everything else | the framebuffer itself, origin (0, 0). |
 
+The mini HUD uses a full-frame `CANVAS_HUD`, so its vital statistics and selected artifact follow the left and right edges rather than remaining clustered inside a centred 320-wide strip. On this parked renderer the canvas still draws at scale 1 because it is part of the low-resolution framebuffer; the presenter scales it with the rest of that framebuffer. WebGlideNitro can scale both its classic bar and mini HUD independently with `scr_sbarscale`.
+
 `screen.c` restores `CANVAS_DEFAULT` after `Sbar_Draw()` — the same place
 `gl_screen.c` does — so the console, plaques and menus that follow are not
 drawn inside the status bar canvas.

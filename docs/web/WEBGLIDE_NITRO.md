@@ -55,9 +55,7 @@ The intended signature is:
 * **grounded entities** — fullbright pixels, authored glows and cheap planar
   shadows, with any pose interpolation restrained enough to retain the
   stop-motion character;
-* **Nitro scan-out** — a crisp panel-resolution HUD over a scalable scene with
-  optional 16-bit ordered dither, a 2x2 “22-bit” resolve and restrained
-  persistence.
+* **Nitro scan-out** — a crisp panel-resolution HUD over a scalable scene, with an independently scalable classic bar and an aspect-aware edge-anchored mini HUD, plus optional 16-bit ordered dither, a 2x2 “22-bit” resolve and restrained persistence.
 
 Correctness comes first: complete the effects already authored by the game
 before inventing new ones. Performance work then protects the look through
@@ -181,8 +179,7 @@ The dedicated model loader is copied from the software loader so Nitro retains i
 * sky keeps the authored indexed solid and punched-out cloud layers in one
   cached binding, projects them from the eye direction, and scrolls them at
   independent speeds in one draw;
-* the 2D layer coalesces consecutive same-texture quads into runs and flushes
-  the whole HUD, console and menu from a single vertex buffer;
+* the 2D layer coalesces consecutive same-texture quads into runs and flushes the whole HUD, console and menu from a single vertex buffer; its status-bar canvas applies `scr_sbarscale`, while the mini HUD uses the same scale on a full-screen logical canvas so its vital statistics and selected artifact remain anchored to opposite display edges at every aspect ratio;
 * the whole frame is one command encoder, two passes (scene, then scan-out
   plus UI at panel resolution) and one `queue.submit`.
 
