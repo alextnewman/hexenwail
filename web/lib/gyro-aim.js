@@ -148,19 +148,13 @@ export class GyroAim {
     if (!deltaSeconds) return;
 
     /*
-     * Keep the motion sensor mapped to the phone's native axes so it behaves
-     * like a fine-tuned cursor instead of a screen-rotation hack.  Safari
-     * exposes beta/gamma in the device's local frame; applying a second
-     * rotation from the viewport angle makes the axes drift and leaves one
-     * direction feeling dead on some iPhone orientations.
-     *
-     * Some motion-sensor implementations expose raw x/y slots instead of
-     * beta/gamma, but the web bridge treats left/right as yaw and up/down as
-     * pitch. Keep both axis names accepted so the X-axis drift does not vanish
-     * on a browser or controller that reports the raw local axes directly.
+     * Map yaw to rotation around the phone's screen-normal axis, so twisting
+     * the phone turns the view like a held sphere. Pitch remains rotation
+     * around the phone's native X axis. Some implementations expose the same
+     * axes as z/x slots or an indexed vector.
      */
-    const yaw = finite(rate.gamma ?? rate.x ?? rate[0]);
-    const pitch = finite(rate.beta ?? rate.y ?? rate[1]);
+    const yaw = finite(rate.alpha ?? rate.z ?? rate[2]);
+    const pitch = finite(rate.beta ?? rate.x ?? rate[0]);
     this.emitRates(yaw, pitch, deltaSeconds);
   }
 
