@@ -89,6 +89,32 @@ test('compatible gamepad angular velocity is integrated when exposed', () => {
   assert.ok(Math.abs(looks[0][1] - (1 * 180 / Math.PI * 0.02 / 0.022)) < 1e-9);
 });
 
+test('device motion and controller motion can both contribute when enabled', () => {
+  const looks = [];
+  const env = environment({
+    navigator: { getGamepads: () => [{ pose: { angularVelocity: [1, 2, 0] } }] },
+  });
+  const gyro = new GyroAim({
+    look: (...values) => looks.push(values),
+    deviceActive: () => true,
+    gamepadActive: () => true,
+  }, { deadZoneDegrees: 0 }, env);
+  gyro.setEnabled(true);
+  env.listeners.get('devicemotion')({
+    rotationRate: { alpha: 20, beta: 10 },
+    interval: 20,
+    timeStamp: 100,
+  });
+  gyro.pollGamepads(100);
+  gyro.pollGamepads(120);
+
+  assert.equal(looks.length, 2);
+  assert.ok(Math.abs(looks[0][0] - (-20 * 0.02 / 0.022)) < 1e-9);
+  assert.ok(Math.abs(looks[0][1] - (10 * 0.02 / 0.022)) < 1e-9);
+  assert.ok(Math.abs(looks[1][0] - (-2 * 180 / Math.PI * 0.02 / 0.022)) < 1e-9);
+  assert.ok(Math.abs(looks[1][1] - (1 * 180 / Math.PI * 0.02 / 0.022)) < 1e-9);
+});
+
 test('inactive input sources do not move the view', () => {
   const looks = [];
   const env = environment({
