@@ -1452,7 +1452,10 @@ function bindUi() {
   state.phoneControls.attach();
   state.gyroAim = new GyroAim({
     look: engineGyroLook,
-    deviceActive: () => gyroGameplayActive() && isTouchControlsVisible(),
+    /* Phone motion is independent from the touch overlay: a connected
+     * controller is a valid way to combine gyro aim with an on-pad motion
+     * sensor, and the menu guard still keeps it out of the launcher flow. */
+    deviceActive: () => gyroGameplayActive(),
     gamepadActive: () => gyroGameplayActive() && state.gamepadConnected,
   }, { sensitivity: state.preferences.gyroSensitivity });
   addEventListener('hexenwailtouchmode', (event) => {
