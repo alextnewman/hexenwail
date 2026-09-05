@@ -11,10 +11,12 @@ import {
 
 const save = { path: 'data1/s0/clients.gip', bytes: new TextEncoder().encode('save state') };
 
-test('classifies engine save slots while excluding commercial assets', () => {
+test('classifies engine save slots while excluding commercial assets and config files', () => {
   assert.equal(isSavePath('data1/s0/info.dat'), true);
   assert.equal(isSavePath('portals/ms9/level.gip'), true);
   assert.equal(isSavePath('hw/s1/clients.gip'), true);
+  assert.equal(isSavePath('data1/s0/config.cfg'), false);
+  assert.equal(isSavePath('data1/s0/input.txt'), false);
   assert.equal(isSavePath('data1/pak0.pak'), false);
   assert.equal(isSavePath('data1/music/track01.ogg'), false);
   assert.equal(isSavePath('data1/progs.dat'), false);

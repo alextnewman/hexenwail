@@ -14,7 +14,8 @@ export const SAVE_BUNDLE_LIMITS = Object.freeze({
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const SAVE_SLOT = /^(?:s|ms)\d+$/i;
-const EXCLUDED_SAVE_FILE = /\.(?:pak|ogg|wasm|js|data|cache|log)$/i;
+const SAVE_FILE = /^(?:info\.dat|.+\.(?:gip|hsv))$/i;
+const EXCLUDED_SAVE_FILE = /\.(?:pak|ogg|wasm|js|data|cache|log|cfg|txt|ini|conf)$/i;
 
 function assertBundle(condition, message) {
   if (!condition) throw new Error(message);
@@ -33,7 +34,11 @@ export function isSavePath(path) {
   const safe = sanitizeRelativePath(path);
   if (!safe || EXCLUDED_SAVE_FILE.test(safe)) return false;
   const parts = safe.split('/');
-  return KNOWN_GAME_ROOTS.includes(parts[0].toLowerCase()) && parts.length >= 3 && SAVE_SLOT.test(parts[1]);
+  if (!KNOWN_GAME_ROOTS.includes(parts[0].toLowerCase()) || parts.length < 3 || !SAVE_SLOT.test(parts[1])) {
+    return false;
+  }
+  const fileName = parts.at(-1);
+  return SAVE_FILE.test(fileName);
 }
 
 export function saveBundlePath(path) {
